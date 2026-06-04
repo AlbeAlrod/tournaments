@@ -147,9 +147,6 @@ async function loadTournament() {
   // Load registrations
   await loadRegistrations();
 
-  // Set activeCat
-  if (categories.length) activeCat = categories[0].id;
-
   // Live listener
   onSnapshot(TREF, snap => {
     if (!snap.exists() || applyingRemote) return;
@@ -425,10 +422,13 @@ function renderBuildPage() {
   if (!el) return;
   el.innerHTML = '';
   categories.forEach(cat => {
-    const cs = state[cat.id] || { roster:[] };
-    const roster = cs.roster.length ? cs.roster :
-      registrations.filter(r => r.status === 'approved' && r.category === cat.id)
+    if (!state[cat.id]) state[cat.id] = { roster:[], groups:[], sched:[], ko:[] };
+    const cs = state[cat.id];
+    if (!cs.roster.length) {
+      cs.roster = registrations.filter(r => r.status === 'approved' && r.category === cat.id)
         .map(r => r.p1 + (r.p2 ? ' / '+r.p2 : ''));
+    }
+    const roster = cs.roster;
 
     const div = document.createElement('div');
     div.className = 'build-cat';
@@ -493,6 +493,7 @@ function onDrop(e, catId) {
   const [moved] = roster.splice(fromIdx, 1);
   roster.splice(toIdx, 0, moved);
   cs.roster = roster;
+  pushToCloud();
   renderBuildPage();
 }
 
@@ -503,6 +504,7 @@ function moveBuildItem(catId, idx, dir) {
   const newIdx = idx + dir;
   if (newIdx < 0 || newIdx >= roster.length) return;
   [roster[idx], roster[newIdx]] = [roster[newIdx], roster[idx]];
+  pushToCloud();
   renderBuildPage();
 }
 
@@ -1441,7 +1443,7 @@ window.addEventListener('load', async () => {
     });
   });
 
-  if (categories.length) activeCat = categories[0].id;
+  activeCat = null;
 
   firebaseReady = true;
   document.getElementById('view-loading').classList.add('h');
