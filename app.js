@@ -389,6 +389,13 @@ function refreshAdmin() {
     ? 'Master mode — full access'
     : adminLevel === 1 ? 'Admin mode — score entry only'
     : 'View only — tap Admin to manage';
+  // Master doesn't need the public Register tab
+  const regTab = document.getElementById('tab-register');
+  if (regTab) regTab.classList.toggle('h', superAdmin);
+  // If master landed on register page, redirect to registrations
+  if (superAdmin && document.getElementById('page-register')?.classList.contains('on')) {
+    goPage('registrations');
+  }
 }
 
 // ============ REGISTRATION ============
@@ -587,9 +594,30 @@ function buildItem(catId, name, i) {
     ondrop="onDrop(event,'${catId}')" ondragend="onDragEnd(event)">
     <span class="build-rank">${i+1}</span>
     <span class="build-name">${name}</span>
+    <button class="gedit-btn" onclick="editBuildItem('${catId}',${i})" title="Edit">Edit</button>
     <button class="build-arrow" onclick="moveBuildItem('${catId}',${i},-1)" title="Up">↑</button>
     <button class="build-arrow" onclick="moveBuildItem('${catId}',${i},1)" title="Down">↓</button>
+    <button class="team-del" onclick="deleteBuildItem('${catId}',${i})" title="Remove">✕</button>
   </div>`;
+}
+
+function editBuildItem(catId, idx) {
+  if (!superAdmin) return;
+  editTarget = { catId, buildIdx: idx };
+  const name = state[catId]?.roster[idx] || '';
+  const parts = name.split('/').map(s => s.trim());
+  document.getElementById('edit-p1').value = parts[0] || '';
+  document.getElementById('edit-p2').value = parts[1] || '';
+  document.getElementById('edit-modal-title').textContent = 'Edit Pair';
+  document.getElementById('edit-modal').classList.remove('h');
+  document.getElementById('edit-p1').focus();
+}
+
+function deleteBuildItem(catId, idx) {
+  if (!superAdmin) return;
+  state[catId].roster.splice(idx, 1);
+  pushToCloud();
+  renderBuildPage();
 }
 
 function setupDragDrop(catId) {}
@@ -982,6 +1010,15 @@ function saveEdit() {
   const p2 = document.getElementById('edit-p2').value.trim();
   const name = p2?`${p1} / ${p2}`:p1;
   if (!name) return;
+
+  // Build page roster edit
+  if (editTarget.buildIdx !== undefined) {
+    state[editTarget.catId].roster[editTarget.buildIdx] = name;
+    closeEdit(); pushToCloud(); renderBuildPage();
+    return;
+  }
+
+  // Standings group team edit
   const {catId,gi,ti} = editTarget;
   const old = state[catId].groups[gi].teams[ti];
   state[catId].groups[gi].teams[ti] = name;
@@ -1580,6 +1617,7 @@ Object.assign(window, {
   buildTournament, shuffleBuildRoster, moveBuildItem,
   onDragStart, onDragEnd, onDragOver, onDrop,
   openEditTeam, closeEdit, saveEdit, deleteTeam,
+  editBuildItem, deleteBuildItem,
   setGS, setKS, filterSchedule,
   updateMeta, updateCatName, updateCatCfg, adjCatCfg,
   addCategory, deleteCategory, resetAllScores
@@ -1611,6 +1649,6 @@ window.addEventListener('load', async () => {
 
   // Show first relevant page
   const isReg = meta.phase==='registration';
-  if (isReg) goPage('register');
+  if (isReg) goPage(superAdmin ? 'registrations' : 'register');
   else goPage('standings');
 });
