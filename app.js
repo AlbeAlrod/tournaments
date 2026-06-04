@@ -228,6 +228,38 @@ function hslToHex(h,s,l) {
   return '#'+[r,g,b].map(x=>Math.round(x*255).toString(16).padStart(2,'0')).join('');
 }
 
+// WCAG relative luminance
+function luminance(hex) {
+  return hexToRgb(hex).map(v => {
+    v /= 255;
+    return v <= 0.03928 ? v/12.92 : Math.pow((v+0.055)/1.055, 2.4);
+  }).reduce((sum,v,i) => sum + v * [0.2126,0.7152,0.0722][i], 0);
+}
+
+// Contrast ratio (WCAG 2.1)
+function contrast(hex1, hex2) {
+  const l1=luminance(hex1), l2=luminance(hex2);
+  return (Math.max(l1,l2)+0.05) / (Math.min(l1,l2)+0.05);
+}
+
+// Adjust lightness until contrast vs bg meets ratio (min 4.5 = WCAG AA)
+function readable(candidate, bg, minRatio=4.5) {
+  if (contrast(candidate, bg) >= minRatio) return candidate;
+  const [h,s] = hexToHsl(candidate);
+  const bgDark = luminance(bg) < 0.5; // dark bg → lighten; light bg → darken
+  for (let step=1; step<=20; step++) {
+    const l = bgDark ? Math.min(100, 50+step*3) : Math.max(0, 50-step*3);
+    const c = hslToHex(h, s, l);
+    if (contrast(c, bg) >= minRatio) return c;
+  }
+  return bgDark ? '#FFFFFF' : '#000000';
+}
+
+// White or dark text on a colored background (e.g. buttons, group headers)
+function onColor(bgHex) {
+  return contrast('#FFFFFF', bgHex) >= 4.5 ? '#FFFFFF' : '#1a1a1a';
+}
+
 function applyTheme(primary, secondary) {
   primary   = primary   || '#6B21A8';
   secondary = secondary || primary;
@@ -237,25 +269,32 @@ function applyTheme(primary, secondary) {
   const [r2,g2,b2] = hexToRgb(secondary);
   const [h2,s2,l2] = hexToHsl(secondary);
 
-  // Background: very light tint of primary hue
+  // ── Backgrounds (light tint of primary hue) ──
   const bgL  = Math.max(95, 98 - s1*0.04);
   const bg3L = Math.max(90, bgL - 5);
   const surL = Math.max(84, bgL - 10);
-  const bg    = hslToHex(h1, Math.min(s1*0.35, 22), bgL);
-  const bg3   = hslToHex(h1, Math.min(s1*0.45, 28), bg3L);
-  const surf  = hslToHex(h1, Math.min(s1*0.55, 35), surL);
+  const bg   = hslToHex(h1, Math.min(s1*0.35, 22), bgL);
+  const bg3  = hslToHex(h1, Math.min(s1*0.45, 28), bg3L);
+  const surf = hslToHex(h1, Math.min(s1*0.55, 35), surL);
 
-  // Text: dark variants of primary hue
-  const textL  = Math.max(6,  l1 * 0.22);
-  const text2L = Math.max(16, l1 * 0.45);
-  const text   = hslToHex(h1, Math.min(s1*0.6,  60), textL);
-  const text2  = hslToHex(h1, Math.min(s1*0.75, 80), text2L);
-  const text3  = hslToHex(h1, Math.min(s1,     100), Math.min(l1, 52));
+  // ── Text: start from dark hue variants, then force contrast ──
+  const rawText  = hslToHex(h1, Math.min(s1*0.6,  60), Math.max(6,  l1*0.22));
+  const rawText2 = hslToHex(h1, Math.min(s1*0.75, 80), Math.max(16, l1*0.45));
+  const rawText3 = hslToHex(h1, Math.min(s1,     100), Math.min(l1, 52));
+  const text  = readable(rawText,  bg, 7.0);  // body text — strict
+  const text2 = readable(rawText2, bg, 5.0);  // headings
+  const text3 = readable(rawText3, bg, 4.5);  // secondary text
 
-  // primary3 = lighter secondary for hover/pill states
-  const primary3 = hslToHex(h2, Math.min(s2, 100), Math.min(l2+14, 72));
+  // ── primary3 for tab / label text on light nav bg ──
+  const rawP3 = hslToHex(h2, Math.min(s2*0.85, 88), Math.min(l2, 55));
+  const primary3 = readable(rawP3, bg3, 4.5);
 
-  // Header / nav derived from bg
+  // ── Text color on colored backgrounds (buttons, group headers, bracket) ──
+  // Use average of primary+secondary since most backgrounds are their gradient
+  const midLum = (luminance(primary) + luminance(secondary)) / 2;
+  const onPrimary = midLum > 0.18 ? '#1a1a1a' : '#FFFFFF';
+
+  // ── Header / nav ──
   const [rB,gB,bB]   = hexToRgb(bg);
   const [rB3,gB3,bB3] = hexToRgb(bg3);
 
@@ -272,6 +311,7 @@ function applyTheme(primary, secondary) {
     '--text':               text,
     '--text2':              text2,
     '--text3':              text3,
+    '--on-primary':         onPrimary,
     '--header-bg':          `rgba(${rB},${gB},${bB},0.95)`,
     '--nav-bg':             `rgba(${rB3},${gB3},${bB3},0.96)`,
     '--modebar-bg':         `rgba(${r1},${g1},${b1},0.07)`,
