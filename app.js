@@ -326,7 +326,7 @@ function applyTheme(primary, secondary) {
     '--header-bg':          `rgba(${rB},${gB},${bB},0.95)`,
     '--nav-bg':             `rgba(${rB3},${gB3},${bB3},0.96)`,
     '--modebar-bg':         `rgba(${r1},${g1},${b1},0.07)`,
-    '--modebar-admin-bg':   `linear-gradient(90deg,rgba(${r1},${g1},${b1},.12),rgba(${r2},${g2},${b2},.10))`,
+    '--modebar-admin-bg':   `rgba(${r1},${g1},${b1},0.10)`,
   };
 
   const style = document.getElementById('theme-style') || (() => {
@@ -334,9 +334,8 @@ function applyTheme(primary, secondary) {
   })();
   style.textContent = `:root{${Object.entries(vars).map(([k,v])=>`${k}:${v};`).join('')}}`;
 
-  // Logo mark gets gradient of both colors
   const lm = document.getElementById('logo-mark');
-  if (lm) lm.style.background = `linear-gradient(135deg,${primary},${secondary})`;
+  if (lm) lm.style.background = primary;
 }
 
 // ============ AUTH ============
@@ -503,7 +502,6 @@ function renderParticipants() {
     return;
   }
   hiddenMsg?.classList.add('h');
-  renderPayLink('participants-pay-wrap');
   const approved = registrations.filter(r => r.status === 'approved');
   if (!approved.length) {
     el.innerHTML = `<div class="empty"><h3>No approved participants yet</h3></div>`;
@@ -542,7 +540,6 @@ function renderPayLink(wrapId) {
 
   wrap.className = 'pay-section';
   wrap.innerHTML = `
-    <span class="pay-icon">💳</span>
     <div class="pay-links">
       ${links.map(l => `<a class="pay-link-btn" href="${l.url}" target="_blank" rel="noopener">${l.label}</a>`).join('')}
     </div>`;
@@ -595,7 +592,7 @@ function renderBuildPage() {
       </div>
       <div class="build-foot">
         <button class="build-btn" onclick="buildTournament('${cat.id}')">▶ Build Tournament</button>
-        <button class="build-shuffle" onclick="shuffleBuildRoster('${cat.id}')">🔀 Shuffle</button>
+        <button class="build-shuffle" onclick="shuffleBuildRoster('${cat.id}')">Shuffle</button>
         <button class="build-add-pair" onclick="openAddPair('${cat.id}')">+ Add Pair</button>
       </div>`;
     el.appendChild(div);
@@ -1319,7 +1316,7 @@ function renderBracketForCat(catId, container) {
     if (isValidScore(fsa,fsb,catId)) {
       const w=fsa>fsb?fin.a:fin.b;
       const champEl=document.createElement('div');
-      champEl.innerHTML=`<div class="champ-wrap"><div class="ci">★ CHAMPION</div><div class="champ-name">${w}</div></div>`;
+      champEl.innerHTML=`<div class="champ-wrap"><div class="ci">CHAMPION</div><div class="champ-name">${w}</div></div>`;
       container.appendChild(champEl);
     }
   }
@@ -1393,9 +1390,10 @@ function renderSettings() {
           <input type="color" class="color-inp" value="${meta.secondaryColor||meta.primaryColor||'#7C3AED'}"
             oninput="updateMeta('secondaryColor',this.value)" style="width:52px;height:38px"/>
         </div>
-        <div style="width:114px;height:14px;border-radius:7px;
-          background:linear-gradient(135deg,${meta.primaryColor||'#6B21A8'},${meta.secondaryColor||'#7C3AED'});
-          box-shadow:0 2px 6px rgba(0,0,0,.18)"></div>
+        <div style="display:flex;gap:4px">
+          <div style="width:55px;height:14px;border-radius:5px;background:${meta.primaryColor||'#6B21A8'}"></div>
+          <div style="width:55px;height:14px;border-radius:5px;background:${meta.secondaryColor||meta.primaryColor||'#7C3AED'}"></div>
+        </div>
       </div>
     </div>
     <div class="sett-row" style="align-items:flex-start;padding-top:16px">

@@ -6,14 +6,13 @@
 <title>Tournaments</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@700;800;900&display=swap" rel="stylesheet"/>
-<link rel="stylesheet" href="styles.css?v=8"/>
+<link rel="stylesheet" href="styles.css?v=9"/>
 </head>
 <body>
 
 <!-- NO TOURNAMENT -->
 <div id="view-none" class="view h">
   <div class="no-t-wrap">
-    <div class="no-t-icon">🏆</div>
     <h1>Tournaments</h1>
     <p>No tournament specified. Add <code>?t=tournament-id</code> to the URL.</p>
   </div>
@@ -68,7 +67,6 @@
         <p id="reg-subtitle"></p>
       </div>
       <div id="reg-closed-msg" class="info-box h">Registration is currently closed.</div>
-      <div id="reg-pay-wrap" class="h"></div>
       <div id="reg-form-wrap">
         <div class="form-card">
           <div class="form-row">
@@ -90,6 +88,7 @@
           <div id="frm-err" class="frm-err h"></div>
           <div id="frm-ok" class="frm-ok h">Registration submitted! You will be notified upon approval.</div>
           <button class="submit-btn" onclick="submitRegistration()">Submit Registration</button>
+          <div id="reg-pay-wrap"></div>
         </div>
       </div>
     </div>
@@ -101,7 +100,6 @@
         <p id="participants-subtitle">Approved registrations</p>
       </div>
       <div id="participants-hidden-msg" class="info-box h">The participant list is not public yet.</div>
-      <div id="participants-pay-wrap" class="h"></div>
       <div id="participants-list"></div>
     </div>
 
@@ -221,6 +219,6 @@
   </div>
 </div>
 
-<script type="module" src="app.js?v=8"></script>
+<script type="module" src="app.js?v=9"></script>
 </body>
 </html>
