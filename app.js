@@ -292,7 +292,15 @@ function applyTheme(primary, secondary) {
   // ── Text color on colored backgrounds (buttons, group headers, bracket) ──
   // Use average of primary+secondary since most backgrounds are their gradient
   const midLum = (luminance(primary) + luminance(secondary)) / 2;
-  const onPrimary = midLum > 0.18 ? '#1a1a1a' : '#FFFFFF';
+  // ── Text on colored backgrounds: always white + dark shadow scaled by lightness ──
+  // shadowStr: 0 for dark backgrounds (no shadow needed), up to 0.9 for very light ones
+  const shadowStr = Math.max(0, Math.min(0.9, (midLum - 0.04) * 1.8));
+  const onPrimaryShadow = shadowStr > 0.06
+    ? `0 1px 3px rgba(0,0,0,${shadowStr.toFixed(2)}),` +
+      `0 0 6px rgba(0,0,0,${(shadowStr * 0.5).toFixed(2)}),` +
+      `-1px 0 2px rgba(0,0,0,${(shadowStr * 0.4).toFixed(2)}),` +
+      ` 1px 0 2px rgba(0,0,0,${(shadowStr * 0.4).toFixed(2)})`
+    : 'none';
 
   // ── Header / nav ──
   const [rB,gB,bB]   = hexToRgb(bg);
@@ -311,7 +319,8 @@ function applyTheme(primary, secondary) {
     '--text':               text,
     '--text2':              text2,
     '--text3':              text3,
-    '--on-primary':         onPrimary,
+    '--on-primary':         '#FFFFFF',
+    '--on-primary-shadow':  onPrimaryShadow,
     '--header-bg':          `rgba(${rB},${gB},${bB},0.95)`,
     '--nav-bg':             `rgba(${rB3},${gB3},${bB3},0.96)`,
     '--modebar-bg':         `rgba(${r1},${g1},${b1},0.07)`,

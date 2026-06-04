@@ -16,6 +16,7 @@
   --modebar-bg: rgba(107,33,168,0.07);
   --modebar-admin-bg: linear-gradient(90deg,rgba(107,33,168,.12),rgba(124,58,237,.12));
   --on-primary: #FFFFFF;
+  --on-primary-shadow: none;
   --green: #059669;
   --amber: #D97706;
   --red: #DC2626;
@@ -437,6 +438,14 @@ input:checked + .toggle-slider::before { transform: translateX(20px); }
 #role-btn-admin, #role-btn-master { flex: 1; padding: 10px 6px; border-radius: var(--rs);
   border: 2px solid var(--border2); background: transparent; color: var(--primary);
   font-family: 'Barlow Condensed', sans-serif; font-size: 15px; font-weight: 700; cursor: pointer; }
+
+/* ===== ON-PRIMARY SHADOW — dark outline on white text for light color themes ===== */
+.lmark span, .admin-toggle.on, .submit-btn,
+.filter-btn.on, .cat-btn.on, .cf-btn.on,
+.scard-name, .build-cat-name, .build-cat-count,
+.build-btn, .gen-btn, .mbtn-ok, .pay-btn {
+  text-shadow: var(--on-primary-shadow);
+}
 
 /* ===== COLOR PICKER ===== */
 
