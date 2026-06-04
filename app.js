@@ -29,6 +29,7 @@ const tId = new URLSearchParams(location.search).get('t');
 // ============ STATE ============
 let meta = { name:'', logoUrl:'', primaryColor:'#6B21A8', secondaryColor:'#7C3AED',
   paymentLink:'', paymentLinkLabel:'', paymentLink2:'', paymentLink2Label:'',
+  regNote:'',
   phase:'registration', regOpen:true, showRegistered:true };
 let categories = [];   // [{id, name, cfg}]
 let state = {};        // {[catId]: {roster:[], groups:[], sched:[], ko:[]}}
@@ -321,8 +322,8 @@ function applyTheme(primary, secondary) {
     '--text':               text,
     '--text2':              text2,
     '--text3':              text3,
-    '--on-primary':         '#FFFFFF',
-    '--on-primary-shadow':  onPrimaryShadow,
+    '--on-primary':         onColor(primary),
+    '--on-primary-shadow':  onColor(primary) === '#FFFFFF' ? onPrimaryShadow : 'none',
     '--header-bg':          `rgba(${rB},${gB},${bB},0.95)`,
     '--nav-bg':             `rgba(${rB3},${gB3},${bB3},0.96)`,
     '--modebar-bg':         `rgba(${r1},${g1},${b1},0.07)`,
@@ -413,7 +414,7 @@ async function submitRegistration() {
   const p1   = document.getElementById('frm-p1').value.trim();
   const p2   = document.getElementById('frm-p2').value.trim();
   const phone = document.getElementById('frm-phone').value.trim();
-  const catId = document.getElementById('frm-cat').value;
+  const catId = document.querySelector('#frm-cat-wrap .cat-pill.on')?.dataset.value || '';
   const err = document.getElementById('frm-err');
   const ok  = document.getElementById('frm-ok');
   err.classList.add('h'); ok.classList.add('h');
@@ -454,6 +455,11 @@ async function setRegPaid(id, paid) {
     if (r) r.paid = paid;
     renderRegistrations();
   } catch(e) {}
+}
+
+function selectRegCat(btn) {
+  document.querySelectorAll('.cat-pill').forEach(b => b.classList.remove('on'));
+  btn.classList.add('on');
 }
 
 function setRegFilter(f) {
@@ -546,10 +552,9 @@ function renderPayLink(wrapId) {
 }
 
 function renderRegisterPage() {
-  const closedMsg  = document.getElementById('reg-closed-msg');
-  const formWrap   = document.getElementById('reg-form-wrap');
-  const sub        = document.getElementById('reg-subtitle');
-  const catSelect  = document.getElementById('frm-cat');
+  const closedMsg = document.getElementById('reg-closed-msg');
+  const formWrap  = document.getElementById('reg-form-wrap');
+  const sub       = document.getElementById('reg-subtitle');
   if (!meta.regOpen) {
     closedMsg?.classList.remove('h');
     if (formWrap) formWrap.style.display = 'none';
@@ -558,8 +563,17 @@ function renderRegisterPage() {
     if (formWrap) formWrap.style.display = '';
   }
   if (sub) sub.textContent = meta.name ? `Register for ${meta.name}` : '';
-  if (catSelect) {
-    catSelect.innerHTML = categories.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+  const catWrap = document.getElementById('frm-cat-wrap');
+  if (catWrap) {
+    catWrap.innerHTML = categories.map(c =>
+      `<button type="button" class="cat-pill" data-value="${c.id}" onclick="selectRegCat(this)">${c.name}</button>`
+    ).join('');
+    if (categories.length === 1) catWrap.querySelector('.cat-pill')?.classList.add('on');
+  }
+  const noteEl = document.getElementById('reg-note');
+  if (noteEl) {
+    noteEl.textContent = meta.regNote || '';
+    noteEl.classList.toggle('h', !meta.regNote);
   }
   renderPayLink('reg-pay-wrap');
 }
@@ -1399,7 +1413,7 @@ function renderSettings() {
     <div class="sett-row" style="align-items:flex-start;padding-top:16px">
       <div class="sett-label">
         <span class="sett-name">Payment Links</span>
-        <span class="sett-desc">Shown as subtle links on the register &amp; participants pages. Label is optional.</span>
+        <span class="sett-desc">Shown inside the registration form. Label is optional.</span>
       </div>
       <div class="sett-ctrl" style="flex-direction:column;align-items:flex-end;gap:8px">
         <div style="display:flex;gap:6px;align-items:center">
@@ -1414,6 +1428,17 @@ function renderSettings() {
           <input class="text-inp" value="${meta.paymentLink2||''}" style="width:190px" placeholder="https://… (optional)"
             onchange="updateMeta('paymentLink2',this.value)"/>
         </div>
+      </div>
+    </div>
+    <div class="sett-row" style="align-items:flex-start;padding-top:16px">
+      <div class="sett-label">
+        <span class="sett-name">Registration Note</span>
+        <span class="sett-desc">Text shown below the registration form — deadlines, rules, payment info, etc.</span>
+      </div>
+      <div class="sett-ctrl">
+        <textarea class="text-inp" style="width:240px;height:76px;resize:vertical;line-height:1.5"
+          onchange="updateMeta('regNote',this.value)"
+          placeholder="e.g. Payment deadline is Friday…">${meta.regNote||''}</textarea>
       </div>
     </div>
     <div class="toggle-row">
@@ -1440,7 +1465,13 @@ function renderSettings() {
   catSection.className='sett-section';
   catSection.innerHTML=`<div class="sett-section-title">Categories</div>
     <div id="cat-list">${categories.map((cat,ci)=>renderCatItem(cat,ci)).join('')}</div>
-    <button class="add-cat-btn" onclick="addCategory()">+ Add Category</button>`;
+    <div class="sett-row" style="border-top:1px solid var(--border);margin-top:8px;padding-top:14px;border-bottom:none;padding-bottom:0">
+      <div class="sett-label">
+        <span class="sett-name">Add Category</span>
+        <span class="sett-desc">Create a new category for this tournament</span>
+      </div>
+      <button class="add-cat-btn" onclick="addCategory()">+ Add</button>
+    </div>`;
   container.appendChild(catSection);
 
   // Danger zone
@@ -1518,6 +1549,7 @@ function updateMeta(key, val) {
   if (['paymentLink','paymentLinkLabel','paymentLink2','paymentLink2Label'].includes(key)) {
     renderRegisterPage(); renderParticipants();
   }
+  if (key === 'regNote') renderRegisterPage();
   pushMetaOnly();
 }
 
@@ -1640,7 +1672,7 @@ function renderAll() {
 Object.assign(window, {
   adminClick, selectLoginRole, tryLogin, closeLogin,
   goPage, setCat, setCourt,
-  submitRegistration, setRegStatus, setRegPaid, setRegFilter,
+  submitRegistration, setRegStatus, setRegPaid, setRegFilter, selectRegCat,
   openAddPair, closeAddPair, saveAddPair,
   buildTournament, shuffleBuildRoster, moveBuildItem,
   onDragStart, onDragEnd, onDragOver, onDrop,

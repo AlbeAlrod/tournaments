@@ -6,7 +6,7 @@
 <title>Tournaments</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@700;800;900&display=swap" rel="stylesheet"/>
-<link rel="stylesheet" href="styles.css?v=9"/>
+<link rel="stylesheet" href="styles.css?v=10"/>
 </head>
 <body>
 
@@ -71,11 +71,11 @@
         <div class="form-card">
           <div class="form-row">
             <label>Player 1 Name</label>
-            <input class="form-input" id="frm-p1" placeholder="First Last" autocomplete="off"/>
+            <input class="form-input" id="frm-p1" placeholder="Name" autocomplete="off"/>
           </div>
           <div class="form-row">
             <label>Player 2 Name</label>
-            <input class="form-input" id="frm-p2" placeholder="First Last" autocomplete="off"/>
+            <input class="form-input" id="frm-p2" placeholder="Name" autocomplete="off"/>
           </div>
           <div class="form-row">
             <label>Phone</label>
@@ -83,7 +83,7 @@
           </div>
           <div class="form-row">
             <label>Category</label>
-            <select class="form-input" id="frm-cat"></select>
+            <div id="frm-cat-wrap" class="cat-pills"></div>
           </div>
           <div id="frm-err" class="frm-err h"></div>
           <div id="frm-ok" class="frm-ok h">Registration submitted! You will be notified upon approval.</div>
@@ -92,6 +92,7 @@
         </div>
       </div>
     </div>
+    <div id="reg-note" class="reg-note h"></div>
 
     <!-- PARTICIPANTS page -->
     <div class="pg" id="page-participants">
@@ -219,6 +220,6 @@
   </div>
 </div>
 
-<script type="module" src="app.js?v=9"></script>
+<script type="module" src="app.js?v=10"></script>
 </body>
 </html>
