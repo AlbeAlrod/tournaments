@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Tournaments</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@700;800;900&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="styles.css?v=1"/>
+</head>
+<body>
+
+<!-- NO TOURNAMENT -->
+<div id="view-none" class="view h">
+  <div class="no-t-wrap">
+    <div class="no-t-icon">🏆</div>
+    <h1>Tournaments</h1>
+    <p>No tournament specified. Add <code>?t=tournament-id</code> to the URL.</p>
+  </div>
+</div>
+
+<!-- LOADING -->
+<div id="view-loading" class="view">
+  <div class="no-t-wrap"><div class="loader"></div><p>Loading…</p></div>
+</div>
+
+<!-- MAIN APP -->
+<div id="view-app" class="view h">
+
+  <header>
+    <div class="logo">
+      <div class="lmark" id="logo-mark">
+        <img id="logo-img" src="" alt="" style="display:none;height:40px;width:auto;object-fit:contain;"/>
+        <span id="logo-letter">T</span>
+      </div>
+      <span class="lname" id="header-name">Tournament</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;">
+      <span class="sync-dot" id="sync-indicator" title="Synced"></span>
+      <button class="admin-toggle" id="abtn" onclick="adminClick()"><span id="adm-txt">Admin</span></button>
+    </div>
+  </header>
+
+  <div class="mode-bar mode-view" id="mode-bar">
+    <span id="mode-text">View only — tap Admin to manage</span>
+  </div>
+
+  <nav id="main-nav">
+    <!-- Registration phase tabs -->
+    <button class="tab phase-reg" id="tab-register" onclick="goPage('register')">Register</button>
+    <button class="tab phase-reg" id="tab-participants" onclick="goPage('participants')">Participants</button>
+    <button class="tab phase-reg admin-only" id="tab-registrations" onclick="goPage('registrations')">Registrations</button>
+    <button class="tab phase-reg admin-only" id="tab-build" onclick="goPage('build')">Build</button>
+    <!-- Tournament phase tabs -->
+    <button class="tab phase-trn" id="tab-standings" onclick="goPage('standings')">Standings</button>
+    <button class="tab phase-trn" id="tab-schedule" onclick="goPage('schedule')">Schedule</button>
+    <button class="tab phase-trn" id="tab-bracket" onclick="goPage('bracket')">Bracket</button>
+    <!-- Shared master tabs -->
+    <button class="tab admin-only" id="tab-settings" onclick="goPage('settings')">Settings</button>
+  </nav>
+
+  <main>
+
+    <!-- REGISTER page -->
+    <div class="pg" id="page-register">
+      <div class="page-header">
+        <h2 id="reg-title">Register</h2>
+        <p id="reg-subtitle"></p>
+      </div>
+      <div id="reg-closed-msg" class="info-box h">Registration is currently closed.</div>
+      <div id="reg-form-wrap">
+        <div class="form-card">
+          <div class="form-row">
+            <label>Player 1 Name</label>
+            <input class="form-input" id="frm-p1" placeholder="First Last" autocomplete="off"/>
+          </div>
+          <div class="form-row">
+            <label>Player 2 Name</label>
+            <input class="form-input" id="frm-p2" placeholder="First Last" autocomplete="off"/>
+          </div>
+          <div class="form-row">
+            <label>Phone</label>
+            <input class="form-input" id="frm-phone" type="tel" placeholder="050-0000000" autocomplete="off"/>
+          </div>
+          <div class="form-row">
+            <label>Category</label>
+            <select class="form-input" id="frm-cat"></select>
+          </div>
+          <div id="frm-err" class="frm-err h"></div>
+          <div id="frm-ok" class="frm-ok h">Registration submitted! You will be notified upon approval.</div>
+          <button class="submit-btn" onclick="submitRegistration()">Submit Registration</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- PARTICIPANTS page -->
+    <div class="pg" id="page-participants">
+      <div class="page-header">
+        <h2>Registered Participants</h2>
+        <p id="participants-subtitle">Approved registrations</p>
+      </div>
+      <div id="participants-hidden-msg" class="info-box h">The participant list is not public yet.</div>
+      <div id="participants-list"></div>
+    </div>
+
+    <!-- REGISTRATIONS (master) -->
+    <div class="pg" id="page-registrations">
+      <div class="page-header">
+        <h2>Registrations</h2>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">
+          <button class="filter-btn on" id="rf-all" onclick="setRegFilter('all')">All</button>
+          <button class="filter-btn" id="rf-pending" onclick="setRegFilter('pending')">Pending</button>
+          <button class="filter-btn" id="rf-approved" onclick="setRegFilter('approved')">Approved</button>
+          <button class="filter-btn" id="rf-rejected" onclick="setRegFilter('rejected')">Rejected</button>
+        </div>
+      </div>
+      <div id="registrations-list"></div>
+    </div>
+
+    <!-- BUILD (master) -->
+    <div class="pg" id="page-build">
+      <div class="page-header">
+        <h2>Build Tournament</h2>
+        <p>Drag pairs into order, then build the tournament.</p>
+      </div>
+      <div id="build-cats"></div>
+    </div>
+
+    <!-- STANDINGS (tournament) -->
+    <div class="pg" id="page-standings">
+      <div class="page-header">
+        <h2>Standings</h2>
+      </div>
+      <div id="cat-filter"></div>
+      <div id="standings-grid"></div>
+    </div>
+
+    <!-- SCHEDULE (tournament) -->
+    <div class="pg" id="page-schedule">
+      <div id="sbar" class="sbar"></div>
+      <div id="cat-filter-sched"></div>
+      <div class="sched-search-box">
+        <input class="team-search-input" id="sched-search" placeholder="Search team…" oninput="filterSchedule()"/>
+      </div>
+      <div id="court-filter" class="court-filter"></div>
+      <div id="schedule-content"></div>
+    </div>
+
+    <!-- BRACKET (tournament) -->
+    <div class="pg" id="page-bracket">
+      <div class="page-header"><h2>Knockout Bracket</h2></div>
+      <div id="cat-filter-bracket"></div>
+      <div id="bracket-container"></div>
+    </div>
+
+    <!-- SETTINGS (master) -->
+    <div class="pg" id="page-settings">
+      <div class="page-header"><h2>Settings</h2></div>
+      <div id="settings-container"></div>
+    </div>
+
+  </main>
+</div><!-- /view-app -->
+
+<!-- LOGIN MODAL -->
+<div class="overlay h" id="pw-modal" onclick="if(event.target===this)closeLogin()">
+  <div class="modal">
+    <h3>Admin Login</h3>
+    <div class="modal-row" style="margin-bottom:14px;">
+      <button id="role-btn-admin" onclick="selectLoginRole('admin')">Admin</button>
+      <button id="role-btn-master" onclick="selectLoginRole('master')">Master</button>
+    </div>
+    <div class="modal-row">
+      <input class="modal-input" id="pw-inp" type="password" placeholder="Password"
+        onkeydown="if(event.key==='Enter')tryLogin()"/>
+    </div>
+    <div id="pw-err" class="h" style="color:#DC2626;font-size:13px;margin-top:6px;">Incorrect password.</div>
+    <div class="modal-btns">
+      <button class="mbtn mbtn-ok" onclick="tryLogin()">Login</button>
+      <button class="mbtn mbtn-cancel" onclick="closeLogin()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- EDIT TEAM MODAL -->
+<div class="overlay h" id="edit-modal" onclick="if(event.target===this)closeEdit()">
+  <div class="modal">
+    <h3 id="edit-modal-title">Edit Pair</h3>
+    <div class="modal-row">
+      <input class="modal-input" id="edit-p1" placeholder="Player 1"/>
+    </div>
+    <div class="modal-row">
+      <input class="modal-input" id="edit-p2" placeholder="Player 2"/>
+    </div>
+    <div class="modal-btns">
+      <button class="mbtn mbtn-ok" onclick="saveEdit()">Save</button>
+      <button class="mbtn mbtn-cancel" onclick="closeEdit()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- ADD PAIR MODAL (master) -->
+<div class="overlay h" id="addpair-modal" onclick="if(event.target===this)closeAddPair()">
+  <div class="modal">
+    <h3>Add Pair Directly</h3>
+    <div class="modal-row">
+      <input class="modal-input" id="ap-p1" placeholder="Player 1"/>
+    </div>
+    <div class="modal-row">
+      <input class="modal-input" id="ap-p2" placeholder="Player 2"/>
+    </div>
+    <div class="modal-row">
+      <select class="modal-input" id="ap-cat"></select>
+    </div>
+    <div class="modal-btns">
+      <button class="mbtn mbtn-ok" onclick="saveAddPair()">Add</button>
+      <button class="mbtn mbtn-cancel" onclick="closeAddPair()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script type="module" src="app.js?v=1"></script>
+</body>
+</html>
