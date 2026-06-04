@@ -27,7 +27,7 @@ const EMAIL_MASTER = 'vl.master@tournaments.app';
 const tId = new URLSearchParams(location.search).get('t');
 
 // ============ STATE ============
-let meta = { name:'', logoUrl:'', theme:'purple', paymentLink:'', phase:'registration', regOpen:true, showRegistered:true };
+let meta = { name:'', logoUrl:'', primaryColor:'#6B21A8', secondaryColor:'#7C3AED', paymentLink:'', phase:'registration', regOpen:true, showRegistered:true };
 let categories = [];   // [{id, name, cfg}]
 let state = {};        // {[catId]: {roster:[], groups:[], sched:[], ko:[]}}
 let registrations = [];// [{id, p1, p2, phone, category, status, paid, createdAt}]
@@ -163,7 +163,7 @@ async function loadTournament() {
       if (!state[cat.id]) state[cat.id] = { roster:[], groups:[], sched:[], ko:[] };
     });
     applyingRemote = false;
-    applyTheme(meta.theme);
+    applyTheme(meta.primaryColor, meta.secondaryColor);
     renderAll();
     setSyncStatus(true);
   });
@@ -182,72 +182,110 @@ async function loadRegistrations() {
   }
 }
 
-// ============ THEMES ============
-const THEMES = {
-  purple: {
-    '--primary':       '#6B21A8',
-    '--primary2':      '#7C3AED',
-    '--primary3':      '#9333EA',
-    '--bg':            '#F3F0FF',
-    '--bg2':           '#FFFFFF',
-    '--bg3':           '#EDE8FB',
-    '--surface':       '#E4DCFA',
-    '--border':        'rgba(107,33,168,0.12)',
-    '--border2':       'rgba(107,33,168,0.25)',
-    '--text':          '#1E0A3C',
-    '--text2':         '#4C1D95',
-    '--text3':         '#7C3AED',
-    '--header-bg':     'rgba(243,240,255,0.95)',
-    '--nav-bg':        'rgba(237,232,251,0.96)',
-    '--modebar-bg':    'rgba(107,33,168,0.07)',
-    '--modebar-admin-bg': 'linear-gradient(90deg,rgba(107,33,168,.13),rgba(124,58,237,.13))',
-  },
-  blue: {
-    '--primary':       '#1E3A8A',
-    '--primary2':      '#2563EB',
-    '--primary3':      '#3B82F6',
-    '--bg':            '#EFF6FF',
-    '--bg2':           '#FFFFFF',
-    '--bg3':           '#DBEAFE',
-    '--surface':       '#BFDBFE',
-    '--border':        'rgba(30,58,138,0.12)',
-    '--border2':       'rgba(30,58,138,0.25)',
-    '--text':          '#0A1628',
-    '--text2':         '#1E3A8A',
-    '--text3':         '#2563EB',
-    '--header-bg':     'rgba(239,246,255,0.95)',
-    '--nav-bg':        'rgba(219,234,254,0.96)',
-    '--modebar-bg':    'rgba(30,58,138,0.07)',
-    '--modebar-admin-bg': 'linear-gradient(90deg,rgba(30,58,138,.13),rgba(37,99,235,.13))',
-  },
-  green: {
-    '--primary':       '#065F46',
-    '--primary2':      '#047857',
-    '--primary3':      '#059669',
-    '--bg':            '#ECFDF5',
-    '--bg2':           '#FFFFFF',
-    '--bg3':           '#D1FAE5',
-    '--surface':       '#A7F3D0',
-    '--border':        'rgba(6,95,70,0.12)',
-    '--border2':       'rgba(6,95,70,0.25)',
-    '--text':          '#022C22',
-    '--text2':         '#064E3B',
-    '--text3':         '#059669',
-    '--header-bg':     'rgba(236,253,245,0.95)',
-    '--nav-bg':        'rgba(209,250,229,0.96)',
-    '--modebar-bg':    'rgba(6,95,70,0.07)',
-    '--modebar-admin-bg': 'linear-gradient(90deg,rgba(6,95,70,.13),rgba(4,120,87,.13))',
-  }
-};
+// ============ THEME — dual free color picker ============
+function hexToRgb(hex) {
+  return [
+    parseInt(hex.slice(1,3),16),
+    parseInt(hex.slice(3,5),16),
+    parseInt(hex.slice(5,7),16)
+  ];
+}
 
-function applyTheme(themeName) {
-  const t = THEMES[themeName] || THEMES.purple;
+function hexToHsl(hex) {
+  let [r,g,b] = hexToRgb(hex).map(v=>v/255);
+  const max=Math.max(r,g,b), min=Math.min(r,g,b);
+  const l=(max+min)/2;
+  let h=0, s=0;
+  if (max!==min) {
+    const d=max-min;
+    s = l>0.5 ? d/(2-max-min) : d/(max+min);
+    switch(max) {
+      case r: h=((g-b)/d+(g<b?6:0))/6; break;
+      case g: h=((b-r)/d+2)/6; break;
+      case b: h=((r-g)/d+4)/6; break;
+    }
+  }
+  return [Math.round(h*360), Math.round(s*100), Math.round(l*100)];
+}
+
+function hslToHex(h,s,l) {
+  s=Math.max(0,Math.min(100,s)); l=Math.max(0,Math.min(100,l));
+  const sd=s/100, ld=l/100;
+  let r,g,b;
+  if (s===0) { r=g=b=ld; } else {
+    const hue2rgb=(p,q,t)=>{
+      if(t<0)t+=1; if(t>1)t-=1;
+      if(t<1/6)return p+(q-p)*6*t;
+      if(t<1/2)return q;
+      if(t<2/3)return p+(q-p)*(2/3-t)*6;
+      return p;
+    };
+    const q=ld<0.5?ld*(1+sd):ld+sd-ld*sd, p=2*ld-q;
+    r=hue2rgb(p,q,h/360+1/3);
+    g=hue2rgb(p,q,h/360);
+    b=hue2rgb(p,q,h/360-1/3);
+  }
+  return '#'+[r,g,b].map(x=>Math.round(x*255).toString(16).padStart(2,'0')).join('');
+}
+
+function applyTheme(primary, secondary) {
+  primary   = primary   || '#6B21A8';
+  secondary = secondary || primary;
+
+  const [r1,g1,b1] = hexToRgb(primary);
+  const [h1,s1,l1] = hexToHsl(primary);
+  const [r2,g2,b2] = hexToRgb(secondary);
+  const [h2,s2,l2] = hexToHsl(secondary);
+
+  // Background: very light tint of primary hue
+  const bgL  = Math.max(95, 98 - s1*0.04);
+  const bg3L = Math.max(90, bgL - 5);
+  const surL = Math.max(84, bgL - 10);
+  const bg    = hslToHex(h1, Math.min(s1*0.35, 22), bgL);
+  const bg3   = hslToHex(h1, Math.min(s1*0.45, 28), bg3L);
+  const surf  = hslToHex(h1, Math.min(s1*0.55, 35), surL);
+
+  // Text: dark variants of primary hue
+  const textL  = Math.max(6,  l1 * 0.22);
+  const text2L = Math.max(16, l1 * 0.45);
+  const text   = hslToHex(h1, Math.min(s1*0.6,  60), textL);
+  const text2  = hslToHex(h1, Math.min(s1*0.75, 80), text2L);
+  const text3  = hslToHex(h1, Math.min(s1,     100), Math.min(l1, 52));
+
+  // primary3 = lighter secondary for hover/pill states
+  const primary3 = hslToHex(h2, Math.min(s2, 100), Math.min(l2+14, 72));
+
+  // Header / nav derived from bg
+  const [rB,gB,bB]   = hexToRgb(bg);
+  const [rB3,gB3,bB3] = hexToRgb(bg3);
+
+  const vars = {
+    '--primary':            primary,
+    '--primary2':           secondary,
+    '--primary3':           primary3,
+    '--bg':                 bg,
+    '--bg2':                '#FFFFFF',
+    '--bg3':                bg3,
+    '--surface':            surf,
+    '--border':             `rgba(${r1},${g1},${b1},0.13)`,
+    '--border2':            `rgba(${r1},${g1},${b1},0.28)`,
+    '--text':               text,
+    '--text2':              text2,
+    '--text3':              text3,
+    '--header-bg':          `rgba(${rB},${gB},${bB},0.95)`,
+    '--nav-bg':             `rgba(${rB3},${gB3},${bB3},0.96)`,
+    '--modebar-bg':         `rgba(${r1},${g1},${b1},0.07)`,
+    '--modebar-admin-bg':   `linear-gradient(90deg,rgba(${r1},${g1},${b1},.12),rgba(${r2},${g2},${b2},.10))`,
+  };
+
   const style = document.getElementById('theme-style') || (() => {
-    const s = document.createElement('style'); s.id = 'theme-style'; document.head.appendChild(s); return s;
+    const s=document.createElement('style'); s.id='theme-style'; document.head.appendChild(s); return s;
   })();
-  style.textContent = `:root { ${Object.entries(t).map(([k,v])=>`${k}:${v};`).join('')} }`;
+  style.textContent = `:root{${Object.entries(vars).map(([k,v])=>`${k}:${v};`).join('')}}`;
+
+  // Logo mark gets gradient of both colors
   const lm = document.getElementById('logo-mark');
-  if (lm) lm.style.background = t['--primary'];
+  if (lm) lm.style.background = `linear-gradient(135deg,${primary},${secondary})`;
 }
 
 // ============ AUTH ============
@@ -1247,18 +1285,25 @@ function renderSettings() {
       <div class="sett-label"><span class="sett-name">Logo URL</span></div>
       <div class="sett-ctrl"><input class="text-inp" value="${meta.logoUrl||''}" style="width:200px" placeholder="https://…" onchange="updateMeta('logoUrl',this.value)"/></div>
     </div>
-    <div class="sett-row">
+    <div class="sett-row" style="align-items:flex-start;padding-top:16px">
       <div class="sett-label">
-        <span class="sett-name">Color Theme</span>
-        <span class="sett-desc">Affects the entire site — background, header, buttons.</span>
+        <span class="sett-name">Colors</span>
+        <span class="sett-desc">Two colors that together style the entire site — background, header, gradients, buttons.</span>
       </div>
-      <div class="sett-ctrl">
-        <div class="theme-picker">
-          <button class="theme-swatch t-purple ${(meta.theme||'purple')==='purple'?'on':''}" title="Purple" onclick="updateMeta('theme','purple')"></button>
-          <button class="theme-swatch t-blue   ${meta.theme==='blue'  ?'on':''}" title="Blue"   onclick="updateMeta('theme','blue')"></button>
-          <button class="theme-swatch t-green  ${meta.theme==='green' ?'on':''}" title="Green"  onclick="updateMeta('theme','green')"></button>
-          <span class="theme-label">${{purple:'Purple',blue:'Blue',green:'Green'}[meta.theme||'purple']}</span>
+      <div class="sett-ctrl" style="flex-direction:column;align-items:flex-end;gap:10px">
+        <div style="display:flex;align-items:center;gap:10px">
+          <label style="font-size:12px;color:var(--text3);font-weight:600;white-space:nowrap">Primary</label>
+          <input type="color" class="color-inp" value="${meta.primaryColor||'#6B21A8'}"
+            oninput="updateMeta('primaryColor',this.value)" style="width:52px;height:38px"/>
         </div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <label style="font-size:12px;color:var(--text3);font-weight:600;white-space:nowrap">Accent</label>
+          <input type="color" class="color-inp" value="${meta.secondaryColor||meta.primaryColor||'#7C3AED'}"
+            oninput="updateMeta('secondaryColor',this.value)" style="width:52px;height:38px"/>
+        </div>
+        <div style="width:114px;height:14px;border-radius:7px;
+          background:linear-gradient(135deg,${meta.primaryColor||'#6B21A8'},${meta.secondaryColor||'#7C3AED'});
+          box-shadow:0 2px 6px rgba(0,0,0,.18)"></div>
       </div>
     </div>
     <div class="sett-row">
@@ -1351,7 +1396,9 @@ function catNumField(label, ci, key, val, min, max) {
 
 function updateMeta(key, val) {
   meta[key] = val;
-  if (key==='theme') { applyTheme(val); renderSettings(); }
+  if (key==='primaryColor' || key==='secondaryColor') {
+    applyTheme(meta.primaryColor, meta.secondaryColor);
+  }
   if (key==='name') {
     document.getElementById('header-name').textContent=val;
     document.title=val||'Tournaments';
@@ -1461,7 +1508,7 @@ function rerender() {
 }
 
 function renderAll() {
-  applyTheme(meta.theme);
+  applyTheme(meta.primaryColor, meta.secondaryColor);
   applyLogo(meta.logoUrl);
   document.getElementById('header-name').textContent = meta.name||'Tournament';
   document.title = meta.name||'Tournaments';

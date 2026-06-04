@@ -24,7 +24,7 @@
 }
 
 *,*::before,*::after { box-sizing: border-box; margin: 0; padding: 0; }
-body { font-family: 'Barlow', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; overflow-x: hidden; }
+body { font-family: 'Barlow', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; overflow-x: hidden; transition: background .4s, color .4s; }
 
 /* Views */
 .view { min-height: 100vh; }
@@ -437,16 +437,7 @@ input:checked + .toggle-slider::before { transform: translateX(20px); }
   border: 2px solid var(--border2); background: transparent; color: var(--primary);
   font-family: 'Barlow Condensed', sans-serif; font-size: 15px; font-weight: 700; cursor: pointer; }
 
-/* ===== THEME PICKER ===== */
-.theme-picker { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
-.theme-swatch { width: 40px; height: 40px; border-radius: 50%; cursor: pointer;
-  border: 3px solid transparent; transition: all .2s; box-shadow: 0 2px 8px rgba(0,0,0,.15); }
-.theme-swatch:hover { transform: scale(1.1); }
-.theme-swatch.on { border-color: #fff; outline: 2px solid var(--primary); outline-offset: 2px; transform: scale(1.1); }
-.theme-swatch.t-purple { background: #6B21A8; }
-.theme-swatch.t-blue   { background: #1E3A8A; }
-.theme-swatch.t-green  { background: #065F46; }
-.theme-label { font-size: 13px; color: var(--text2); font-weight: 600; margin-left: 6px; }
+/* ===== COLOR PICKER ===== */
 
 /* ===== PAYMENT LINK ===== */
 .pay-btn { display: inline-flex; align-items: center; gap: 8px; padding: 13px 24px;
