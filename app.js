@@ -27,7 +27,7 @@ const EMAIL_MASTER = 'vl.master@tournaments.app';
 const tId = new URLSearchParams(location.search).get('t');
 
 // ============ STATE ============
-let meta = { name:'', logoUrl:'', primaryColor:'#6B21A8', phase:'registration', regOpen:true, showRegistered:true };
+let meta = { name:'', logoUrl:'', theme:'purple', paymentLink:'', phase:'registration', regOpen:true, showRegistered:true };
 let categories = [];   // [{id, name, cfg}]
 let state = {};        // {[catId]: {roster:[], groups:[], sched:[], ko:[]}}
 let registrations = [];// [{id, p1, p2, phone, category, status, paid, createdAt}]
@@ -163,7 +163,7 @@ async function loadTournament() {
       if (!state[cat.id]) state[cat.id] = { roster:[], groups:[], sched:[], ko:[] };
     });
     applyingRemote = false;
-    applyTheme(meta.primaryColor);
+    applyTheme(meta.theme);
     renderAll();
     setSyncStatus(true);
   });
@@ -182,34 +182,72 @@ async function loadRegistrations() {
   }
 }
 
-// ============ THEME ============
-function applyTheme(color) {
-  if (!color) return;
-  const r = parseInt(color.slice(1,3),16);
-  const g = parseInt(color.slice(3,5),16);
-  const b = parseInt(color.slice(5,7),16);
-  const lighten = (amt) => {
-    const lr = Math.min(255, r + amt), lg = Math.min(255, g + amt), lb = Math.min(255, b + amt);
-    return `rgb(${lr},${lg},${lb})`;
-  };
+// ============ THEMES ============
+const THEMES = {
+  purple: {
+    '--primary':       '#6B21A8',
+    '--primary2':      '#7C3AED',
+    '--primary3':      '#9333EA',
+    '--bg':            '#F3F0FF',
+    '--bg2':           '#FFFFFF',
+    '--bg3':           '#EDE8FB',
+    '--surface':       '#E4DCFA',
+    '--border':        'rgba(107,33,168,0.12)',
+    '--border2':       'rgba(107,33,168,0.25)',
+    '--text':          '#1E0A3C',
+    '--text2':         '#4C1D95',
+    '--text3':         '#7C3AED',
+    '--header-bg':     'rgba(243,240,255,0.95)',
+    '--nav-bg':        'rgba(237,232,251,0.96)',
+    '--modebar-bg':    'rgba(107,33,168,0.07)',
+    '--modebar-admin-bg': 'linear-gradient(90deg,rgba(107,33,168,.13),rgba(124,58,237,.13))',
+  },
+  blue: {
+    '--primary':       '#1E3A8A',
+    '--primary2':      '#2563EB',
+    '--primary3':      '#3B82F6',
+    '--bg':            '#EFF6FF',
+    '--bg2':           '#FFFFFF',
+    '--bg3':           '#DBEAFE',
+    '--surface':       '#BFDBFE',
+    '--border':        'rgba(30,58,138,0.12)',
+    '--border2':       'rgba(30,58,138,0.25)',
+    '--text':          '#0A1628',
+    '--text2':         '#1E3A8A',
+    '--text3':         '#2563EB',
+    '--header-bg':     'rgba(239,246,255,0.95)',
+    '--nav-bg':        'rgba(219,234,254,0.96)',
+    '--modebar-bg':    'rgba(30,58,138,0.07)',
+    '--modebar-admin-bg': 'linear-gradient(90deg,rgba(30,58,138,.13),rgba(37,99,235,.13))',
+  },
+  green: {
+    '--primary':       '#065F46',
+    '--primary2':      '#047857',
+    '--primary3':      '#059669',
+    '--bg':            '#ECFDF5',
+    '--bg2':           '#FFFFFF',
+    '--bg3':           '#D1FAE5',
+    '--surface':       '#A7F3D0',
+    '--border':        'rgba(6,95,70,0.12)',
+    '--border2':       'rgba(6,95,70,0.25)',
+    '--text':          '#022C22',
+    '--text2':         '#064E3B',
+    '--text3':         '#059669',
+    '--header-bg':     'rgba(236,253,245,0.95)',
+    '--nav-bg':        'rgba(209,250,229,0.96)',
+    '--modebar-bg':    'rgba(6,95,70,0.07)',
+    '--modebar-admin-bg': 'linear-gradient(90deg,rgba(6,95,70,.13),rgba(4,120,87,.13))',
+  }
+};
+
+function applyTheme(themeName) {
+  const t = THEMES[themeName] || THEMES.purple;
   const style = document.getElementById('theme-style') || (() => {
     const s = document.createElement('style'); s.id = 'theme-style'; document.head.appendChild(s); return s;
   })();
-  style.textContent = `:root {
-    --primary: ${color};
-    --primary2: ${lighten(20)};
-    --primary3: ${lighten(40)};
-    --bg: #F8F5FF;
-    --bg3: rgba(${r},${g},${b},.06);
-    --surface: rgba(${r},${g},${b},.12);
-    --border: rgba(${r},${g},${b},.12);
-    --border2: rgba(${r},${g},${b},.25);
-    --text2: rgba(${r},${g},${b},.9);
-    --text3: rgba(${r},${g},${b},.6);
-  }`;
-  // Update lmark bg
+  style.textContent = `:root { ${Object.entries(t).map(([k,v])=>`${k}:${v};`).join('')} }`;
   const lm = document.getElementById('logo-mark');
-  if (lm) lm.style.background = color;
+  if (lm) lm.style.background = t['--primary'];
 }
 
 // ============ AUTH ============
@@ -370,6 +408,7 @@ function renderParticipants() {
     return;
   }
   hiddenMsg?.classList.add('h');
+  renderPayLink('participants-pay-wrap');
   const approved = registrations.filter(r => r.status === 'approved');
   if (!approved.length) {
     el.innerHTML = `<div class="empty"><h3>No approved participants yet</h3></div>`;
@@ -396,6 +435,19 @@ function renderParticipants() {
   }).join('');
 }
 
+function renderPayLink(wrapId) {
+  const wrap = document.getElementById(wrapId);
+  if (!wrap) return;
+  if (meta.paymentLink) {
+    wrap.className = 'pay-wrap';
+    wrap.innerHTML = `<p>Payment</p>
+      <a class="pay-btn" href="${meta.paymentLink}" target="_blank" rel="noopener">💳 Pay Now</a>`;
+  } else {
+    wrap.className = 'pay-wrap h';
+    wrap.innerHTML = '';
+  }
+}
+
 function renderRegisterPage() {
   const closedMsg  = document.getElementById('reg-closed-msg');
   const formWrap   = document.getElementById('reg-form-wrap');
@@ -412,6 +464,7 @@ function renderRegisterPage() {
   if (catSelect) {
     catSelect.innerHTML = categories.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
   }
+  renderPayLink('reg-pay-wrap');
 }
 
 // ============ BUILD PAGE ============
@@ -1188,23 +1241,40 @@ function renderSettings() {
   metaSection.innerHTML=`<div class="sett-section-title">Tournament</div>
     <div class="sett-row">
       <div class="sett-label"><span class="sett-name">Name</span></div>
-      <div class="sett-ctrl"><input class="text-inp" id="s-name" value="${meta.name||''}" style="width:200px" onchange="updateMeta('name',this.value)"/></div>
+      <div class="sett-ctrl"><input class="text-inp" value="${meta.name||''}" style="width:200px" onchange="updateMeta('name',this.value)"/></div>
     </div>
     <div class="sett-row">
       <div class="sett-label"><span class="sett-name">Logo URL</span></div>
-      <div class="sett-ctrl"><input class="text-inp" id="s-logo" value="${meta.logoUrl||''}" style="width:200px" placeholder="https://…" onchange="updateMeta('logoUrl',this.value)"/></div>
+      <div class="sett-ctrl"><input class="text-inp" value="${meta.logoUrl||''}" style="width:200px" placeholder="https://…" onchange="updateMeta('logoUrl',this.value)"/></div>
     </div>
     <div class="sett-row">
-      <div class="sett-label"><span class="sett-name">Primary Color</span></div>
-      <div class="sett-ctrl"><input type="color" class="color-inp" id="s-color" value="${meta.primaryColor||'#6B21A8'}" oninput="updateMeta('primaryColor',this.value)"/></div>
+      <div class="sett-label">
+        <span class="sett-name">Color Theme</span>
+        <span class="sett-desc">Affects the entire site — background, header, buttons.</span>
+      </div>
+      <div class="sett-ctrl">
+        <div class="theme-picker">
+          <button class="theme-swatch t-purple ${(meta.theme||'purple')==='purple'?'on':''}" title="Purple" onclick="updateMeta('theme','purple')"></button>
+          <button class="theme-swatch t-blue   ${meta.theme==='blue'  ?'on':''}" title="Blue"   onclick="updateMeta('theme','blue')"></button>
+          <button class="theme-swatch t-green  ${meta.theme==='green' ?'on':''}" title="Green"  onclick="updateMeta('theme','green')"></button>
+          <span class="theme-label">${{purple:'Purple',blue:'Blue',green:'Green'}[meta.theme||'purple']}</span>
+        </div>
+      </div>
+    </div>
+    <div class="sett-row">
+      <div class="sett-label">
+        <span class="sett-name">Payment Link</span>
+        <span class="sett-desc">Shown to participants on the registration and participants pages.</span>
+      </div>
+      <div class="sett-ctrl"><input class="text-inp" value="${meta.paymentLink||''}" style="width:220px" placeholder="https://pay.example.com/…" onchange="updateMeta('paymentLink',this.value)"/></div>
     </div>
     <div class="toggle-row">
       <span class="toggle-label">Registration Open</span>
-      <label class="toggle-switch"><input type="checkbox" id="s-regopen" ${meta.regOpen?'checked':''} onchange="updateMeta('regOpen',this.checked)"/><span class="toggle-slider"></span></label>
+      <label class="toggle-switch"><input type="checkbox" ${meta.regOpen?'checked':''} onchange="updateMeta('regOpen',this.checked)"/><span class="toggle-slider"></span></label>
     </div>
     <div class="toggle-row">
       <span class="toggle-label">Show Participant List (public)</span>
-      <label class="toggle-switch"><input type="checkbox" id="s-showreg" ${meta.showRegistered?'checked':''} onchange="updateMeta('showRegistered',this.checked)"/><span class="toggle-slider"></span></label>
+      <label class="toggle-switch"><input type="checkbox" ${meta.showRegistered?'checked':''} onchange="updateMeta('showRegistered',this.checked)"/><span class="toggle-slider"></span></label>
     </div>
     <div class="sett-row">
       <div class="sett-label"><span class="sett-name">Phase</span><span class="sett-desc">Switch between registration and tournament mode.</span></div>
@@ -1281,7 +1351,7 @@ function catNumField(label, ci, key, val, min, max) {
 
 function updateMeta(key, val) {
   meta[key] = val;
-  if (key==='primaryColor') applyTheme(val);
+  if (key==='theme') { applyTheme(val); renderSettings(); }
   if (key==='name') {
     document.getElementById('header-name').textContent=val;
     document.title=val||'Tournaments';
@@ -1295,6 +1365,7 @@ function updateMeta(key, val) {
   }
   if (key==='regOpen') renderRegisterPage();
   if (key==='showRegistered') renderParticipants();
+  if (key==='paymentLink') { renderRegisterPage(); renderParticipants(); }
   pushMetaOnly();
 }
 
@@ -1390,7 +1461,7 @@ function rerender() {
 }
 
 function renderAll() {
-  applyTheme(meta.primaryColor);
+  applyTheme(meta.theme);
   applyLogo(meta.logoUrl);
   document.getElementById('header-name').textContent = meta.name||'Tournament';
   document.title = meta.name||'Tournaments';
