@@ -27,7 +27,9 @@ const EMAIL_MASTER = 'vl.master@tournaments.app';
 const tId = new URLSearchParams(location.search).get('t');
 
 // ============ STATE ============
-let meta = { name:'', logoUrl:'', primaryColor:'#6B21A8', secondaryColor:'#7C3AED', paymentLink:'', phase:'registration', regOpen:true, showRegistered:true };
+let meta = { name:'', logoUrl:'', primaryColor:'#6B21A8', secondaryColor:'#7C3AED',
+  paymentLink:'', paymentLinkLabel:'', paymentLink2:'', paymentLink2Label:'',
+  phase:'registration', regOpen:true, showRegistered:true };
 let categories = [];   // [{id, name, cfg}]
 let state = {};        // {[catId]: {roster:[], groups:[], sched:[], ko:[]}}
 let registrations = [];// [{id, p1, p2, phone, category, status, paid, createdAt}]
@@ -482,11 +484,10 @@ function renderRegistrations() {
         <div class="reg-phone">${r.phone||'—'}</div>
       </div>
       <span class="status-badge badge-${r.status}">${r.status}</span>
-      ${r.paid ? '<span class="status-badge badge-paid">Paid</span>' : ''}
       <div class="reg-actions">
         ${r.status !== 'approved' ? `<button class="reg-btn approve" onclick="setRegStatus('${r.id}','approved')">Approve</button>` : ''}
         ${r.status !== 'rejected' ? `<button class="reg-btn reject" onclick="setRegStatus('${r.id}','rejected')">Reject</button>` : ''}
-        ${!r.paid ? `<button class="reg-btn" onclick="setRegPaid('${r.id}',true)">Mark Paid</button>` : `<button class="reg-btn" onclick="setRegPaid('${r.id}',false)">Unpaid</button>`}
+        ${r.status === 'approved' ? `<button class="reg-btn" onclick="setRegStatus('${r.id}','pending')">Undo</button>` : ''}
       </div>
     </div>`;
   }).join('');
@@ -532,14 +533,19 @@ function renderParticipants() {
 function renderPayLink(wrapId) {
   const wrap = document.getElementById(wrapId);
   if (!wrap) return;
-  if (meta.paymentLink) {
-    wrap.className = 'pay-wrap';
-    wrap.innerHTML = `<p>Payment</p>
-      <a class="pay-btn" href="${meta.paymentLink}" target="_blank" rel="noopener">💳 Pay Now</a>`;
-  } else {
-    wrap.className = 'pay-wrap h';
-    wrap.innerHTML = '';
-  }
+  const links = [
+    { url: meta.paymentLink,  label: meta.paymentLinkLabel  || 'Payment Link'   },
+    { url: meta.paymentLink2, label: meta.paymentLink2Label || 'Payment Link 2' },
+  ].filter(l => l.url);
+
+  if (!links.length) { wrap.className = 'pay-section h'; wrap.innerHTML = ''; return; }
+
+  wrap.className = 'pay-section';
+  wrap.innerHTML = `
+    <span class="pay-icon">💳</span>
+    <div class="pay-links">
+      ${links.map(l => `<a class="pay-link-btn" href="${l.url}" target="_blank" rel="noopener">${l.label}</a>`).join('')}
+    </div>`;
 }
 
 function renderRegisterPage() {
@@ -1392,12 +1398,25 @@ function renderSettings() {
           box-shadow:0 2px 6px rgba(0,0,0,.18)"></div>
       </div>
     </div>
-    <div class="sett-row">
+    <div class="sett-row" style="align-items:flex-start;padding-top:16px">
       <div class="sett-label">
-        <span class="sett-name">Payment Link</span>
-        <span class="sett-desc">Shown to participants on the registration and participants pages.</span>
+        <span class="sett-name">Payment Links</span>
+        <span class="sett-desc">Shown as subtle links on the register &amp; participants pages. Label is optional.</span>
       </div>
-      <div class="sett-ctrl"><input class="text-inp" value="${meta.paymentLink||''}" style="width:220px" placeholder="https://pay.example.com/…" onchange="updateMeta('paymentLink',this.value)"/></div>
+      <div class="sett-ctrl" style="flex-direction:column;align-items:flex-end;gap:8px">
+        <div style="display:flex;gap:6px;align-items:center">
+          <input class="text-inp" value="${meta.paymentLinkLabel||''}" style="width:100px" placeholder="Label…"
+            onchange="updateMeta('paymentLinkLabel',this.value)"/>
+          <input class="text-inp" value="${meta.paymentLink||''}" style="width:190px" placeholder="https://…"
+            onchange="updateMeta('paymentLink',this.value)"/>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center">
+          <input class="text-inp" value="${meta.paymentLink2Label||''}" style="width:100px" placeholder="Label…"
+            onchange="updateMeta('paymentLink2Label',this.value)"/>
+          <input class="text-inp" value="${meta.paymentLink2||''}" style="width:190px" placeholder="https://… (optional)"
+            onchange="updateMeta('paymentLink2',this.value)"/>
+        </div>
+      </div>
     </div>
     <div class="toggle-row">
       <span class="toggle-label">Registration Open</span>
@@ -1498,7 +1517,9 @@ function updateMeta(key, val) {
   }
   if (key==='regOpen') renderRegisterPage();
   if (key==='showRegistered') renderParticipants();
-  if (key==='paymentLink') { renderRegisterPage(); renderParticipants(); }
+  if (['paymentLink','paymentLinkLabel','paymentLink2','paymentLink2Label'].includes(key)) {
+    renderRegisterPage(); renderParticipants();
+  }
   pushMetaOnly();
 }
 
