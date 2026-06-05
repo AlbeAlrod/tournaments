@@ -1374,11 +1374,18 @@ function filterSchedule() { renderScheduleContent(); }
 function renderCourtFilter() {
   const el = document.getElementById('court-filter');
   if (!el) return;
-  const courts = new Set();
   const cats = activeCat ? categories.filter(c=>c.id===activeCat) : categories;
+  const courts = new Set();
   cats.forEach(cat => {
-    const cfg = cat.cfg||DEF_CAT_CFG;
-    for (let i=1; i<=(cfg.courts||2); i++) courts.add(i);
+    const cs = state[cat.id];
+    if (cs) {
+      (cs.sched||[]).forEach(g => { if(g.court) courts.add(g.court); });
+      (cs.ko||[]).flat().forEach(g => { if(g.court) courts.add(g.court); });
+    }
+    // Fallback when schedule not yet built
+    if (!courts.size) {
+      for (let i=1; i<=(cat.cfg?.courts||2); i++) courts.add(i);
+    }
   });
   el.innerHTML = `<button class="cf-btn ${activeCourt==='all'?'on':''}" onclick="setCourt('all')">All</button>`
     + [...courts].sort((a,b)=>a-b).map(c =>
