@@ -1201,7 +1201,7 @@ function saveEdit() {
   if (!superAdmin || !editTarget) return;
   const p1 = document.getElementById('edit-p1').value.trim();
   const p2 = document.getElementById('edit-p2').value.trim();
-  const name = p2?`${p1} ${p2}`:p1;
+  const name = p2?`${p1} / ${p2}`:p1;
   if (!name) return;
 
   // Build page roster edit
@@ -1351,8 +1351,8 @@ function renderStats() {
 
 function buildGameRow(catId, g, idx, isKO) {
   const done = isValidScore(parseInt(g.sa),parseInt(g.sb),catId);
-  // Color pill by group for pool games, by court class for KO
-  const pc = isKO ? ['p1','p2','p3','p4'][(g.court-1)%4] : `gi${(g.gi ?? 0) % 4}`;
+  // Color pill by group index for pool; by court→group for KO (dynamic group colors)
+  const pc = `gi${isKO ? (g.court-1)%4 : (g.gi ?? 0) % 4}`;
   const wrap = document.createElement('div');
   const row  = document.createElement('div');
   row.className = 'gc'+(done?' done':'');
@@ -1412,11 +1412,30 @@ function renderScheduleContent() {
   el.innerHTML = '';
   Object.keys(byTime).sort((a,b)=>t2m(a)-t2m(b)).forEach(time => {
     const games = byTime[time];
-    const koGame = games.find(g=>g._isKO);
     const block = document.createElement('div');
     block.className='tblock';
-    block.innerHTML=`<div class="thdr"><span class="tlbl">${time}</span><div class="tline"></div>${koGame?`<span class="rtag">${koGame._rn}</span>`:''}</div>`;
-    games.forEach(g => block.appendChild(buildGameRow(g._catId, g, g._idx, g._isKO)));
+    // Build sub-groups: key = catId + type
+    const subGroups = new Map();
+    games.forEach(g => {
+      const isThirdPlace = !g._isKO && g.gi === -1;
+      let key, label;
+      if (g._isKO) { key = `ko-${g._catId}-${g._rn}`; label = g._rn; }
+      else if (isThirdPlace) { key = `3p-${g._catId}`; label = 'מקום שלישי'; }
+      else { key = `pool-${g._catId}`; label = null; } // pool: no label
+      if (!subGroups.has(key)) subGroups.set(key, {label, games:[]});
+      subGroups.get(key).games.push(g);
+    });
+    const needSubHeaders = subGroups.size > 1 || [...subGroups.values()].some(s=>s.label);
+    block.innerHTML=`<div class="thdr"><span class="tlbl">${time}</span><div class="tline"></div></div>`;
+    subGroups.forEach(({label, games: sg}) => {
+      if (needSubHeaders && label) {
+        const sh = document.createElement('div');
+        sh.className = 'tsub-hdr';
+        sh.textContent = label;
+        block.appendChild(sh);
+      }
+      sg.forEach(g => block.appendChild(buildGameRow(g._catId, g, g._idx, g._isKO)));
+    });
     el.appendChild(block);
   });
 }
@@ -1866,6 +1885,19 @@ function renderSettings() {
   container.appendChild(startSection);
 }
 
+// ── Dynamic group color CSS ──────────────────────────────────────
+const GRP_DEFAULTS = ['#E91E8C','#111111','#FFD600','#111111'];
+function applyGroupColors() {
+  const colors = GRP_DEFAULTS.map((d,i) => (meta.groupColors||[])[i] || d);
+  const style = document.getElementById('grp-color-style') || (() => {
+    const s=document.createElement('style'); s.id='grp-color-style'; document.head.appendChild(s); return s;
+  })();
+  style.textContent = colors.map((c,i) => {
+    const oc = onColor(c);
+    return `.gi${i}{background:${c};color:${oc}}`;
+  }).join('');
+}
+
 // ── Site colors ──────────────────────────────────────────────────
 function updateBgColor(color) {
   meta.bgColor = color;
@@ -1873,11 +1905,15 @@ function updateBgColor(color) {
   pushMetaOnly();
 }
 function updateGroupColor(gi, color) {
-  if (!Array.isArray(meta.groupColors)) meta.groupColors = [];
-  meta.groupColors[gi] = color;
+  // Ensure full 4-element array (avoids sparse array issues in Firestore)
+  const cur = [...GRP_DEFAULTS.map((d,i) => (meta.groupColors||[])[i] || d)];
+  cur[gi] = color;
+  meta.groupColors = cur;
+  applyGroupColors();
   pushMetaOnly();
   renderStandings();
   renderBuildPage();
+  renderScheduleContent();
 }
 
 // ── Category color ───────────────────────────────────────────────
@@ -2124,6 +2160,7 @@ function renderSponsorBar() {
 
 function renderAll() {
   applyTheme(meta.primaryColor, meta.secondaryColor);
+  applyGroupColors();
   applyLogo(meta.logoUrl);
   document.getElementById('header-name').textContent = meta.name||'Tournament';
   document.title = meta.name||'Tournaments';

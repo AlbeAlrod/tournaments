@@ -49,7 +49,12 @@ body {
 .no-t-wrap h1 { font-family: 'Barlow Condensed', sans-serif; font-size: 32px; font-weight: 900; color: var(--text); }
 .no-t-wrap p { font-size: 15px; color: var(--text3); }
 .no-t-wrap code { background: var(--bg3); padding: 2px 7px; border-radius: 4px; font-size: 13px; }
-.loader { width: 36px; height: 36px; border: 3px solid var(--border); border-top-color: var(--primary);
+/* Loading — pink brand */
+#view-loading { background: linear-gradient(135deg, #E91E8C 0%, #FF4FA8 100%); }
+#view-loading .no-t-wrap h1,
+#view-loading p { color: rgba(255,255,255,0.9); }
+.loader { width: 36px; height: 36px;
+  border: 3px solid rgba(255,255,255,0.3); border-top-color: #fff;
   border-radius: 50%; animation: spin .8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
@@ -314,6 +319,9 @@ main { position: relative; z-index: 5; max-width: 980px; margin: 0 auto; padding
 .cf-btn.on { background: var(--primary); color: var(--on-primary); border-color: var(--primary); }
 .tblock { margin-bottom: 16px; }
 .thdr { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+.tsub-hdr { font-family: 'Barlow Condensed', sans-serif; font-size: 10px; font-weight: 700;
+  letter-spacing: 2px; text-transform: uppercase; color: var(--primary-text);
+  padding: 4px 0 2px; margin-top: 6px; border-bottom: 1px solid var(--border); margin-bottom: 4px; }
 .tlbl { font-family: 'Barlow Condensed', sans-serif; font-size: 22px; font-weight: 800; color: var(--primary-text); }
 .tline { flex: 1; height: 1px; background: var(--border); }
 .rtag { font-size: 11px; color: var(--text3); letter-spacing: .1em; text-transform: uppercase; }
@@ -329,11 +337,12 @@ main { position: relative; z-index: 5; max-width: 980px; margin: 0 auto; padding
 .p2 { background: rgba(168,85,247,.13); color: #7E22CE; }
 .p3 { background: rgba(99,102,241,.13); color: #4338CA; }
 .p4 { background: rgba(139,92,246,.13); color: #5B21B6; }
-/* Group pills for pool games — flyer colors */
-.gi0 { background: #E91E8C; color: #fff; }          /* בית א — ורוד */
-.gi1 { background: #111111; color: #fff; }          /* בית ב — שחור */
-.gi2 { background: #FFD600; color: #111; }          /* בית ג — צהוב */
-.gi3 { background: #111111; color: #fff; }          /* בית ד — שחור */
+/* Group pills — dynamic colors applied via applyGroupColors() JS function */
+/* Fallback static values (overridden at runtime): */
+.gi0 { background: #E91E8C; color: #fff; }
+.gi1 { background: #111111; color: #fff; }
+.gi2 { background: #FFD600; color: #111; }
+.gi3 { background: #111111; color: #fff; }
 .gt { font-size: 13px; color: var(--text); font-weight: 500; overflow: hidden;
   text-overflow: ellipsis; white-space: nowrap; }
 .gt.r { text-align: right; }
