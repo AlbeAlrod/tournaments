@@ -71,7 +71,8 @@ header { position: sticky; top: 0; z-index: 50; display: flex; align-items: cent
   box-shadow: 0 2px 8px rgba(0,0,0,0.18); }
 .lmark span { font-family: 'Barlow Condensed', sans-serif; font-weight: 900; font-size: 20px; color: var(--on-primary); }
 .lname { font-family: 'Barlow Condensed', sans-serif; font-weight: 800; font-size: 20px;
-  color: var(--text); letter-spacing: 1px; }
+  color: var(--text); letter-spacing: 1px;
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .admin-toggle { font-family: 'Barlow Condensed', sans-serif; font-weight: 800; font-size: 13px;
   letter-spacing: .8px; text-transform: uppercase; padding: 7px 18px; border-radius: 999px;
@@ -88,7 +89,8 @@ body.admin-mode button.admin-only { display: inline-block !important; }
 
 /* Mode bar */
 .mode-bar { padding: 6px 20px; font-size: 11px; font-weight: 600; letter-spacing: .4px;
-  text-align: center; text-transform: uppercase; transition: all .3s; }
+  text-transform: uppercase; transition: all .3s;
+  display: flex; align-items: center; justify-content: center; gap: 8px; position: relative; }
 .mode-bar.mode-view { background: var(--modebar-bg); color: var(--text3); border-bottom: 1px solid var(--border); }
 .mode-bar.mode-admin { background: var(--primary);
   color: var(--on-primary); border-bottom: none;
@@ -698,8 +700,51 @@ body.master-mode button.master-only { display: inline-block !important; }
   border: 1.5px solid var(--border2); background: var(--bg2); color: var(--text2);
   cursor: pointer; flex-shrink: 0; }
 
+/* ── Prevent double-tap zoom on all interactive elements ── */
+button, a, input, select, textarea { touch-action: manipulation; }
+/* ── Global: prevent input/select overflow inside any container ── */
+input, textarea, select { max-width: 100%; }
+
 @media (max-width: 640px) {
-  header { flex-wrap: wrap; height: auto; padding: 10px 14px 8px; gap: 6px; }
-  .gc { grid-template-columns: auto 1fr 20px 1fr auto; gap: 5px; }
-  .si { width: 32px; font-size: 13px; }
+  /* Header: single row, truncate long tournament names */
+  header { height: 56px; padding: 0 14px; flex-wrap: nowrap; }
+  /* Nav must follow header height */
+  nav { top: 56px; }
+
+  /* Game rows */
+  .gc { grid-template-columns: auto 1fr 18px 1fr auto; gap: 4px; }
+  /* 16px on score inputs prevents iOS auto-zoom on focus */
+  .si { width: 32px; font-size: 16px; }
+  /* Rule tag clutters narrow rows — hide on mobile */
+  .game-rule { display: none; }
+
+  /* All text inputs ≥ 16px = no iOS auto-zoom */
+  .form-input, .modal-input, .text-inp, .time-inp,
+  .add-team-input, .team-search-input { font-size: 16px; }
+
+  /* Form card: tighter padding on phones */
+  .form-card { padding: 20px 14px; }
+
+  /* Standings: single column on narrow screens */
+  .stnds-subgrid { grid-template-columns: 1fr; }
+
+  /* Settings: allow label to stack above controls */
+  .sett-row { flex-wrap: wrap; gap: 10px; }
+  .sett-ctrl { flex-wrap: wrap; width: 100%; }
+  /* Non-monospace inputs fill available width (monospace = hex color fields, keep compact) */
+  .sett-ctrl .text-inp:not(.text-mono) { width: 100% !important; }
+  .sett-ctrl textarea { width: 100% !important; }
+
+  /* Sponsor bar: slightly smaller logos */
+  .sponsor-logo { height: 28px; }
+
+  /* Build page footer: wrap buttons on very small screens */
+  .build-foot { flex-wrap: wrap; }
+
+  /* Bracket: smooth momentum scroll on iOS */
+  .bscroll { -webkit-overflow-scrolling: touch; }
+
+  /* Bracket: compact match boxes */
+  .bmatch-box { margin: 3px 4px; }
+  .bteam { font-size: 11px; padding: 6px 8px; min-height: 30px; }
 }

@@ -403,8 +403,8 @@ function selectLoginRole(role) {
 function updateRoleButtons() {
   const on  = `flex:1;padding:10px 6px;border-radius:var(--rs);border:2px solid var(--primary);background:var(--primary);color:#fff;font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:700;cursor:pointer`;
   const off = `flex:1;padding:10px 6px;border-radius:var(--rs);border:2px solid var(--border2);background:transparent;color:var(--primary);font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:700;cursor:pointer`;
-  document.getElementById('role-btn-admin')?.setAttribute('style',   loginRole==='admin'   ? on : off);
-  document.getElementById('role-btn-master')?.setAttribute('style', loginRole==='manager' ? on : off);
+  document.getElementById('role-btn-admin')?.setAttribute('style',   loginRole==='admin'  ? on : off);
+  document.getElementById('role-btn-master')?.setAttribute('style', loginRole==='master' ? on : off);
 }
 
 function tryLogin() {
@@ -439,6 +439,8 @@ function refreshAdmin() {
   const mtxt = document.getElementById('mode-text');
   if (txt) txt.textContent = adminLevel===2 ? 'Master ✓' : adminLevel===1 ? 'Admin ✓' : 'Admin';
   if (btn) btn.classList.toggle('on', admin);
+  const syncDot = document.getElementById('sync-indicator');
+  if (syncDot) syncDot.classList.toggle('h', !admin);
   if (bar) bar.className = 'mode-bar ' + (admin ? 'mode-admin' : 'mode-view');
   if (mtxt) {
     if (!admin) mtxt.textContent = 'View only — tap Admin to manage';
@@ -496,6 +498,7 @@ async function submitRegistration() {
     document.getElementById('frm-p2').value = '';
     document.getElementById('frm-phone').value = '';
     ok.classList.remove('h');
+    document.querySelectorAll('#frm-cat-wrap .cat-pill').forEach(b => b.classList.remove('on'));
   } catch(e) {
     err.textContent = 'Submission failed. Please try again.';
     err.classList.remove('h');
@@ -874,6 +877,7 @@ function shuffleBuildRoster(catId) {
     const j = Math.floor(Math.random() * (i+1));
     [cs.roster[i], cs.roster[j]] = [cs.roster[j], cs.roster[i]];
   }
+  pushToCloud();
   renderBuildPage();
 }
 
@@ -1066,6 +1070,7 @@ function generateScheduleForCat(catId) {
 // ============ SCORE VALIDATION ============
 function isValidScore(sa, sb, catId, ptwOverride) {
   if (isNaN(sa)||isNaN(sb)||sa===''||sb==='') return false;
+  if (sa < 0 || sb < 0) return false;
   const cat = categories.find(c=>c.id===catId);
   const cfg = cat?.cfg || DEF_CAT_CFG;
   if (cfg.sets === 3) {
@@ -1084,6 +1089,7 @@ function scoreError(sa, sb, catId, ptwOverride) {
   if (sa===''||sb==='') return null;
   const a=parseInt(sa), b=parseInt(sb);
   if (isNaN(a)||isNaN(b)) return null;
+  if (a < 0 || b < 0) return 'Scores must be 0 or higher';
   const cat = categories.find(c=>c.id===catId);
   const cfg = cat?.cfg || DEF_CAT_CFG;
   if (cfg.sets===3) {
@@ -1814,9 +1820,9 @@ function renderSettings() {
             ? `<img src="${escH(l.url)}" alt="" onerror="this.style.display='none'" style="max-width:52px;max-height:32px;object-fit:contain"/>`
             : `<span style="color:var(--text3);font-size:20px;line-height:1">+</span>`}</div>
           <input class="text-inp" style="flex:1;min-width:0" value="${escH(l.url)}"
-            placeholder="Image URL…" onchange="updateSponsorLogo(${i},'url',this.value)"/>
+            placeholder="Image URL…" oninput="updateSponsorLogo(${i},'url',this.value)"/>
           <input class="text-inp" style="width:100px;flex-shrink:0" value="${escH(l.alt)}"
-            placeholder="Name…" onchange="updateSponsorLogo(${i},'alt',this.value)"/>
+            placeholder="Name…" oninput="updateSponsorLogo(${i},'alt',this.value)"/>
           <button class="team-del" onclick="removeSponsorLogo(${i})" title="Remove">✕</button>
         </div>`).join('')
       : `<p class="sett-empty-note">No sponsors yet — add one below.</p>`}
@@ -1886,7 +1892,7 @@ function renderSettings() {
       </div>
       <div class="sett-ctrl">
         <textarea class="text-inp" style="width:240px;height:76px;resize:vertical;line-height:1.5"
-          onchange="updateMeta('regNote',this.value)"
+          oninput="updateMeta('regNote',this.value)"
           placeholder="e.g. Payment deadline is Friday…">${escH(meta.regNote)}</textarea>
       </div>
     </div>
@@ -1898,15 +1904,15 @@ function renderSettings() {
       <div class="sett-ctrl" style="flex-direction:column;align-items:flex-end;gap:8px">
         <div style="display:flex;gap:6px;align-items:center">
           <input class="text-inp" value="${escH(meta.paymentLinkLabel)}" style="width:100px" placeholder="Label…"
-            onchange="updateMeta('paymentLinkLabel',this.value)"/>
+            oninput="updateMeta('paymentLinkLabel',this.value)"/>
           <input class="text-inp" value="${escH(meta.paymentLink)}" style="width:190px" placeholder="https://…"
-            onchange="updateMeta('paymentLink',this.value)"/>
+            oninput="updateMeta('paymentLink',this.value)"/>
         </div>
         <div style="display:flex;gap:6px;align-items:center">
           <input class="text-inp" value="${escH(meta.paymentLink2Label)}" style="width:100px" placeholder="Label…"
-            onchange="updateMeta('paymentLink2Label',this.value)"/>
+            oninput="updateMeta('paymentLink2Label',this.value)"/>
           <input class="text-inp" value="${escH(meta.paymentLink2)}" style="width:190px" placeholder="https://… (optional)"
-            onchange="updateMeta('paymentLink2',this.value)"/>
+            oninput="updateMeta('paymentLink2',this.value)"/>
         </div>
       </div>
     </div>`;
