@@ -1402,8 +1402,8 @@ function updateKOForCat(catId) {
     const sfRound = cs.ko[cs.ko.length - 2];
     const thirdGame = cs.sched.find(g => g.isThirdPlace);
     if (thirdGame && sfRound) {
-      thirdGame.a = getKOLoser(sfRound[0], catId) || 'מפסידה חצי גמר 1';
-      thirdGame.b = getKOLoser(sfRound[1], catId) || 'מפסידה חצי גמר 2';
+      thirdGame.a = getKOLoser(sfRound[0], catId) || 'Loser of SF1';
+      thirdGame.b = getKOLoser(sfRound[1], catId) || 'Loser of SF2';
     }
   }
 }
@@ -1708,26 +1708,29 @@ function renderBracketForCat(catId, container) {
     const matchesEl=document.createElement('div'); matchesEl.className='brnd-matches';
     let halvings=0;
     for (let k=startRi+1;k<=ri;k++) { if(cs.ko[k].length<cs.ko[k-1].length) halvings++; }
-    matchesEl.style.paddingTop=(ri===startRi?0:((Math.pow(2,halvings)-1)*HG/2))+'px';
-    const matchGap=(Math.pow(2,halvings)-1)*HG+GAP;
-    // Detect BYE-pair pattern: even=BYE, odd=real game
+    // R16 with BYEs: show only 4 actual games with QF-matching spacing (halvings=1)
+    // so connector lines to QF are perfectly horizontal
     const hasByePairs = ri===startRi && round.some(g=>g.isBye) && round[0]?.isBye;
-    // Cross display: when 4 QF games feed a cross-SF (2 games), show in [0,3,1,2] order
-    // so SF boxes sit visually between the correct QF pairs
+    const effHalvings = hasByePairs ? 1 : halvings;
+    matchesEl.style.paddingTop=((Math.pow(2,effHalvings)-1)*HG/2)+'px';
+    const matchGap=(Math.pow(2,effHalvings)-1)*HG+GAP;
+    // Cross display order for rounds feeding cross-SF
     const nextNonThird = cs.ko[ri+1]?.filter(g=>!g.isThirdPlace);
     const isCrossRound = round.length === 4 && nextNonThird?.length === 2;
-    const displayOrder = isCrossRound ? [0,3,1,2] : round.map((_,i)=>i);
+    let displayOrder;
+    if (hasByePairs) {
+      // Show only non-BYE games in cross-aligned order [0,3,1,2]
+      const nonBye = round.map((_,i)=>i).filter(i=>!round[i].isBye);
+      displayOrder = [0,3,1,2].map(j=>nonBye[j]).filter(i=>i!=null);
+    } else if (isCrossRound) {
+      displayOrder = [0,3,1,2];
+    } else {
+      displayOrder = round.map((_,i)=>i);
+    }
     displayOrder.forEach((gi, pos) => {
       const g = round[gi];
       const wrap=document.createElement('div'); wrap.className='bmatch-wrap';
-      if (pos>0) {
-        if (hasByePairs) {
-          // Within pair: small gap; between pairs: larger gap (HG/2 = 45px)
-          wrap.style.marginTop = (gi % 2 === 1 ? GAP : Math.floor(HG/2)) + 'px';
-        } else {
-          wrap.style.marginTop=matchGap+'px';
-        }
-      }
+      if (pos>0) wrap.style.marginTop=matchGap+'px';
       wrap.appendChild(mkBox(g,gi,ri));
       matchesEl.appendChild(wrap);
     });
@@ -1751,10 +1754,11 @@ function renderBracketForCat(catId, container) {
 function drawBracketLines(scroll, catId) {
   const cs = state[catId];
   if (!cs?.ko?.length) return;
-  requestAnimationFrame(() => {
+
+  const doDraw = () => {
     scroll.querySelector('.bsvg')?.remove();
     const sR = scroll.getBoundingClientRect();
-    if (!sR.width) return;
+    if (!sR.width) return false;
     const SL = scroll.scrollLeft, ST = scroll.scrollTop;
     const svg = document.createElementNS('http://www.w3.org/2000/svg','svg');
     svg.className = 'bsvg';
@@ -1766,18 +1770,18 @@ function drawBracketLines(scroll, catId) {
     scroll.style.position = 'relative';
 
     const rounds = [...scroll.querySelectorAll('.bround')];
-    const C = 'rgba(255,255,255,0.2)';
+    const C = 'rgba(255,255,255,0.25)';
 
     const mk = (x1,y1,x2,y2) => {
       const el = document.createElementNS('http://www.w3.org/2000/svg','line');
       el.setAttribute('x1',Math.round(x1)); el.setAttribute('y1',Math.round(y1));
       el.setAttribute('x2',Math.round(x2)); el.setAttribute('y2',Math.round(y2));
-      el.setAttribute('stroke',C); el.setAttribute('stroke-width','1.5');
+      el.setAttribute('stroke',C); el.setAttribute('stroke-width','2');
       el.setAttribute('stroke-linecap','round');
       svg.appendChild(el);
     };
 
-    const pos = wrap => {
+    const getPos = wrap => {
       const b = wrap.querySelector('.bmatch-box');
       if (!b) return null;
       const r = b.getBoundingClientRect();
@@ -1792,19 +1796,39 @@ function drawBracketLines(scroll, catId) {
       const srcWraps = [...rounds[ci].querySelectorAll('.bmatch-wrap')];
       const dstWraps = [...rounds[ci+1].querySelectorAll('.bmatch-wrap')];
       if (!srcWraps.length || !dstWraps.length) continue;
-      const srcPos = srcWraps.map(pos).filter(Boolean);
-      const dstPos = dstWraps.map(pos).filter(Boolean);
+      const srcPos = srcWraps.map(getPos).filter(Boolean);
+      const dstPos = dstWraps.map(getPos).filter(Boolean);
 
-      dstPos.forEach((dst, di) => {
-        const s0 = srcPos[di*2], s1 = srcPos[di*2+1];
-        if (!s0) return;
-        const vx = (Math.max(s0.rx, s1?.rx ?? s0.rx) + dst.lx) / 2;
-        mk(s0.rx, s0.my, vx, s0.my);
-        if (s1) { mk(s1.rx, s1.my, vx, s1.my); mk(vx, s0.my, vx, s1.my); }
-        mk(vx, dst.my, dst.lx, dst.my);
-      });
+      if (srcPos.length === dstPos.length) {
+        // 1:1 — R16 actual games → QF (horizontal lines)
+        dstPos.forEach((dst, di) => {
+          const s = srcPos[di];
+          if (!s) return;
+          const vx = (s.rx + dst.lx) / 2;
+          mk(s.rx, s.my, vx, s.my);
+          mk(vx, s.my, dst.lx, dst.my);
+        });
+      } else {
+        // 2:1 — standard bracket connector (QF→SF, SF→Final)
+        dstPos.forEach((dst, di) => {
+          const s0 = srcPos[di*2], s1 = srcPos[di*2+1];
+          if (!s0) return;
+          const vx = (Math.max(s0.rx, s1?.rx ?? s0.rx) + dst.lx) / 2;
+          mk(s0.rx, s0.my, vx, s0.my);
+          if (s1) { mk(s1.rx, s1.my, vx, s1.my); mk(vx, s0.my, vx, s1.my); }
+          mk(vx, dst.my, dst.lx, dst.my);
+        });
+      }
     }
     scroll.prepend(svg);
+    return true;
+  };
+
+  // Double RAF to ensure layout is complete; retry after 150ms if tab was hidden
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      if (!doDraw()) setTimeout(() => requestAnimationFrame(doDraw), 150);
+    });
   });
 }
 
