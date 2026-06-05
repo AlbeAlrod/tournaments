@@ -58,10 +58,11 @@ body {
   border-radius: 50%; animation: spin .8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-/* Header — scrolls away (not sticky) */
+/* Header — sticky (inside sticky-block) */
 header { display: flex; align-items: center;
-  justify-content: space-between; padding: 18px 20px 14px;
-  background: var(--header-bg); transition: background .4s; }
+  justify-content: space-between; padding: 12px 20px;
+  background: var(--header-bg); border-bottom: 1px solid var(--border);
+  transition: background .4s; }
 
 /* Admin bar row — scrolls away, holds admin button + mode indicator */
 .admin-bar { display: flex; align-items: center; gap: 12px;
