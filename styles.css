@@ -325,9 +325,21 @@ main { position: relative; z-index: 5; max-width: 980px; margin: 0 auto; padding
 .tlbl { font-family: 'Barlow Condensed', sans-serif; font-size: 22px; font-weight: 800; color: var(--primary-text); }
 .tline { flex: 1; height: 1px; background: var(--border); }
 .rtag { font-size: 11px; color: var(--text3); letter-spacing: .1em; text-transform: uppercase; }
+/* Game scoring rule tag */
+.game-rule { font-size: 10px; font-family: 'Barlow Condensed', sans-serif; font-weight: 600;
+  letter-spacing: .5px; color: var(--text3); white-space: nowrap; flex-shrink: 0; }
+
+/* Scoring rules table in Settings */
+.scoring-rules-tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
+.scoring-rules-tbl th { font-size: 10px; color: var(--text3); text-transform: uppercase;
+  letter-spacing: .5px; padding: 4px 6px; text-align: left; border-bottom: 1px solid var(--border); }
+.scoring-rules-tbl td { padding: 3px 6px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+.scoring-rules-tbl tr:last-child td { border-bottom: none; }
+.srt-label { font-size: 11px; color: var(--text2); }
+
 .gc { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--rs);
   padding: 10px 14px; margin-bottom: 7px; display: grid;
-  grid-template-columns: auto 1fr 28px 1fr auto; gap: 8px; align-items: center; transition: border-color .2s; }
+  grid-template-columns: auto 1fr 28px 1fr auto auto; gap: 8px; align-items: center; transition: border-color .2s; }
 .gc:hover { border-color: var(--border2); }
 .gc.done { border-color: rgba(107,33,168,.25); background: rgba(107,33,168,.03); }
 .pill { font-family: 'Barlow Condensed', sans-serif; font-size: 12px; font-weight: 700;

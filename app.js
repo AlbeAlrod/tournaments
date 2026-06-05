@@ -55,6 +55,32 @@ const dn = s => {
   return s.replace(/\sו([^\s])/g, ' $1');
 };
 
+// ============ KO SCORING RULES (per round position from end) ============
+const DEF_KO_RULES = {
+  pool:   { pts: 15, change: null },
+  r16:    { pts: 15, change: null },
+  qf:     { pts: 18, change: 5 },
+  sf:     { pts: 18, change: 5 },
+  final:  { pts: 21, change: 7 },
+  third:  { pts: 15, change: 6 },
+};
+
+function getRuleForGame(catId, g, isKO) {
+  const cat = categories.find(c=>c.id===catId);
+  const rules = { ...DEF_KO_RULES, ...(cat?.cfg?.koRules||{}) };
+  if (!isKO) {
+    if (g.gi === -1) return rules.third;
+    return rules.pool;
+  }
+  const cs = state[catId];
+  if (!cs?.ko?.length) return rules.pool;
+  const fromEnd = cs.ko.length - 1 - (g.ri ?? 0);
+  if (fromEnd === 0) return rules.final;
+  if (fromEnd === 1) return rules.sf;
+  if (fromEnd === 2) return rules.qf;
+  return rules.r16;
+}
+
 // ============ DEFAULT CATEGORY CONFIG ============
 const DEF_CAT_CFG = {
   courts: 2, gameDur: 30, breakDur: 0, numGroups: 2, advPerGroup: 2,
@@ -1033,7 +1059,7 @@ function generateScheduleForCat(catId) {
 }
 
 // ============ SCORE VALIDATION ============
-function isValidScore(sa, sb, catId) {
+function isValidScore(sa, sb, catId, ptwOverride) {
   if (isNaN(sa)||isNaN(sb)||sa===''||sb==='') return false;
   const cat = categories.find(c=>c.id===catId);
   const cfg = cat?.cfg || DEF_CAT_CFG;
@@ -1041,7 +1067,7 @@ function isValidScore(sa, sb, catId) {
     const hi = Math.max(sa,sb), lo = Math.min(sa,sb);
     return (hi===2 && lo>=0 && lo<=1);
   }
-  const ptw = cfg.pointsToWin || 21;
+  const ptw = ptwOverride || cfg.pointsToWin || 21;
   if (sa===sb) return false;
   const hi = Math.max(sa,sb), lo = Math.min(sa,sb);
   if (hi < ptw) return false;
@@ -1049,7 +1075,7 @@ function isValidScore(sa, sb, catId) {
   return hi-lo===2;
 }
 
-function scoreError(sa, sb, catId) {
+function scoreError(sa, sb, catId, ptwOverride) {
   if (sa===''||sb==='') return null;
   const a=parseInt(sa), b=parseInt(sb);
   if (isNaN(a)||isNaN(b)) return null;
@@ -1061,7 +1087,7 @@ function scoreError(sa, sb, catId) {
     if (hi!==2) return 'Winner must have 2 sets';
     return null;
   }
-  const ptw = cfg.pointsToWin||21;
+  const ptw = ptwOverride || cfg.pointsToWin||21;
   const hi=Math.max(a,b), lo=Math.min(a,b);
   if (hi===lo) return `Scores can't be equal`;
   if (hi<ptw) return `Must reach ${ptw} · e.g. ${ptw}–${lo}`;
@@ -1255,7 +1281,8 @@ function setGS(catId, idx, k, v) {
   if (!admin || meta.phase !== 'tournament') return;
   state[catId].sched[idx][k] = v;
   const g = state[catId].sched[idx];
-  const err = scoreError(g.sa, g.sb, catId);
+  const rule = getRuleForGame(catId, g, false);
+  const err = scoreError(g.sa, g.sb, catId, rule.pts);
   const errEl = document.getElementById(`gerr-${catId}-${idx}`);
   if (errEl) { errEl.textContent=err||''; errEl.style.display=err?'block':'none'; }
   if (!err) { updateKOForCat(catId); pushToCloud(); renderStandings(); }
@@ -1264,7 +1291,8 @@ function setKS(catId, ri, gi, k, v) {
   if (!admin || meta.phase !== 'tournament') return;
   state[catId].ko[ri][gi][k] = v;
   const g = state[catId].ko[ri][gi];
-  const err = scoreError(g.sa, g.sb, catId);
+  const rule = getRuleForGame(catId, g, true);
+  const err = scoreError(g.sa, g.sb, catId, rule.pts);
   const errEl = document.getElementById(`kerr-${catId}-${ri}-${gi}`);
   if (errEl) { errEl.textContent=err||''; errEl.style.display=err?'block':'none'; }
   if (!err) { updateKOForCat(catId); pushToCloud(); }
@@ -1350,7 +1378,8 @@ function renderStats() {
 }
 
 function buildGameRow(catId, g, idx, isKO) {
-  const done = isValidScore(parseInt(g.sa),parseInt(g.sb),catId);
+  const rule = getRuleForGame(catId, g, isKO);
+  const done = isValidScore(parseInt(g.sa), parseInt(g.sb), catId, rule.pts);
   // Color pill by group index for pool; by court→group for KO (dynamic group colors)
   const pc = `gi${isKO ? (g.court-1)%4 : (g.gi ?? 0) % 4}`;
   const wrap = document.createElement('div');
@@ -1364,12 +1393,16 @@ function buildGameRow(catId, g, idx, isKO) {
          onchange="${isKO?`setKS('${catId}',${g.ri},${g.gi},'sb',this.value)`:`setGS('${catId}',${idx},'sb',this.value)`}"/>`
     : `<span class="ssep">${done?`${g.sa} : ${g.sb}`:'— : —'}</span>`;
 
+  const ruleTag = rule.change
+    ? `<span class="game-rule">to ${rule.pts} pts · switch @${rule.change}</span>`
+    : `<span class="game-rule">to ${rule.pts} pts</span>`;
   row.innerHTML = `
     <span class="pill ${pc}">C${g.court}</span>
     <span class="gt">${dn(g.a)}${!isKO&&g.gn?`<span class="gtag">${g.gn}</span>`:''}</span>
     <span class="gvs">vs</span>
     <span class="gt r">${dn(g.b)}</span>
-    <span class="sw">${scoreCell}</span>`;
+    <span class="sw">${scoreCell}</span>
+    ${ruleTag}`;
   const errId = isKO ? `kerr-${catId}-${g.ri}-${g.gi}` : `gerr-${catId}-${idx}`;
   const errD  = document.createElement('div');
   errD.id = errId; errD.className = 'score-err'; errD.style.display = 'none';
@@ -2014,6 +2047,37 @@ function renderCatItem(cat, ci) {
         </div>
       </div>
     </div>
+    <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
+      <div class="cat-sett-label" style="margin-bottom:8px;font-size:10px;letter-spacing:2px">SCORING RULES</div>
+      <table class="scoring-rules-tbl">
+        <thead><tr><th>Stage</th><th>Pts to win</th><th>Switch @</th></tr></thead>
+        <tbody>
+          ${[
+            ['pool',  'Pool'],
+            ['r16',   'R16 (שמינית)'],
+            ['qf',    'QF (רבע)'],
+            ['sf',    'SF (חצי)'],
+            ['third', '3/4'],
+            ['final', 'Final (גמר)'],
+          ].map(([key, label]) => {
+            const r = { ...DEF_KO_RULES[key], ...(cfg.koRules?.[key]||{}) };
+            return `<tr>
+              <td class="srt-label">${label}</td>
+              <td><div class="cat-sett-ctrl">
+                <button class="s-num-btn" onclick="updateKORuleField(${ci},'${key}','pts',Math.max(11,(${r.pts||15})-1))">−</button>
+                <span class="s-num-val">${r.pts||15}</span>
+                <button class="s-num-btn" onclick="updateKORuleField(${ci},'${key}','pts',Math.min(30,(${r.pts||15})+1))">+</button>
+              </div></td>
+              <td><div class="cat-sett-ctrl">
+                <button class="s-num-btn" onclick="updateKORuleField(${ci},'${key}','change',${r.change?r.change-1:null})">−</button>
+                <span class="s-num-val">${r.change||'—'}</span>
+                <button class="s-num-btn" onclick="updateKORuleField(${ci},'${key}','change',${r.change?r.change+1:5})">+</button>
+              </div></td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>
   </div>`;
 }
 
@@ -2061,6 +2125,15 @@ function applyLogo(url) {
   } else {
     img.style.display='none'; if(letter)letter.style.display='';
   }
+}
+
+function updateKORuleField(ci, roundKey, field, val) {
+  if (!categories[ci]) return;
+  if (!categories[ci].cfg) categories[ci].cfg = {...DEF_CAT_CFG};
+  if (!categories[ci].cfg.koRules) categories[ci].cfg.koRules = {};
+  if (!categories[ci].cfg.koRules[roundKey]) categories[ci].cfg.koRules[roundKey] = {...DEF_KO_RULES[roundKey]};
+  categories[ci].cfg.koRules[roundKey][field] = val === '' || val === null ? null : Number(val);
+  pushToCloud();
 }
 
 function updateCatName(ci, val) {
@@ -2201,7 +2274,8 @@ Object.assign(window, {
   addCategory, deleteCategory, resetAllScores,
   updateSponsorLogo, removeSponsorLogo, addSponsorLogo,
   updateCatColor, renameGroup, moveTeam,
-  updateGroupColor, updateBgColor
+  updateGroupColor, updateBgColor,
+  updateKORuleField
 });
 
 // ============ BOOT ============
