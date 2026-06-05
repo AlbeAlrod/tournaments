@@ -932,11 +932,11 @@ function getKORoundName(catId, ri) {
   if (!cs||!cs.ko[ri]) return '';
   // Use position from end (0=Final, 1=SF, 2=QF, 3=R16...)
   const fromEnd = cs.ko.length - 1 - ri;
-  if (fromEnd === 0) return 'גמר';
-  if (fromEnd === 1) return 'חצי גמר';
-  if (fromEnd === 2) return 'רבע גמר';
-  if (fromEnd === 3) return 'שמינית גמר';
-  return `1/${Math.pow(2,fromEnd)} גמר`;
+  if (fromEnd === 0) return 'Final';
+  if (fromEnd === 1) return 'Semifinals';
+  if (fromEnd === 2) return 'Quarterfinals';
+  if (fromEnd === 3) return 'Round of 16';
+  return `Round of ${Math.pow(2,fromEnd+1)}`;
 }
 
 function generateScheduleForCat(catId) {
@@ -1263,6 +1263,7 @@ function resolvePoolSeed(catId, seed) {
 
 function getKOWinner(game, catId) {
   if (!game) return null;
+  if (game.isBye) return game.a || null; // bye → auto-advance
   const sa=parseInt(game.sa), sb=parseInt(game.sb);
   if (isValidScore(sa,sb,catId)) return sa>sb?game.a:game.b;
   return null;
@@ -1272,49 +1273,25 @@ function updateKOForCat(catId) {
   const cs = state[catId];
   if (!cs||!cs.ko.length) return;
 
-  // r0: resolve pool seeds (use explicit seedA/seedB stored in each game)
+  // r0: resolve pool seeds; byes just resolve their single seed
   if (cs.ko[0]) {
     cs.ko[0].forEach(g => {
-      if (!g.seedA && !g.seedB) return;
-      const rA = resolvePoolSeed(catId, g.seedA||'');
-      const rB = resolvePoolSeed(catId, g.seedB||'');
-      if (g.seedA) g.a = rA.known ? rA.label : g.seedA;
-      if (g.seedB) g.b = rB.known ? rB.label : g.seedB;
+      const seedA = g.seedA || (g.isBye ? g.a : '');
+      const seedB = g.seedB || '';
+      if (seedA) { const r=resolvePoolSeed(catId,seedA); if(r.known||/^[A-Z]\d+$/.test(seedA)) g.a=r.known?r.label:seedA; }
+      if (seedB) { const r=resolvePoolSeed(catId,seedB); if(r.known||/^[A-Z]\d+$/.test(seedB)) g.b=r.known?r.label:seedB; }
     });
   }
 
   for (let ri=1; ri<cs.ko.length; ri++) {
     const prev = cs.ko[ri-1];
     const rndName = getKORoundName(catId, ri-1);
-    // Detect ratio: 2:1 (normal halving) or 1:1 (hybrid bracket where direct seeds fill one slot)
-    const ratio = prev.length / cs.ko[ri].length; // 2 = normal, 1 = hybrid
-
     cs.ko[ri].forEach((g, gi) => {
       if (g.isThirdPlace) return;
-
-      // 'a' side
-      if (g.directSeedA) {
-        const r = resolvePoolSeed(catId, g.directSeedA);
-        g.a = r.known ? r.label : g.directSeedA;
-      } else if (ratio >= 2) {
-        const wa = getKOWinner(prev[gi*2], catId);
-        g.a = wa || `Winner of ${rndName} ${gi*2+1}`;
-      } else {
-        const wa = getKOWinner(prev[gi], catId);
-        g.a = wa || `Winner of ${rndName} ${gi+1}`;
-      }
-
-      // 'b' side
-      if (g.directSeedB) {
-        const r = resolvePoolSeed(catId, g.directSeedB);
-        g.b = r.known ? r.label : g.directSeedB;
-      } else if (ratio >= 2) {
-        const wb = getKOWinner(prev[gi*2+1], catId);
-        g.b = wb || `Winner of ${rndName} ${gi*2+2}`;
-      } else {
-        const wb = getKOWinner(prev[gi], catId);
-        g.b = wb || `Winner of ${rndName} ${gi+1}`;
-      }
+      const wa = getKOWinner(prev[gi*2],   catId);
+      const wb = getKOWinner(prev[gi*2+1], catId);
+      g.a = wa || `Winner of ${rndName} ${gi*2+1}`;
+      g.b = wb || `Winner of ${rndName} ${gi*2+2}`;
     });
   }
 }
@@ -1330,7 +1307,7 @@ function renderStats() {
     if (!cs) return;
     totalPool += cs.sched.length;
     donePool  += cs.sched.filter(g=>isValidScore(parseInt(g.sa),parseInt(g.sb),cat.id)).length;
-    totalKO   += cs.ko.reduce((s,r)=>s+r.length, 0);
+    totalKO   += cs.ko.reduce((s,r)=>s+r.filter(g=>!g.isBye).length, 0);
     const last = cs.ko.length ? cs.ko[cs.ko.length-1][0] : cs.sched[cs.sched.length-1];
     if (last?.time && t2m(last.time)>t2m(lastTime)) { lastTime=last.time; lastDur=cat.cfg?.gameDur||30; }
   });
@@ -1385,7 +1362,7 @@ function renderScheduleContent() {
     cs.sched.filter(g => activeCourt==='all'||g.court===activeCourt)
       .forEach(g => allGames.push({...g,_catId:cat.id,_idx:cs.sched.indexOf(g),_isKO:false,_rn:null}));
     cs.ko.flatMap((r,ri)=>r.map((g,gi)=>({...g,ri,gi})))
-      .filter(g=>activeCourt==='all'||g.court===activeCourt)
+      .filter(g=>!g.isBye && (activeCourt==='all'||g.court===activeCourt))
       .forEach(g=>allGames.push({...g,_catId:cat.id,_idx:-1,_isKO:true,_rn:getKORoundName(cat.id,g.ri)}));
   });
   if (!allGames.length) { el.innerHTML=`<div class="empty"><h3>No games</h3></div>`; return; }
@@ -1489,7 +1466,6 @@ function renderBracketForCat(catId, container) {
       const wa=hs&&sa>sb, wb=hs&&sb>sa;
       let labelA,labelB,codeA='',codeB='',knownA=false,knownB=false;
       if (ri===0) {
-        // Use explicit seedA/B stored in game, fall back to computed pairs
         const sAkey = g.seedA || seedPairs[gi]?.[0] || 'TBD';
         const sBkey = g.seedB || seedPairs[gi]?.[1] || 'TBD';
         const sA=resolvePoolSeed(catId,sAkey), sB=resolvePoolSeed(catId,sBkey);
@@ -1497,25 +1473,31 @@ function renderBracketForCat(catId, container) {
         codeA=sA.known?sAkey:''; codeB=sB.known?sBkey:'';
         knownA=sA.known; knownB=sB.known;
       } else {
-        // Use stored g.a/g.b values (set by updateKOForCat), with directSeed tag display
         const srcRound=getKORoundName(catId,ri-1);
-        labelA=g.a||(g.directSeedA||`Winner of ${srcRound} ${gi*2+1}`);
-        labelB=g.b||(g.directSeedB||`Winner of ${srcRound} ${gi*2+2}`);
+        labelA=g.a||`Winner of ${srcRound} ${gi*2+1}`;
+        labelB=g.b||`Winner of ${srcRound} ${gi*2+2}`;
         knownA=!!(g.a&&!g.a.startsWith('Winner'));
         knownB=!!(g.b&&!g.b.startsWith('Winner'));
-        // Show seed tag for direct qualifiers
-        if (g.directSeedA && knownA) codeA=g.directSeedA;
-        if (g.directSeedB && knownB) codeB=g.directSeedB;
       }
       const box=document.createElement('div'); box.className='bmatch-box';
-      box.innerHTML=`<div class="bmatch">
-        <div class="bteam ${wa?'win':''} ${knownA?'':'tbd'}">
-          <span class="bname">${labelA}</span>${codeA?`<span class="bsc seed-tag">${codeA}</span>`:''}${hs?`<span class="bsc">${g.sa}</span>`:''}
-        </div>
-        <div class="bteam ${wb?'win':''} ${knownB?'':'tbd'}">
-          <span class="bname">${labelB}</span>${codeB?`<span class="bsc seed-tag">${codeB}</span>`:''}${hs?`<span class="bsc">${g.sb}</span>`:''}
-        </div>
-      </div>`;
+      if (g.isBye) {
+        // Bye: show single team advancing directly, no opponent
+        box.innerHTML=`<div class="bmatch bye-match">
+          <div class="bteam ${knownA?'win':'tbd'}">
+            <span class="bname">${labelA}</span>${codeA?`<span class="bsc seed-tag">${codeA}</span>`:''}
+            <span class="bye-tag">BYE</span>
+          </div>
+        </div>`;
+      } else {
+        box.innerHTML=`<div class="bmatch">
+          <div class="bteam ${wa?'win':''} ${knownA?'':'tbd'}">
+            <span class="bname">${labelA}</span>${codeA?`<span class="bsc seed-tag">${codeA}</span>`:''}${hs?`<span class="bsc">${g.sa}</span>`:''}
+          </div>
+          <div class="bteam ${wb?'win':''} ${knownB?'':'tbd'}">
+            <span class="bname">${labelB}</span>${codeB?`<span class="bsc seed-tag">${codeB}</span>`:''}${hs?`<span class="bsc">${g.sb}</span>`:''}
+          </div>
+        </div>`;
+      }
       wrap.appendChild(box); matchesEl.appendChild(wrap);
     });
     col.appendChild(matchesEl); tree.appendChild(col);

@@ -110,38 +110,44 @@ const QUEEN_SCHED = [
   Q(0,'A','תום ומוריאל',"נוי וביסמוץ'",1,9,'10:45'),
   Q(1,'B',"מרג' ואילי","אלה ובצ'ינה",2,9,'10:45'),
   Q(2,'C','רוני וניצן','קורין ואלבי',3,9,'10:45'),
-  // 3rd-place game (gi=-1 so it doesn't affect group standings)
-  {gi:-1,gn:'',a:'מפסידה חצי גמר 1',b:'מפסידה חצי גמר 2',court:1,si:17,time:'12:40',sa:'',sb:'',catId:'queen'},
+  // 3rd place (gi=-1 so it doesn't affect group standings)
+  {gi:-1,gn:'',a:'SF Loser 1',b:'SF Loser 2',court:1,si:17,time:'12:40',sa:'',sb:'',catId:'queen',isThirdPlace:true},
 ];
 
 // KO bracket — QUEEN:
-//   advPerGroup=3: #1 → directly to QF, #2+#3 → שמינית גמר first
-//   R16 (שמינית גמר): A2×B3, B2×A3, C2×D3, D2×C3 — courts 1,2
-//   QF (רבע גמר):    direct #1 vs R16 winner — courts 1,2
-//   SF (חצי גמר):   courts 1,2 (but only court 1 used to keep 2-court flow)
-const QQ = (a,b,sA,sB,c,si,t,extra={}) =>
-  ({a,b,seedA:sA,seedB:sB,sa:'',sb:'',catId:'queen',court:c,si,time:t,...extra});
-const qF = (a,b,c,si,t,extra={}) =>
-  ({a,b,sa:'',sb:'',catId:'queen',court:c,si,time:t,...extra});
+//   advPerGroup=3: #1 gets BYE (skips R16), #2+#3 play R16
+//   r0: 8 entries — 4 byes (C1,D1,A1,B1) interleaved with 4 real R16 games
+//       Standard 2:1 ratio applies: QF game i feeds from r0[i*2] and r0[i*2+1]
+//   r1: Quarterfinals — bye winner vs R16 winner
+//   r2: Semifinals, r3: Final
+const BYE = (seed,catId) =>
+  ({isBye:true,a:seed,b:'',seedA:seed,sa:'',sb:'',catId,court:0,si:-2,time:''});
+const QQ = (a,b,sA,sB,c,si,t) =>
+  ({a,b,seedA:sA,seedB:sB,sa:'',sb:'',catId:'queen',court:c,si,time:t});
+const qF = (a,b,c,si,t) => ({a,b,sa:'',sb:'',catId:'queen',court:c,si,time:t});
 const QUEEN_KO = {
-  r0: [  // שמינית גמר — #2 vs #3 seeds
-    QQ('A2','B3','A2','B3',1,10,'11:00', {_label:'שמינית גמר'}),
-    QQ('B2','A3','B2','A3',2,10,'11:00'),
-    QQ('C2','D3','C2','D3',1,11,'11:15'),
-    QQ('D2','C3','D2','C3',2,11,'11:15'),
+  r0: [  // Round of 16 — 8 entries: bye then real game (pairs feed into QF)
+    BYE('C1','queen'),              // QF-0 'a': C1 bye
+    QQ('A2','B3','A2','B3',1,10,'11:00'), // QF-0 'b': winner goes vs C1
+    BYE('D1','queen'),              // QF-1 'a': D1 bye
+    QQ('B2','A3','B2','A3',2,10,'11:00'), // QF-1 'b': winner goes vs D1
+    BYE('A1','queen'),              // QF-2 'a': A1 bye
+    QQ('C2','D3','C2','D3',1,11,'11:15'), // QF-2 'b': winner goes vs A1
+    BYE('B1','queen'),              // QF-3 'a': B1 bye
+    QQ('D2','C3','D2','C3',2,11,'11:15'), // QF-3 'b': winner goes vs B1
   ],
-  r1: [  // רבע גמר — direct #1 seeds vs שמינית winners (1:1 hybrid)
-    qF('C1','Winner of שמינית גמר 1',1,12,'11:30', {directSeedA:'C1', _label:'רבע גמר'}),
-    qF('D1','Winner of שמינית גמר 2',2,12,'11:30', {directSeedA:'D1'}),
-    qF('A1','Winner of שמינית גמר 3',1,13,'11:45', {directSeedA:'A1'}),
-    qF('B1','Winner of שמינית גמר 4',2,13,'11:45', {directSeedA:'B1'}),
+  r1: [  // Quarterfinals
+    qF('C1','A2/B3 winner',1,12,'11:30'),
+    qF('D1','B2/A3 winner',2,12,'11:30'),
+    qF('A1','C2/D3 winner',1,13,'11:45'),
+    qF('B1','D2/C3 winner',2,13,'11:45'),
   ],
-  r2: [  // חצי גמר
-    qF('Winner of רבע גמר 1','Winner of רבע גמר 2',1,15,'12:00', {_label:'חצי גמר'}),
-    qF('Winner of רבע גמר 3','Winner of רבע גמר 4',1,16,'12:20'),
+  r2: [  // Semifinals
+    qF('QF winner 1','QF winner 2',1,15,'12:00'),
+    qF('QF winner 3','QF winner 4',1,16,'12:20'),
   ],
-  r3: [  // גמר
-    qF('Winner of חצי גמר 1','Winner of חצי גמר 2',1,18,'13:00', {_label:'גמר'}),
+  r3: [  // Final
+    qF('SF winner 1','SF winner 2',1,18,'13:00'),
   ],
 };
 
@@ -168,30 +174,29 @@ const PRINCESS_SCHED = [
   P(1,'B','אורטל ועפרי','אליה ושירי',3,6,'11:30'),
   P(0,'A','מאיה ודקל','עמית ולירי',4,7,'11:45'),
   P(1,'B','מאיה ורוני','מוריאל ושירה',3,7,'11:45'),
-  // 3rd-place
-  {gi:-1,gn:'',a:'מפסידה חצי גמר 1',b:'מפסידה חצי גמר 2',court:3,si:12,time:'13:00',sa:'',sb:'',catId:'princess'},
+  // 3rd place
+  {gi:-1,gn:'',a:'SF Loser 1',b:'SF Loser 2',court:3,si:12,time:'13:00',sa:'',sb:'',catId:'princess',isThirdPlace:true},
 ];
 
 // KO — advPerGroup=4, 2 groups → 8 teams, seeds=[A1,A2,A3,A4,B1,B2,B3,B4]
 // pairs: A1×B4, A2×B3, A3×B2, A4×B1
 // Princess KO on courts 3+4 (court 3 freed from Queen pools at 11:00)
-const PP = (a,b,sA,sB,c,si,t,extra={}) =>
-  ({a,b,seedA:sA,seedB:sB,sa:'',sb:'',catId:'princess',court:c,si,time:t,...extra});
-const pF = (a,b,c,si,t,extra={}) =>
-  ({a,b,sa:'',sb:'',catId:'princess',court:c,si,time:t,...extra});
+const PP = (a,b,sA,sB,c,si,t) =>
+  ({a,b,seedA:sA,seedB:sB,sa:'',sb:'',catId:'princess',court:c,si,time:t});
+const pF = (a,b,c,si,t) => ({a,b,sa:'',sb:'',catId:'princess',court:c,si,time:t});
 const PRINCESS_KO = {
-  r0: [
-    PP('A1','B4','A1','B4',4,8,'12:00', {_label:'רבע גמר'}),
+  r0: [  // Quarterfinals — all 8 teams play (no byes)
+    PP('A1','B4','A1','B4',4,8,'12:00'),
     PP('A2','B3','A2','B3',3,8,'12:00'),
     PP('A3','B2','A3','B2',4,9,'12:20'),
     PP('A4','B1','A4','B1',3,9,'12:20'),
   ],
-  r1: [
-    pF('Winner of רבע גמר 1','Winner of רבע גמר 2',4,11,'12:40', {_label:'חצי גמר'}),
-    pF('Winner of רבע גמר 3','Winner of רבע גמר 4',3,11,'12:40'),
+  r1: [  // Semifinals
+    pF('QF winner 1','QF winner 2',4,11,'12:40'),
+    pF('QF winner 3','QF winner 4',3,11,'12:40'),
   ],
-  r2: [
-    pF('Winner of חצי גמר 1','Winner of חצי גמר 2',4,13,'13:15', {_label:'גמר'}),
+  r2: [  // Final
+    pF('SF winner 1','SF winner 2',4,13,'13:15'),
   ],
 };
 
