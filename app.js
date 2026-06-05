@@ -1419,9 +1419,10 @@ function renderScheduleContent() {
     games.forEach(g => {
       const isThirdPlace = !g._isKO && g.gi === -1;
       let key, label;
-      if (g._isKO) { key = `ko-${g._catId}-${g._rn}`; label = g._rn; }
-      else if (isThirdPlace) { key = `3p-${g._catId}`; label = 'מקום שלישי'; }
-      else { key = `pool-${g._catId}`; label = null; } // pool: no label
+      const catName = categories.find(c=>c.id===g._catId)?.name || '';
+      if (g._isKO) { key = `ko-${g._catId}-${g._rn}`; label = catName ? `${catName} — ${g._rn}` : g._rn; }
+      else if (isThirdPlace) { key = `3p-${g._catId}`; label = catName ? `${catName} — 3/4` : '3/4'; }
+      else { key = `pool-${g._catId}`; label = catName || null; }
       if (!subGroups.has(key)) subGroups.set(key, {label, games:[]});
       subGroups.get(key).games.push(g);
     });
@@ -1507,7 +1508,7 @@ function renderBracketForCat(catId, container) {
       const box=document.createElement('div'); box.className='bmatch-box bmatch-box--bye';
       box.innerHTML=`<div class="bmatch bmatch-bye">
         <div class="bteam ${res.known?'win':'tbd'}">
-          <span class="bname">${label}</span><span class="bye-badge">ישיר ↗</span>
+          <span class="bname">${label}</span><span class="bye-badge">Direct ↗</span>
         </div>
       </div>`;
       return box;

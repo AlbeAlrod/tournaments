@@ -28,7 +28,7 @@ button.del{background:#c62828}
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
 import {
-  getFirestore, doc, setDoc, deleteDoc, serverTimestamp, Timestamp
+  getFirestore, doc, getDoc, setDoc, deleteDoc, serverTimestamp, Timestamp
 } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -258,8 +258,22 @@ async function seedAll() {
 
   log(`  Writing tournament "${T_ID}"…`);
   try {
+    // Check if tournament already exists — preserve Master's customizations in meta
+    const snap = await getDoc(doc(db, 'tournaments', T_ID));
+
+    let finalMeta = meta;
+    if (snap.exists()) {
+      const existingMeta = snap.data().meta || {};
+      // Preserve ALL customizable fields set by Master — never overwrite them
+      const preserve = ['primaryColor','secondaryColor','logoUrl','sponsorLogos','name',
+        'groupColors','bgColor','paymentLink','paymentLinkLabel','paymentLink2','paymentLink2Label','regNote'];
+      finalMeta = { ...meta };
+      preserve.forEach(k => { if (existingMeta[k] !== undefined) finalMeta[k] = existingMeta[k]; });
+      log('  ↳ Tournament exists — preserving Master customizations (colors, logos, names).');
+    }
+
     await setDoc(doc(db, 'tournaments', T_ID), {
-      meta, categories, state,
+      meta: finalMeta, categories, state,
       updatedAt: serverTimestamp()
     });
     log('✓ Done! Tournament written to Firestore.');
