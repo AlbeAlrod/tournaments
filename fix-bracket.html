@@ -52,36 +52,50 @@ async function fix() {
   const qKO = koFromFB(data.state?.queen?.ko);
   const pKO = koFromFB(data.state?.princess?.ko);
 
-  // ── QUEEN r0 ──
-  // Current: [BYE(C1), A2vB3, BYE(D1), B2vA3, BYE(A1), C2vD3, BYE(B1), D2vC3]
+  // ── QUEEN r0: fix BYE order ──
   // Desired: [BYE(A1), B2vA3, BYE(B1), A2vB3, BYE(C1), D2vC3, BYE(D1), C2vD3]
   if (!qKO[0] || qKO[0].length !== 8) {
     L('❌ QUEEN r0 לא תואם — מדלג', 'err');
   } else {
     const r = qKO[0];
-    const byeSeeds = r.filter(g=>g.isBye).map(g=>g.seedA||g.a).sort().join(',');
-    L(`QUEEN r0 BYEs שנמצאו: ${byeSeeds}`, 'dim');
     qKO[0] = [r[4], r[3], r[6], r[1], r[0], r[7], r[2], r[5]];
-    L('✓ QUEEN r0 סודר מחדש', 'ok');
-    L(`  QF1: ${qKO[0][0].seedA||qKO[0][0].a} BYE → vs winner(${qKO[0][1].seedA||qKO[0][1].a} v ${qKO[0][1].seedB||qKO[0][1].b})`, 'dim');
-    L(`  QF2: ${qKO[0][2].seedA||qKO[0][2].a} BYE → vs winner(${qKO[0][3].seedA||qKO[0][3].a} v ${qKO[0][3].seedB||qKO[0][3].b})`, 'dim');
-    L(`  QF3: ${qKO[0][4].seedA||qKO[0][4].a} BYE → vs winner(${qKO[0][5].seedA||qKO[0][5].a} v ${qKO[0][5].seedB||qKO[0][5].b})`, 'dim');
-    L(`  QF4: ${qKO[0][6].seedA||qKO[0][6].a} BYE → vs winner(${qKO[0][7].seedA||qKO[0][7].a} v ${qKO[0][7].seedB||qKO[0][7].b})`, 'dim');
+    L('✓ QUEEN r0  →  QF1=A1, QF2=B1, QF3=C1, QF4=D1', 'ok');
   }
 
-  // ── PRINCESS r0 ──
-  // Current: [A1vB4, A2vB3, A3vB2, A4vB1]
+  // ── QUEEN r1 (QF): reset placeholders ──
+  if (qKO[1]?.length === 4) {
+    const q1 = qKO[1];
+    if (!q1[0].sa) { q1[0].a='A#1'; q1[0].b='Winner of R16-2'; }
+    if (!q1[1].sa) { q1[1].a='B#1'; q1[1].b='Winner of R16-1'; }
+    if (!q1[2].sa) { q1[2].a='C#1'; q1[2].b='Winner of R16-4'; }
+    if (!q1[3].sa) { q1[3].a='D#1'; q1[3].b='Winner of R16-3'; }
+    L('✓ QUEEN r1  →  QF labels reset', 'ok');
+  }
+
+  // ── QUEEN r2 (SF): cross pairing ──
+  if (qKO[2]?.length >= 2) {
+    const q2 = qKO[2];
+    if (!q2[0].sa) { q2[0].a='Winner of Quarterfinals 1'; q2[0].b='Winner of Quarterfinals 4'; }
+    if (!q2[1].sa) { q2[1].a='Winner of Quarterfinals 2'; q2[1].b='Winner of Quarterfinals 3'; }
+    L('✓ QUEEN r2  →  SF1=QF1×QF4, SF2=QF2×QF3', 'ok');
+  }
+
+  // ── PRINCESS r0: fix QF order ──
   // Desired: [A1vB4, B1vA4, A2vB3, B2vA3]
   if (!pKO[0] || pKO[0].length !== 4) {
     L('❌ PRINCESS r0 לא תואם — מדלג', 'err');
   } else {
     const r = pKO[0];
     pKO[0] = [r[0], r[3], r[1], r[2]];
-    L('✓ PRINCESS r0 סודר מחדש', 'ok');
-    L(`  QF1: ${pKO[0][0].seedA} v ${pKO[0][0].seedB}`, 'dim');
-    L(`  QF2: ${pKO[0][1].seedA} v ${pKO[0][1].seedB}`, 'dim');
-    L(`  QF3: ${pKO[0][2].seedA} v ${pKO[0][2].seedB}`, 'dim');
-    L(`  QF4: ${pKO[0][3].seedA} v ${pKO[0][3].seedB}`, 'dim');
+    L('✓ PRINCESS r0  →  QF1=A1vB4, QF2=B1vA4, QF3=A2vB3, QF4=B2vA3', 'ok');
+  }
+
+  // ── PRINCESS r1 (SF): cross pairing ──
+  if (pKO[1]?.length >= 2) {
+    const p1 = pKO[1];
+    if (!p1[0].sa) { p1[0].a='Winner of Quarterfinals 1'; p1[0].b='Winner of Quarterfinals 4'; }
+    if (!p1[1].sa) { p1[1].a='Winner of Quarterfinals 2'; p1[1].b='Winner of Quarterfinals 3'; }
+    L('✓ PRINCESS r1  →  SF1=QF1×QF4, SF2=QF2×QF3', 'ok');
   }
 
   L('שומר ל-Firestore...', 'dim');
@@ -91,7 +105,7 @@ async function fix() {
   });
 
   L('', '');
-  L('✅ הכל נשמר! סגור עמוד זה וטען מחדש את הטורניר.', 'ok');
+  L('✅ הכל נשמר! סגור עמוד זה וטען מחדש את הטורניר (Cmd+Shift+R).', 'ok');
 }
 
 fix().catch(e => { L('❌ שגיאה: ' + e.message, 'err'); console.error(e); });
