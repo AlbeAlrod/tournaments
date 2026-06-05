@@ -57,8 +57,8 @@ const dn = s => {
 
 // ============ KO SCORING RULES (per round position from end) ============
 const DEF_KO_RULES = {
-  pool:   { pts: 15, change: null },
-  r16:    { pts: 15, change: null },
+  pool:   { pts: 15, change: 5 },
+  r16:    { pts: 15, change: 5 },
   qf:     { pts: 18, change: 5 },
   sf:     { pts: 18, change: 5 },
   final:  { pts: 21, change: 7 },
@@ -1394,8 +1394,8 @@ function buildGameRow(catId, g, idx, isKO) {
     : `<span class="ssep">${done?`${g.sa} : ${g.sb}`:'— : —'}</span>`;
 
   const ruleTag = rule.change
-    ? `<span class="game-rule">to ${rule.pts} pts · switch @${rule.change}</span>`
-    : `<span class="game-rule">to ${rule.pts} pts</span>`;
+    ? `<span class="game-rule">to ${rule.pts} · switch/${rule.change}</span>`
+    : `<span class="game-rule">to ${rule.pts}</span>`;
   row.innerHTML = `
     <span class="pill ${pc}">C${g.court}</span>
     <span class="gt">${dn(g.a)}${!isKO&&g.gn?`<span class="gtag">${g.gn}</span>`:''}</span>
