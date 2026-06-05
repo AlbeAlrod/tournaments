@@ -300,9 +300,9 @@ function applyTheme(primary, secondary) {
 
   const [rb3,gb3,bb3] = hexToRgb(bg3);
 
-  // ── Readable variants: primary/secondary forced readable on white cards ──
-  const primaryText   = readable(primary,   '#FFFFFF', 4.5);
-  const secondaryText = readable(secondary, '#FFFFFF', 4.5);
+  // ── Readable variants: slight darkening only when truly needed (ratio 3.5) ──
+  const primaryText   = readable(primary,   '#FFFFFF', 3.5);
+  const secondaryText = readable(secondary, '#FFFFFF', 3.5);
 
   const vars = {
     '--primary':            primary,
@@ -437,7 +437,7 @@ async function setRegStatus(id, status) {
   if (!superAdmin) return;
   try {
     if (status === 'rejected') {
-      // Also remove from build roster if approved
+      // Hard delete — also remove from build roster if present
       const reg = registrations.find(r => r.id === id);
       if (reg) {
         const catId = reg.category;
@@ -450,9 +450,21 @@ async function setRegStatus(id, status) {
       await deleteDoc(doc(db, 'tournaments', tId, 'registrations', id));
       registrations = registrations.filter(r => r.id !== id);
     } else {
-      await updateDoc(doc(db, 'tournaments', tId, 'registrations', id), { status });
       const r = registrations.find(r => r.id === id);
-      if (r) r.status = status;
+      const wasRejected = r?.status === 'rejected';
+      await updateDoc(doc(db, 'tournaments', tId, 'registrations', id), { status });
+      if (r) {
+        r.status = status;
+        // Re-approve a rejected pair → add back to build roster
+        if (status === 'approved' && wasRejected) {
+          const catId = r.category;
+          const name = r.p1 + (r.p2 ? ' / ' + r.p2 : '');
+          if (state[catId]?.roster && !state[catId].roster.includes(name)) {
+            state[catId].roster.push(name);
+            await pushToCloud();
+          }
+        }
+      }
     }
     renderRegistrations();
     renderParticipants();
@@ -505,8 +517,8 @@ function renderRegistrations() {
       <span class="status-badge badge-${r.status}">${r.status}</span>
       <div class="reg-actions">
         ${r.status !== 'approved' ? `<button class="reg-btn approve" onclick="setRegStatus('${r.id}','approved')">Approve</button>` : ''}
-        ${r.status !== 'rejected' ? `<button class="reg-btn reject" onclick="setRegStatus('${r.id}','rejected')">Reject</button>` : ''}
-        ${r.status === 'approved' ? `<button class="reg-btn" onclick="setRegStatus('${r.id}','pending')">Undo</button>` : ''}
+        ${r.status === 'approved'  ? `<button class="reg-btn" onclick="setRegStatus('${r.id}','pending')">Undo</button>` : ''}
+        <button class="reg-btn reject" onclick="setRegStatus('${r.id}','rejected')" title="Permanently remove">Delete</button>
       </div>
     </div>`;
   }).join('');
@@ -674,9 +686,9 @@ async function deleteBuildItem(catId, idx) {
     );
     if (reg) {
       try {
-        await deleteDoc(doc(db, 'tournaments', tId, 'registrations', reg.id));
-        registrations = registrations.filter(r => r.id !== reg.id);
-      } catch(e) { console.error('Could not delete registration', e); }
+        await updateDoc(doc(db, 'tournaments', tId, 'registrations', reg.id), { status: 'rejected' });
+        reg.status = 'rejected'; // soft-reject: stays in Firestore, visible in Registrations
+      } catch(e) { console.error('Could not update registration status', e); }
     }
   }
   state[catId].roster.splice(idx, 1);
