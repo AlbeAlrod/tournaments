@@ -1359,8 +1359,9 @@ function getKOWinner(game, catId) {
   if (game.isBye) {
     const seed = game.seedA || game.a;
     if (!seed) return null;
-    if (/^[A-Z]\d+$/.test(seed)) { const r=resolvePoolSeed(catId,seed); return r.known?r.label:null; }
-    return seed; // already resolved
+    // Return resolved team name if known, otherwise return seed code (e.g. "A1")
+    if (/^[A-Z]\d+$/.test(seed)) { const r=resolvePoolSeed(catId,seed); return r.known?r.label:seed; }
+    return seed;
   }
   const sa=parseInt(game.sa), sb=parseInt(game.sb);
   if (isValidScore(sa,sb,catId)) return sa>sb?game.a:game.b;
@@ -1390,10 +1391,15 @@ function updateKOForCat(catId) {
       if (g.isThirdPlace) return;
       const idxA = isCross ? gi               : gi*2;
       const idxB = isCross ? prev.length-1-gi : gi*2+1;
+      const seedLabel = src => {
+        if (!src) return null;
+        if (src.seedA && src.seedB && !src.isBye) return `${src.seedA}/${src.seedB}`;
+        return null;
+      };
       const wa = getKOWinner(prev[idxA], catId);
       const wb = getKOWinner(prev[idxB], catId);
-      g.a = wa || `Winner of ${rndName} ${idxA+1}`;
-      g.b = wb || `Winner of ${rndName} ${idxB+1}`;
+      g.a = wa || seedLabel(prev[idxA]) || `Winner of ${rndName} ${idxA+1}`;
+      g.b = wb || seedLabel(prev[idxB]) || `Winner of ${rndName} ${idxB+1}`;
     });
   }
 
@@ -1653,8 +1659,9 @@ function renderBracketForCat(catId, container) {
       codeA=sA.known?sAk:''; codeB=sB.known?sBk:'';
       knownA=sA.known; knownB=sB.known;
     } else {
-      knownA=!!(g.a&&!g.a.startsWith('Winner'));
-      knownB=!!(g.b&&!g.b.startsWith('Winner'));
+      const isSeed = s => !s || s.startsWith('Winner') || /^[A-Z]\d+(\/[A-Z]\d+)?$/.test(s);
+      knownA=!isSeed(g.a);
+      knownB=!isSeed(g.b);
       if (g.directSeedA&&knownA) codeA=g.directSeedA;
       if (g.directSeedB&&knownB) codeB=g.directSeedB;
       labelA=dnH(labelA); labelB=dnH(labelB);
