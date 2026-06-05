@@ -142,9 +142,9 @@ const QUEEN_KO = {
     qF('A1','C2/D3 winner',1,13,'11:45'),
     qF('B1','D2/C3 winner',2,13,'11:45'),
   ],
-  r2: [  // Semifinals
+  r2: [  // Semifinals — parallel (courts 1+2 simultaneously at 12:00)
     qF('QF winner 1','QF winner 2',1,15,'12:00'),
-    qF('QF winner 3','QF winner 4',1,16,'12:20'),
+    qF('QF winner 3','QF winner 4',2,15,'12:00'),
   ],
   r3: [  // Final
     qF('SF winner 1','SF winner 2',1,18,'13:00'),
@@ -262,18 +262,29 @@ async function seedAll() {
     const snap = await getDoc(doc(db, 'tournaments', T_ID));
 
     let finalMeta = meta;
+    let finalState = state;
     if (snap.exists()) {
-      const existingMeta = snap.data().meta || {};
-      // Preserve ALL customizable fields set by Master — never overwrite them
-      const preserve = ['primaryColor','secondaryColor','logoUrl','sponsorLogos','name',
+      const existing = snap.data();
+      const existingMeta = existing.meta || {};
+      // Preserve ALL customizable meta fields set by Master
+      const metaPreserve = ['primaryColor','secondaryColor','logoUrl','sponsorLogos','name',
         'groupColors','bgColor','paymentLink','paymentLinkLabel','paymentLink2','paymentLink2Label','regNote'];
       finalMeta = { ...meta };
-      preserve.forEach(k => { if (existingMeta[k] !== undefined) finalMeta[k] = existingMeta[k]; });
-      log('  ↳ Tournament exists — preserving Master customizations (colors, logos, names).');
+      metaPreserve.forEach(k => { if (existingMeta[k] !== undefined) finalMeta[k] = existingMeta[k]; });
+
+      // Preserve team names (groups + roster) edited by Master — only overwrite sched/ko
+      const exState = existing.state || {};
+      finalState = { ...state };
+      ['queen','princess'].forEach(catId => {
+        if (exState[catId]?.groups?.length) {
+          finalState[catId] = { ...state[catId], groups: exState[catId].groups, roster: exState[catId].roster };
+        }
+      });
+      log('  ↳ Tournament exists — preserving Master customizations (meta + team names).');
     }
 
     await setDoc(doc(db, 'tournaments', T_ID), {
-      meta: finalMeta, categories, state,
+      meta: finalMeta, categories, state: finalState,
       updatedAt: serverTimestamp()
     });
     log('✓ Done! Tournament written to Firestore.');
