@@ -1695,9 +1695,15 @@ function renderBracketForCat(catId, container) {
     const matchGap=(Math.pow(2,halvings)-1)*HG+GAP;
     // Detect BYE-pair pattern: even=BYE, odd=real game
     const hasByePairs = ri===startRi && round.some(g=>g.isBye) && round[0]?.isBye;
-    round.forEach((g,gi) => {
+    // Cross display: when 4 QF games feed a cross-SF (2 games), show in [0,3,1,2] order
+    // so SF boxes sit visually between the correct QF pairs
+    const nextNonThird = cs.ko[ri+1]?.filter(g=>!g.isThirdPlace);
+    const isCrossRound = round.length === 4 && nextNonThird?.length === 2;
+    const displayOrder = isCrossRound ? [0,3,1,2] : round.map((_,i)=>i);
+    displayOrder.forEach((gi, pos) => {
+      const g = round[gi];
       const wrap=document.createElement('div'); wrap.className='bmatch-wrap';
-      if (gi>0) {
+      if (pos>0) {
         if (hasByePairs) {
           // Within pair: small gap; between pairs: larger gap (HG/2 = 45px)
           wrap.style.marginTop = (gi % 2 === 1 ? GAP : Math.floor(HG/2)) + 'px';
