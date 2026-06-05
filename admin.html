@@ -6,7 +6,7 @@
 <title>Tournaments Admin</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@700;800;900&display=swap" rel="stylesheet"/>
-<link rel="stylesheet" href="styles.css?v=14"/>
+<link rel="stylesheet" href="styles.css?v=15"/>
 <style>
 /* ── Shared overrides ── */
 .h { display: none !important; }
@@ -397,6 +397,13 @@
       <input class="modal-input" id="cr-expiry" type="datetime-local" style="width:100%"/>
     </div>
 
+    <div class="form-group">
+      <label class="form-label">Copy Design From <span style="font-weight:400;letter-spacing:0;text-transform:none;color:var(--text3)">— reuse colors &amp; logo from an existing tournament</span></label>
+      <select class="modal-input" id="cr-template" style="width:100%">
+        <option value="">Default (purple theme)</option>
+      </select>
+    </div>
+
     <div id="cr-err" class="cr-err h"></div>
 
     <div class="modal-btns">
@@ -519,12 +526,22 @@ function esc(s) {
 
 // ── Create ──────────────────────────────────────────────────
 function openCreateModal() {
-  document.getElementById('cr-name').value     = '';
-  document.getElementById('cr-id').value       = '';
-  document.getElementById('cr-admin-pw').value = '';
-  document.getElementById('cr-master-pw').value= '';
-  document.getElementById('cr-expiry').value   = '';
+  document.getElementById('cr-name').value      = '';
+  document.getElementById('cr-id').value        = '';
+  document.getElementById('cr-admin-pw').value  = '';
+  document.getElementById('cr-master-pw').value = '';
+  document.getElementById('cr-expiry').value    = '';
   document.getElementById('cr-err').classList.add('h');
+
+  // Populate "Copy Design From" dropdown with existing tournaments
+  const sel = document.getElementById('cr-template');
+  sel.innerHTML = '<option value="">Default (purple theme)</option>' +
+    [...tournaments]
+      .sort((a, b) => (a.meta?.name || a.id).localeCompare(b.meta?.name || b.id))
+      .map(t => `<option value="${esc(t.id)}">${esc(t.meta?.name || t.id)}</option>`)
+      .join('');
+  sel.value = '';
+
   document.getElementById('create-modal').classList.remove('h');
   setTimeout(() => document.getElementById('cr-name').focus(), 80);
 }
@@ -577,13 +594,16 @@ async function createTournament() {
     return;
   }
 
+  const templateId = document.getElementById('cr-template').value;
+  const tpl = templateId ? tournaments.find(t => t.id === templateId) : null;
+
   const metaObj = {
     name,
     adminPassword:  adminPw,
     masterPassword: masterPw,
-    logoUrl:         '',
-    primaryColor:   '#6B21A8',
-    secondaryColor: '#7C3AED',
+    logoUrl:        tpl?.meta?.logoUrl        || '',
+    primaryColor:   tpl?.meta?.primaryColor   || '#6B21A8',
+    secondaryColor: tpl?.meta?.secondaryColor || '#7C3AED',
     paymentLink:    '', paymentLinkLabel:  '',
     paymentLink2:   '', paymentLink2Label: '',
     regNote:        '',
