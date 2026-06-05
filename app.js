@@ -653,7 +653,13 @@ function renderBuildPage() {
 
     const div = document.createElement('div');
     div.className = 'build-cat';
-    div.dataset.ci = categories.indexOf(cat);
+    const _bci = categories.indexOf(cat);
+    div.dataset.ci = _bci;
+    const _bDefColors = ['','#D97706','#0891B2','#EA580C'];
+    const _bColor = cat.color || _bDefColors[_bci] || '';
+    const _bOn = _bColor && _bColor.startsWith('#') ? onColor(_bColor) : '';
+    if (_bColor) { div.style.setProperty('--cat-color', _bColor); }
+    if (_bOn)    { div.style.setProperty('--cat-on-color', _bOn); }
     div.innerHTML = `
       <div class="build-cat-head">
         <span class="build-cat-name">${cat.name}</span>
@@ -1083,6 +1089,11 @@ function makeStandingsCard(catId, grp, gi, catIdx) {
   const card = document.createElement('div');
   card.className = 'scard';
   card.dataset.ci = catIdx ?? 0;
+  const _defColors = ['','#D97706','#0891B2','#EA580C'];
+  const _catColor = categories.find(c=>c.id===catId)?.color || _defColors[catIdx??0] || '';
+  const _catOn = _catColor && _catColor.startsWith('#') ? onColor(_catColor) : '';
+  if (_catColor) { card.style.setProperty('--cat-color', _catColor); }
+  if (_catOn)    { card.style.setProperty('--cat-on-color', _catOn); }
   const rows = st.map((t,i) => {
     const isWinner = i<adv && poolDone;
     const diff = t.diff||0;
@@ -1641,6 +1652,42 @@ function renderSettings() {
     </div>`;
   container.appendChild(ssec);
 
+  // ── GROUPS ──────────────────────────────────────────────────────
+  const groupHasCats = categories.some(cat => state[cat.id]?.groups?.length);
+  if (groupHasCats) {
+    const gsec = document.createElement('div');
+    gsec.className = 'sett-section';
+    const gHtml = categories.map((cat, ci) => {
+      const cs = state[cat.id];
+      if (!cs || !cs.groups.length) return '';
+      return `<div class="grp-cat-block">
+        <div class="grp-cat-name">${escH(cat.name)}</div>
+        ${cs.groups.map((grp, gi) => `
+          <div class="grp-row">
+            <div class="grp-row-head">
+              <span style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;flex-shrink:0">Group</span>
+              <input class="text-inp" style="width:54px;font-weight:800;text-align:center;font-size:15px;padding:5px 4px"
+                value="${escH(grp.name)}" onchange="renameGroup('${cat.id}',${gi},this.value)"/>
+              <span style="font-size:11px;color:var(--text3);margin-left:4px">${grp.teams.length} teams</span>
+            </div>
+            <div class="grp-teams-list">
+              ${grp.teams.map((team, ti) => `
+                <div class="grp-team-item">
+                  <span class="grp-team-name">${escH(team)}</span>
+                  ${cs.groups.length > 1 ? `<select class="move-sel"
+                    onchange="moveTeam('${cat.id}',${gi},${ti},parseInt(this.value));this.selectedIndex=0">
+                    <option value="" disabled selected>Move to…</option>
+                    ${cs.groups.map((tg,gj) => gj===gi ? '' : `<option value="${gj}">→ ${escH(tg.name)}</option>`).join('')}
+                  </select>` : ''}
+                </div>`).join('')}
+            </div>
+          </div>`).join('')}
+      </div>`;
+    }).join('');
+    gsec.innerHTML = `<div class="sett-section-title">Groups</div>${gHtml}`;
+    container.appendChild(gsec);
+  }
+
   if (meta.phase !== 'registration') return;
 
   // ── REGISTRATION ────────────────────────────────────────────────
@@ -1716,6 +1763,42 @@ function renderSettings() {
   container.appendChild(startSection);
 }
 
+// ── Category color ───────────────────────────────────────────────
+function updateCatColor(ci, color) {
+  if (!categories[ci]) return;
+  categories[ci].color = color;
+  pushToCloud();
+  renderStandings();
+  renderBuildPage();
+}
+
+// ── Group management ─────────────────────────────────────────────
+function renameGroup(catId, gi, name) {
+  const cs = state[catId];
+  if (!cs || !cs.groups[gi]) return;
+  cs.groups[gi].name = name;
+  cs.sched.forEach(g => { if (g.gi === gi) g.gn = name; });
+  pushToCloud();
+  renderStandings();
+  renderScheduleContent();
+}
+
+function moveTeam(catId, fromGi, teamIdx, toGi) {
+  if (fromGi === toGi) return;
+  const cs = state[catId];
+  if (!cs || !cs.groups[fromGi] || !cs.groups[toGi]) return;
+  const team = cs.groups[fromGi].teams[teamIdx];
+  if (!team) return;
+  cs.groups[fromGi].teams.splice(teamIdx, 1);
+  cs.groups[toGi].teams.push(team);
+  cs.sched.forEach(g => {
+    if ((g.a === team || g.b === team) && g.gi === fromGi) g.gi = toGi;
+  });
+  pushToCloud();
+  renderStandings();
+  renderSettings();
+}
+
 // ── Sponsor management ───────────────────────────────────────────
 function updateSponsorLogo(i, key, val) {
   if (!Array.isArray(meta.sponsorLogos)) meta.sponsorLogos = [];
@@ -1740,9 +1823,17 @@ function addSponsorLogo() {
 
 function renderCatItem(cat, ci) {
   const cfg=cat.cfg||DEF_CAT_CFG;
+  const defaultColors=['','#D97706','#0891B2','#EA580C'];
+  const catColor = cat.color || defaultColors[ci] || '#6B21A8';
   return `<div class="cat-item">
     <div class="cat-item-head">
-      <input class="text-inp" style="width:180px;font-weight:600" value="${cat.name}" onchange="updateCatName(${ci},this.value)"/>
+      <input class="text-inp" style="width:150px;font-weight:600" value="${escH(cat.name)}" onchange="updateCatName(${ci},this.value)"/>
+      <div class="color-pick-row" style="margin-left:auto;margin-right:8px">
+        <input type="color" class="color-inp" id="ccp-${ci}" style="width:36px;height:32px" value="${catColor}"
+          oninput="document.getElementById('cct-${ci}').value=this.value;updateCatColor(${ci},this.value)"/>
+        <input class="text-inp text-mono" id="cct-${ci}" style="width:84px;padding:5px 8px;font-size:12px" value="${catColor}"
+          oninput="if(/^#[0-9A-Fa-f]{6}$/.test(this.value)){document.getElementById('ccp-${ci}').value=this.value;updateCatColor(${ci},this.value)}"/>
+      </div>
       <button class="team-del" onclick="deleteCategory(${ci})" title="Delete">✕</button>
     </div>
     <div class="cat-settings-grid">
@@ -1953,7 +2044,8 @@ Object.assign(window, {
   setGS, setKS, filterSchedule,
   updateMeta, updateCatName, updateCatCfg, adjCatCfg,
   addCategory, deleteCategory, resetAllScores,
-  updateSponsorLogo, removeSponsorLogo, addSponsorLogo
+  updateSponsorLogo, removeSponsorLogo, addSponsorLogo,
+  updateCatColor, renameGroup, moveTeam
 });
 
 // ============ BOOT ============
