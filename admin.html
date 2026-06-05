@@ -454,11 +454,19 @@ const db    = getFirestore(fbApp);
 let tournaments = [];
 
 // ── Auth ────────────────────────────────────────────────────
+async function sha256(str) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join('');
+}
+
 async function checkAdminPw() {
   const val = document.getElementById('adm-pw').value;
-  const snap = await getDoc(doc(db, 'config', 'superAdmin'));
+  const [snap, hashed] = await Promise.all([
+    getDoc(doc(db, 'config', 'superAdmin')),
+    sha256(val)
+  ]);
   const expected = snap.exists() ? snap.data().password : null;
-  if (expected && val === expected) {
+  if (expected && hashed === expected) {
     document.getElementById('screen-login').style.display = 'none';
     document.getElementById('screen-app').style.display   = 'block';
     document.getElementById('adm-pw').value = '';
