@@ -352,10 +352,16 @@ main { position: relative; z-index: 5; max-width: 980px; margin: 0 auto; padding
 .gc.done { border-color: rgba(107,33,168,.25); background: rgba(107,33,168,.03); }
 .pill { font-family: 'Barlow Condensed', sans-serif; font-size: 12px; font-weight: 700;
   padding: 3px 8px; border-radius: 20px; white-space: nowrap; letter-spacing: .3px; }
+/* Court pills for KO games */
 .p1 { background: rgba(124,58,237,.13); color: #6B21A8; }
 .p2 { background: rgba(168,85,247,.13); color: #7E22CE; }
 .p3 { background: rgba(99,102,241,.13); color: #4338CA; }
 .p4 { background: rgba(139,92,246,.13); color: #5B21B6; }
+/* Group pills for pool games — flyer colors */
+.gi0 { background: #E91E8C; color: #fff; }          /* בית א — ורוד */
+.gi1 { background: #2196F3; color: #fff; }          /* בית ב — כחול */
+.gi2 { background: #FACC15; color: #1a1a1a; }       /* בית ג — צהוב */
+.gi3 { background: #1a1a1a; color: #fff; }          /* בית ד — שחור */
 .gt { font-size: 13px; color: var(--text); font-weight: 500; overflow: hidden;
   text-overflow: ellipsis; white-space: nowrap; }
 .gt.r { text-align: right; }

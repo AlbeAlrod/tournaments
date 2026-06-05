@@ -930,8 +930,13 @@ function roundName(count) {
 function getKORoundName(catId, ri) {
   const cs = state[catId];
   if (!cs||!cs.ko[ri]) return '';
-  if (cs.ko[ri][0]?._label) return cs.ko[ri][0]._label;
-  return roundName(cs.ko[ri].length * 2);
+  // Use position from end (0=Final, 1=SF, 2=QF, 3=R16...)
+  const fromEnd = cs.ko.length - 1 - ri;
+  if (fromEnd === 0) return 'גמר';
+  if (fromEnd === 1) return 'חצי גמר';
+  if (fromEnd === 2) return 'רבע גמר';
+  if (fromEnd === 3) return 'שמינית גמר';
+  return `1/${Math.pow(2,fromEnd)} גמר`;
 }
 
 function generateScheduleForCat(catId) {
@@ -1089,11 +1094,13 @@ function makeStandingsCard(catId, grp, gi, catIdx) {
   const card = document.createElement('div');
   card.className = 'scard';
   card.dataset.ci = catIdx ?? 0;
-  const _defColors = ['','#D97706','#0891B2','#EA580C'];
-  const _catColor = categories.find(c=>c.id===catId)?.color || _defColors[catIdx??0] || '';
-  const _catOn = _catColor && _catColor.startsWith('#') ? onColor(_catColor) : '';
-  if (_catColor) { card.style.setProperty('--cat-color', _catColor); }
-  if (_catOn)    { card.style.setProperty('--cat-on-color', _catOn); }
+  // Group colors (per flyer): pink, blue, yellow, dark
+  const _grpColors  = ['#E91E8C','#2196F3','#FACC15','#1a1a1a'];
+  const _grpOnColors= ['#fff',   '#fff',   '#1a1a1a','#fff'];
+  const _grpColor   = _grpColors[gi % 4];
+  const _grpOn      = _grpOnColors[gi % 4];
+  card.style.setProperty('--cat-color',    _grpColor);
+  card.style.setProperty('--cat-on-color', _grpOn);
   const rows = st.map((t,i) => {
     const isWinner = i<adv && poolDone;
     const diff = t.diff||0;
@@ -1336,7 +1343,8 @@ function renderStats() {
 
 function buildGameRow(catId, g, idx, isKO) {
   const done = isValidScore(parseInt(g.sa),parseInt(g.sb),catId);
-  const pc   = ['p1','p2','p3','p4'][(g.court-1)%4];
+  // Color pill by group for pool games, by court class for KO
+  const pc = isKO ? ['p1','p2','p3','p4'][(g.court-1)%4] : `gi${(g.gi ?? 0) % 4}`;
   const wrap = document.createElement('div');
   const row  = document.createElement('div');
   row.className = 'gc'+(done?' done':'');
@@ -1467,8 +1475,11 @@ function renderBracketForCat(catId, container) {
     const col=document.createElement('div'); col.className='bround';
     col.innerHTML=`<div class="brnd-title">${getKORoundName(catId,ri)}</div>`;
     const matchesEl=document.createElement('div'); matchesEl.className='brnd-matches';
-    matchesEl.style.paddingTop=(ri===0?0:((Math.pow(2,ri)-1)*HG/2))+'px';
-    const matchGap=(Math.pow(2,ri)-1)*HG+GAP;
+    // Compute halvings = number of times game count dropped from r0 to this round
+    let halvings=0;
+    for (let k=1;k<=ri;k++) { if(cs.ko[k].length<cs.ko[k-1].length) halvings++; }
+    matchesEl.style.paddingTop=(ri===0?0:((Math.pow(2,halvings)-1)*HG/2))+'px';
+    const matchGap=(Math.pow(2,halvings)-1)*HG+GAP;
 
     round.forEach((g,gi) => {
       const wrap=document.createElement('div'); wrap.className='bmatch-wrap';
