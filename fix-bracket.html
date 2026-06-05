@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8"/>
+<title>Fix Bracket</title>
+<style>
+  body { font-family: monospace; background:#111; color:#eee; padding:30px; font-size:16px; }
+  .ok  { color:#4f4; }
+  .err { color:#f44; }
+  .dim { color:#888; }
+  pre  { background:#222; padding:12px; border-radius:8px; overflow:auto; }
+</style>
+</head>
+<body>
+<h2>🔧 Fix Bracket Pairings — futsilina-1</h2>
+<pre id="log">מאתחל...</pre>
+
+<script type="module">
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js';
+import { getFirestore, doc, getDoc, updateDoc } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js';
+
+const log = document.getElementById('log');
+const L = (msg, cls='') => { log.innerHTML += `\n<span class="${cls}">${msg}</span>`; };
+
+const app = initializeApp({
+  apiKey: "AIzaSyA-rPlg0Oau16QcTjD20hDfkyveRSrD8I0",
+  authDomain: "tournaments-33619.firebaseapp.com",
+  projectId: "tournaments-33619",
+  storageBucket: "tournaments-33619.firebasestorage.app",
+  messagingSenderId: "409384565600",
+  appId: "1:409384565600:web:61bd55676343d6035abc05"
+});
+const db = getFirestore(app);
+
+function koFromFB(obj) {
+  if (!obj) return [];
+  return Object.keys(obj).sort((a,b)=>parseInt(a.slice(1))-parseInt(b.slice(1))).map(k=>obj[k]);
+}
+function koToFB(ko) {
+  const obj = {};
+  ko.forEach((round,ri) => { obj[`r${ri}`] = round; });
+  return obj;
+}
+
+async function fix() {
+  L('קורא נתונים מ-Firestore...', 'dim');
+  const ref = doc(db, 'tournaments', 'futsilina-1');
+  const snap = await getDoc(ref);
+  if (!snap.exists()) { L('❌ טורניר לא נמצא', 'err'); return; }
+
+  const data = snap.data();
+  const qKO = koFromFB(data.state?.queen?.ko);
+  const pKO = koFromFB(data.state?.princess?.ko);
+
+  // ── QUEEN r0 ──
+  // Current: [BYE(C1), A2vB3, BYE(D1), B2vA3, BYE(A1), C2vD3, BYE(B1), D2vC3]
+  // Desired: [BYE(A1), B2vA3, BYE(B1), A2vB3, BYE(C1), D2vC3, BYE(D1), C2vD3]
+  if (!qKO[0] || qKO[0].length !== 8) {
+    L('❌ QUEEN r0 לא תואם — מדלג', 'err');
+  } else {
+    const r = qKO[0];
+    const byeSeeds = r.filter(g=>g.isBye).map(g=>g.seedA||g.a).sort().join(',');
+    L(`QUEEN r0 BYEs שנמצאו: ${byeSeeds}`, 'dim');
+    qKO[0] = [r[4], r[3], r[6], r[1], r[0], r[7], r[2], r[5]];
+    L('✓ QUEEN r0 סודר מחדש', 'ok');
+    L(`  QF1: ${qKO[0][0].seedA||qKO[0][0].a} BYE → vs winner(${qKO[0][1].seedA||qKO[0][1].a} v ${qKO[0][1].seedB||qKO[0][1].b})`, 'dim');
+    L(`  QF2: ${qKO[0][2].seedA||qKO[0][2].a} BYE → vs winner(${qKO[0][3].seedA||qKO[0][3].a} v ${qKO[0][3].seedB||qKO[0][3].b})`, 'dim');
+    L(`  QF3: ${qKO[0][4].seedA||qKO[0][4].a} BYE → vs winner(${qKO[0][5].seedA||qKO[0][5].a} v ${qKO[0][5].seedB||qKO[0][5].b})`, 'dim');
+    L(`  QF4: ${qKO[0][6].seedA||qKO[0][6].a} BYE → vs winner(${qKO[0][7].seedA||qKO[0][7].a} v ${qKO[0][7].seedB||qKO[0][7].b})`, 'dim');
+  }
+
+  // ── PRINCESS r0 ──
+  // Current: [A1vB4, A2vB3, A3vB2, A4vB1]
+  // Desired: [A1vB4, B1vA4, A2vB3, B2vA3]
+  if (!pKO[0] || pKO[0].length !== 4) {
+    L('❌ PRINCESS r0 לא תואם — מדלג', 'err');
+  } else {
+    const r = pKO[0];
+    pKO[0] = [r[0], r[3], r[1], r[2]];
+    L('✓ PRINCESS r0 סודר מחדש', 'ok');
+    L(`  QF1: ${pKO[0][0].seedA} v ${pKO[0][0].seedB}`, 'dim');
+    L(`  QF2: ${pKO[0][1].seedA} v ${pKO[0][1].seedB}`, 'dim');
+    L(`  QF3: ${pKO[0][2].seedA} v ${pKO[0][2].seedB}`, 'dim');
+    L(`  QF4: ${pKO[0][3].seedA} v ${pKO[0][3].seedB}`, 'dim');
+  }
+
+  L('שומר ל-Firestore...', 'dim');
+  await updateDoc(ref, {
+    'state.queen.ko':   koToFB(qKO),
+    'state.princess.ko': koToFB(pKO),
+  });
+
+  L('', '');
+  L('✅ הכל נשמר! סגור עמוד זה וטען מחדש את הטורניר.', 'ok');
+}
+
+fix().catch(e => { L('❌ שגיאה: ' + e.message, 'err'); console.error(e); });
+</script>
+</body>
+</html>
