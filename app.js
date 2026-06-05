@@ -362,14 +362,14 @@ function updateRoleButtons() {
   const on  = `flex:1;padding:10px 6px;border-radius:var(--rs);border:2px solid var(--primary);background:var(--primary);color:#fff;font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:700;cursor:pointer`;
   const off = `flex:1;padding:10px 6px;border-radius:var(--rs);border:2px solid var(--border2);background:transparent;color:var(--primary);font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:700;cursor:pointer`;
   document.getElementById('role-btn-admin')?.setAttribute('style',   loginRole==='admin'   ? on : off);
-  document.getElementById('role-btn-manager')?.setAttribute('style', loginRole==='manager' ? on : off);
+  document.getElementById('role-btn-master')?.setAttribute('style', loginRole==='manager' ? on : off);
 }
 
 function tryLogin() {
   const val      = document.getElementById('pw-inp').value.trim();
-  const expected = loginRole === 'manager' ? meta.masterPassword : meta.adminPassword;
+  const expected = loginRole === 'master' ? meta.masterPassword : meta.adminPassword;
   if (val && expected && val === expected) {
-    adminLevel = loginRole === 'manager' ? 2 : 1;
+    adminLevel = loginRole === 'master' ? 2 : 1;
     admin      = true;
     superAdmin = adminLevel === 2;
     closeLogin(); refreshAdmin(); rerender();
@@ -395,12 +395,12 @@ function refreshAdmin() {
   const btn  = document.getElementById('abtn');
   const bar  = document.getElementById('mode-bar');
   const mtxt = document.getElementById('mode-text');
-  if (txt) txt.textContent = adminLevel===2 ? 'Manager ✓' : adminLevel===1 ? 'Admin ✓' : 'Admin';
+  if (txt) txt.textContent = adminLevel===2 ? 'Master ✓' : adminLevel===1 ? 'Admin ✓' : 'Admin';
   if (btn) btn.classList.toggle('on', admin);
   if (bar) bar.className = 'mode-bar ' + (admin ? 'mode-admin' : 'mode-view');
   if (mtxt) {
     if (!admin) mtxt.textContent = 'View only — tap Admin to manage';
-    else if (adminLevel===2 && meta.phase==='registration') mtxt.textContent = 'Manager mode — full access';
+    else if (adminLevel===2 && meta.phase==='registration') mtxt.textContent = 'Master mode — full access';
     else mtxt.textContent = 'Admin mode — score entry';
   }
   const regTab = document.getElementById('tab-register');

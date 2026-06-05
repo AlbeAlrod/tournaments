@@ -251,7 +251,7 @@ main { position: relative; z-index: 5; max-width: 980px; margin: 0 auto; padding
 .diff-neg { color: var(--red); }
 .diff-zero { color: var(--text3); }
 .pts-val { color: var(--on-primary); background: var(--primary); font-weight: 700;
-  padding: 2px 8px; border-radius: 99px; font-size: 12px; }
+  padding: 1px 5px; border-radius: 4px; font-size: 11px; min-width: 18px; text-align: center; display: inline-block; }
 .gedit-btn { font-size: 11px; color: var(--primary3); background: none; border: none;
   cursor: pointer; padding: 2px 6px; border-radius: 4px; }
 .team-del { width: 24px; height: 24px; background: none; border: none; cursor: pointer;

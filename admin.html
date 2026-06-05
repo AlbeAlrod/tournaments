@@ -6,7 +6,7 @@
 <title>Tournaments Admin</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@700;800;900&display=swap" rel="stylesheet"/>
-<link rel="stylesheet" href="styles.css?v=16"/>
+<link rel="stylesheet" href="styles.css?v=17"/>
 <style>
 /* ── Shared overrides ── */
 .h { display: none !important; }
@@ -362,6 +362,23 @@
   </div>
 </div>
 
+<!-- ══ SPONSORS MODAL ══════════════════════════════════════ -->
+<div class="overlay h" id="sponsors-modal" onclick="if(event.target===this)closeSponsorsModal()">
+  <div class="modal modal-wide">
+    <h3>Sponsor Logos</h3>
+    <p style="font-size:12px;color:var(--text3);margin-bottom:14px;line-height:1.5">
+      Logos appear in a bar at the top of the tournament page.<br>
+      Each row: image URL + display name.
+    </p>
+    <div id="sponsors-list" style="margin-bottom:10px"></div>
+    <button class="regen-btn" onclick="addSponsorRow()" style="padding:7px 16px;width:100%">+ Add Sponsor</button>
+    <div class="modal-btns">
+      <button class="mbtn mbtn-ok" onclick="saveSponsors()">Save</button>
+      <button class="mbtn mbtn-cancel" onclick="closeSponsorsModal()">Cancel</button>
+    </div>
+  </div>
+</div>
+
 <!-- ══ CREATE MODAL ════════════════════════════════════════ -->
 <div class="overlay h" id="create-modal" onclick="if(event.target===this)closeCreateModal()">
   <div class="modal modal-wide">
@@ -416,7 +433,7 @@
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
 import {
-  getFirestore, collection, getDocs, doc, setDoc, deleteDoc,
+  getFirestore, collection, getDocs, doc, setDoc, deleteDoc, updateDoc,
   serverTimestamp, Timestamp
 } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
 
@@ -513,7 +530,10 @@ function renderTable() {
       <td class="t-pw">${esc(adminPw)}</td>
       <td class="t-pw">${esc(masterPw)}</td>
       <td>${statusHtml(t)}</td>
-      <td><button class="del-btn" onclick="deleteTournament('${esc(t.id)}')">Delete</button></td>
+      <td style="white-space:nowrap;display:flex;gap:6px">
+        <button class="refresh-btn" onclick="openSponsorsModal('${esc(t.id)}')">Sponsors</button>
+        <button class="del-btn" onclick="deleteTournament('${esc(t.id)}')">Delete</button>
+      </td>
     </tr>`;
   }).join('');
 }
@@ -647,11 +667,65 @@ async function deleteTournament(tId) {
   }
 }
 
+// ── Sponsors management ──────────────────────────────────────
+let editingSponsorTId = null;
+
+function openSponsorsModal(tId) {
+  editingSponsorTId = tId;
+  const t = tournaments.find(x => x.id === tId);
+  const logos = t?.meta?.sponsorLogos || [];
+  const container = document.getElementById('sponsors-list');
+  container.innerHTML = '';
+  const rows = logos.length ? logos : [{ url: '', alt: '' }];
+  rows.forEach(l => addSponsorRow(l.url, l.alt));
+  document.getElementById('sponsors-modal').classList.remove('h');
+}
+
+function closeSponsorsModal() {
+  document.getElementById('sponsors-modal').classList.add('h');
+  editingSponsorTId = null;
+}
+
+function addSponsorRow(url='', alt='') {
+  const container = document.getElementById('sponsors-list');
+  const div = document.createElement('div');
+  div.className = 'sponsor-row';
+  div.style.cssText = 'display:flex;gap:8px;margin-bottom:8px;align-items:center';
+  div.innerHTML = `
+    <input class="modal-input" style="flex:3;min-width:0" placeholder="Logo URL https://…" value="${esc(url)}"/>
+    <input class="modal-input" style="flex:2;min-width:0" placeholder="Name (e.g. Rip Curl)" value="${esc(alt)}"/>
+    <button onclick="this.parentElement.remove()"
+      style="padding:6px 10px;border:1px solid rgba(220,38,38,.3);background:transparent;
+      border-radius:var(--rs);cursor:pointer;color:#DC2626;flex-shrink:0;font-size:14px">✕</button>`;
+  container.appendChild(div);
+}
+
+function collectSponsorRows() {
+  return [...document.querySelectorAll('#sponsors-list .sponsor-row')].map(row => {
+    const inputs = row.querySelectorAll('input');
+    return { url: inputs[0]?.value.trim()||'', alt: inputs[1]?.value.trim()||'' };
+  }).filter(l => l.url || l.alt);
+}
+
+async function saveSponsors() {
+  if (!editingSponsorTId) return;
+  const logos = collectSponsorRows();
+  try {
+    await updateDoc(doc(db, 'tournaments', editingSponsorTId), { 'meta.sponsorLogos': logos });
+    const t = tournaments.find(x => x.id === editingSponsorTId);
+    if (t) { if (!t.meta) t.meta = {}; t.meta.sponsorLogos = logos; }
+    closeSponsorsModal();
+  } catch(e) {
+    alert('Error saving sponsors: ' + e.message);
+  }
+}
+
 // ── Expose globals ──────────────────────────────────────────
 Object.assign(window, {
   checkAdminPw, adminLogout,
   openCreateModal, closeCreateModal,
   createTournament, deleteTournament,
+  openSponsorsModal, closeSponsorsModal, addSponsorRow, saveSponsors,
   loadTournaments, refreshId, regenId
 });
 
