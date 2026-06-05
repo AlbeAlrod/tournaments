@@ -43,6 +43,9 @@ let firebaseReady = false;
 let TREF = null;
 let REGS_REF = null;
 
+// ============ HTML ESCAPE ============
+const escH = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+
 // ============ DEFAULT CATEGORY CONFIG ============
 const DEF_CAT_CFG = {
   courts: 2, gameDur: 30, breakDur: 0, numGroups: 2, advPerGroup: 2,
@@ -387,9 +390,9 @@ function closeLogin() {
 }
 
 function refreshAdmin() {
-  // admin-mode: manager (level2) in registration phase → shows registration management tabs
   const regManager = superAdmin && meta.phase === 'registration';
   document.body.classList.toggle('admin-mode', regManager);
+  document.body.classList.toggle('master-mode', adminLevel === 2);
 
   const txt  = document.getElementById('adm-txt');
   const btn  = document.getElementById('abtn');
@@ -409,7 +412,7 @@ function refreshAdmin() {
     goPage('registrations');
   }
   if (admin && meta.phase === 'tournament') {
-    const onRegPage = ['registrations','build','settings'].some(p =>
+    const onRegPage = ['registrations','build'].some(p =>
       document.getElementById('page-'+p)?.classList.contains('on'));
     if (onRegPage) goPage('standings');
   }
@@ -1518,10 +1521,101 @@ function renderCatFilters() {
 // ============ SETTINGS ============
 function renderSettings() {
   const container = document.getElementById('settings-container');
-  if (!container || !superAdmin || meta.phase !== 'registration') return;
+  if (!container || !superAdmin) return;
   container.innerHTML = '';
 
-  // Registration control
+  // ── DESIGN ──────────────────────────────────────────────────────
+  const pc = meta.primaryColor   || '#6B21A8';
+  const sc = meta.secondaryColor || pc;
+  const dsec = document.createElement('div');
+  dsec.className = 'sett-section';
+  dsec.innerHTML = `
+    <div class="sett-section-title">Design</div>
+    <div class="sett-row">
+      <div class="sett-label"><span class="sett-name">Tournament Name</span></div>
+      <div class="sett-ctrl">
+        <input class="text-inp" style="width:220px" value="${escH(meta.name)}"
+          oninput="updateMeta('name',this.value)" placeholder="Tournament name"/>
+      </div>
+    </div>
+    <div class="sett-row">
+      <div class="sett-label">
+        <span class="sett-name">Primary Color</span>
+        <span class="sett-desc">Main accent — headers, buttons</span>
+      </div>
+      <div class="sett-ctrl color-pick-row">
+        <input type="color" class="color-inp" id="cp-primary" value="${pc}"
+          oninput="document.getElementById('ct-primary').value=this.value;updateMeta('primaryColor',this.value)"/>
+        <input class="text-inp text-mono" id="ct-primary" style="width:100px" value="${pc}"
+          oninput="if(/^#[0-9A-Fa-f]{6}$/.test(this.value)){document.getElementById('cp-primary').value=this.value;updateMeta('primaryColor',this.value)}"/>
+      </div>
+    </div>
+    <div class="sett-row">
+      <div class="sett-label">
+        <span class="sett-name">Secondary Color</span>
+        <span class="sett-desc">Gradient & accent buttons</span>
+      </div>
+      <div class="sett-ctrl color-pick-row">
+        <input type="color" class="color-inp" id="cp-secondary" value="${sc}"
+          oninput="document.getElementById('ct-secondary').value=this.value;updateMeta('secondaryColor',this.value)"/>
+        <input class="text-inp text-mono" id="ct-secondary" style="width:100px" value="${sc}"
+          oninput="if(/^#[0-9A-Fa-f]{6}$/.test(this.value)){document.getElementById('cp-secondary').value=this.value;updateMeta('secondaryColor',this.value)}"/>
+      </div>
+    </div>
+    <div class="sett-row" style="border-bottom:none;padding-bottom:0">
+      <div class="sett-label"><span class="sett-name">Preview</span></div>
+      <div class="theme-preview" style="background:linear-gradient(135deg,${pc},${sc})">
+        <span style="color:${onColor(pc)};font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:14px;letter-spacing:1px">Aa</span>
+      </div>
+    </div>`;
+  container.appendChild(dsec);
+
+  // ── LOGO ────────────────────────────────────────────────────────
+  const lsec = document.createElement('div');
+  lsec.className = 'sett-section';
+  lsec.innerHTML = `
+    <div class="sett-section-title">Logo</div>
+    <div class="sett-row" style="border-bottom:none">
+      <div class="sett-label">
+        <span class="sett-name">Logo URL</span>
+        <span class="sett-desc">Tournament logo image</span>
+      </div>
+      <div class="sett-ctrl" style="flex-direction:column;align-items:flex-end;gap:10px">
+        <input class="text-inp" style="width:260px" value="${escH(meta.logoUrl)}"
+          oninput="updateMeta('logoUrl',this.value)" placeholder="https://…"/>
+        ${meta.logoUrl ? `<img src="${escH(meta.logoUrl)}" class="logo-prev-img" alt="" onerror="this.style.display='none'"/>` : ''}
+      </div>
+    </div>`;
+  container.appendChild(lsec);
+
+  // ── SPONSORS ────────────────────────────────────────────────────
+  const ssec = document.createElement('div');
+  ssec.className = 'sett-section';
+  const logos = Array.isArray(meta.sponsorLogos) ? meta.sponsorLogos : [];
+  ssec.innerHTML = `
+    <div class="sett-section-title">Sponsors</div>
+    <div id="sponsor-edit-list">${logos.length
+      ? logos.map((l,i) => `
+        <div class="sprow">
+          <div class="sp-thumb">${l.url
+            ? `<img src="${escH(l.url)}" alt="" onerror="this.style.display='none'" style="max-width:52px;max-height:32px;object-fit:contain"/>`
+            : `<span style="color:var(--text3);font-size:20px;line-height:1">+</span>`}</div>
+          <input class="text-inp" style="flex:1;min-width:0" value="${escH(l.url)}"
+            placeholder="Image URL…" onchange="updateSponsorLogo(${i},'url',this.value)"/>
+          <input class="text-inp" style="width:100px;flex-shrink:0" value="${escH(l.alt)}"
+            placeholder="Name…" onchange="updateSponsorLogo(${i},'alt',this.value)"/>
+          <button class="team-del" onclick="removeSponsorLogo(${i})" title="Remove">✕</button>
+        </div>`).join('')
+      : `<p class="sett-empty-note">No sponsors yet — add one below.</p>`}
+    </div>
+    <div class="sett-add-row">
+      <button class="add-cat-btn" onclick="addSponsorLogo()">+ Add Sponsor</button>
+    </div>`;
+  container.appendChild(ssec);
+
+  if (meta.phase !== 'registration') return;
+
+  // ── REGISTRATION ────────────────────────────────────────────────
   const regSection = document.createElement('div');
   regSection.className = 'sett-section';
   regSection.innerHTML = `<div class="sett-section-title">Registration</div>
@@ -1529,7 +1623,7 @@ function renderSettings() {
       <span class="toggle-label">Registration Open</span>
       <label class="toggle-switch"><input type="checkbox" ${meta.regOpen?'checked':''} onchange="updateMeta('regOpen',this.checked)"/><span class="toggle-slider"></span></label>
     </div>
-    <div class="toggle-row">
+    <div class="toggle-row" style="border-bottom:none">
       <span class="toggle-label">Show Participant List (public)</span>
       <label class="toggle-switch"><input type="checkbox" ${meta.showRegistered?'checked':''} onchange="updateMeta('showRegistered',this.checked)"/><span class="toggle-slider"></span></label>
     </div>
@@ -1541,7 +1635,7 @@ function renderSettings() {
       <div class="sett-ctrl">
         <textarea class="text-inp" style="width:240px;height:76px;resize:vertical;line-height:1.5"
           onchange="updateMeta('regNote',this.value)"
-          placeholder="e.g. Payment deadline is Friday…">${meta.regNote||''}</textarea>
+          placeholder="e.g. Payment deadline is Friday…">${escH(meta.regNote)}</textarea>
       </div>
     </div>
     <div class="sett-row" style="align-items:flex-start;padding-top:16px">
@@ -1551,22 +1645,22 @@ function renderSettings() {
       </div>
       <div class="sett-ctrl" style="flex-direction:column;align-items:flex-end;gap:8px">
         <div style="display:flex;gap:6px;align-items:center">
-          <input class="text-inp" value="${meta.paymentLinkLabel||''}" style="width:100px" placeholder="Label…"
+          <input class="text-inp" value="${escH(meta.paymentLinkLabel)}" style="width:100px" placeholder="Label…"
             onchange="updateMeta('paymentLinkLabel',this.value)"/>
-          <input class="text-inp" value="${meta.paymentLink||''}" style="width:190px" placeholder="https://…"
+          <input class="text-inp" value="${escH(meta.paymentLink)}" style="width:190px" placeholder="https://…"
             onchange="updateMeta('paymentLink',this.value)"/>
         </div>
         <div style="display:flex;gap:6px;align-items:center">
-          <input class="text-inp" value="${meta.paymentLink2Label||''}" style="width:100px" placeholder="Label…"
+          <input class="text-inp" value="${escH(meta.paymentLink2Label)}" style="width:100px" placeholder="Label…"
             onchange="updateMeta('paymentLink2Label',this.value)"/>
-          <input class="text-inp" value="${meta.paymentLink2||''}" style="width:190px" placeholder="https://… (optional)"
+          <input class="text-inp" value="${escH(meta.paymentLink2)}" style="width:190px" placeholder="https://… (optional)"
             onchange="updateMeta('paymentLink2',this.value)"/>
         </div>
       </div>
     </div>`;
   container.appendChild(regSection);
 
-  // Categories
+  // ── CATEGORIES ──────────────────────────────────────────────────
   const catSection = document.createElement('div');
   catSection.className = 'sett-section';
   catSection.innerHTML = `<div class="sett-section-title">Categories</div>
@@ -1580,7 +1674,7 @@ function renderSettings() {
     </div>`;
   container.appendChild(catSection);
 
-  // Start Tournament
+  // ── START TOURNAMENT ────────────────────────────────────────────
   const startSection = document.createElement('div');
   startSection.className = 'sett-section';
   startSection.style.textAlign = 'center';
@@ -1592,6 +1686,28 @@ function renderSettings() {
     </p>
     <button class="gen-btn" onclick="openStartModal()">▶ Start Tournament</button>`;
   container.appendChild(startSection);
+}
+
+// ── Sponsor management ───────────────────────────────────────────
+function updateSponsorLogo(i, key, val) {
+  if (!Array.isArray(meta.sponsorLogos)) meta.sponsorLogos = [];
+  if (!meta.sponsorLogos[i]) meta.sponsorLogos[i] = { url: '', alt: '' };
+  meta.sponsorLogos[i][key] = val;
+  renderSponsorBar();
+  renderSettings();
+  pushMetaOnly();
+}
+function removeSponsorLogo(i) {
+  if (!Array.isArray(meta.sponsorLogos)) return;
+  meta.sponsorLogos.splice(i, 1);
+  renderSponsorBar();
+  renderSettings();
+  pushMetaOnly();
+}
+function addSponsorLogo() {
+  if (!Array.isArray(meta.sponsorLogos)) meta.sponsorLogos = [];
+  meta.sponsorLogos.push({ url: '', alt: '' });
+  renderSettings();
 }
 
 function renderCatItem(cat, ci) {
@@ -1720,8 +1836,9 @@ function resetAllScores() {
 
 // ============ NAV ============
 function goPage(p) {
-  const regOnly = p==='settings'||p==='build'||p==='registrations';
+  const regOnly = p==='build'||p==='registrations';
   if (regOnly && (!superAdmin || meta.phase !== 'registration')) return;
+  if (p==='settings' && !superAdmin) return;
   document.querySelectorAll('.pg').forEach(e=>e.classList.remove('on'));
   document.querySelectorAll('.tab').forEach(e=>e.classList.remove('on'));
   const pageEl=document.getElementById('page-'+p);
@@ -1791,7 +1908,7 @@ function renderAll() {
   renderCourtFilter();
   renderScheduleContent();
   renderBracket();
-  if (superAdmin && meta.phase === 'registration') renderSettings();
+  if (superAdmin) renderSettings();
 }
 
 // ============ EXPOSE GLOBALS ============
@@ -1807,7 +1924,8 @@ Object.assign(window, {
   editBuildItem, deleteBuildItem,
   setGS, setKS, filterSchedule,
   updateMeta, updateCatName, updateCatCfg, adjCatCfg,
-  addCategory, deleteCategory, resetAllScores
+  addCategory, deleteCategory, resetAllScores,
+  updateSponsorLogo, removeSponsorLogo, addSponsorLogo
 });
 
 // ============ BOOT ============
