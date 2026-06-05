@@ -58,13 +58,34 @@ body {
   border-radius: 50%; animation: spin .8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-/* Header */
-header { position: sticky; top: 0; z-index: 50; display: flex; align-items: center;
-  justify-content: space-between; padding: 0 20px; height: 60px;
-  background: var(--header-bg); backdrop-filter: blur(24px) saturate(180%);
+/* Header — scrolls away (not sticky) */
+header { display: flex; align-items: center;
+  justify-content: space-between; padding: 18px 20px 14px;
+  background: var(--header-bg); transition: background .4s; }
+
+/* Admin bar row — scrolls away, holds admin button + mode indicator */
+.admin-bar { display: flex; align-items: center; gap: 12px;
+  padding: 0 20px 12px; background: var(--header-bg);
+  border-bottom: 1px solid var(--border); transition: background .3s; }
+.admin-bar.mode-admin { background: var(--primary); border-bottom: none; }
+.admin-bar.mode-admin .admin-toggle {
+  background: rgba(255,255,255,.15) !important;
+  color: var(--on-primary) !important;
+  border-color: rgba(255,255,255,.4) !important; }
+
+/* Sticky wrapper — sponsors + nav + cat filter stick here */
+.sticky-block { position: sticky; top: 0; z-index: 50;
+  box-shadow: var(--shadow-sm); transition: box-shadow .2s; }
+body.admin-mode .sticky-block,
+body.master-mode .sticky-block { box-shadow: 0 2px 0 var(--primary), var(--shadow-sm); }
+
+/* Sticky category filter row */
+.sticky-cat { background: var(--nav-bg); padding: 8px 16px;
   border-bottom: 1px solid var(--border);
-  box-shadow: var(--shadow-sm);
-  transition: background .4s; }
+  display: flex; flex-wrap: wrap; gap: 6px; overflow-x: auto; scrollbar-width: none; }
+.sticky-cat::-webkit-scrollbar { display: none; }
+.sticky-cat .cat-filter { margin-bottom: 0; }
+.sticky-cat.h { display: none; }
 .logo { display: flex; align-items: center; gap: 10px; }
 .lmark { width: 42px; height: 42px; background: var(--primary); border-radius: 10px;
   display: flex; align-items: center; justify-content: center; overflow: hidden; flex-shrink: 0;
@@ -87,17 +108,16 @@ body.admin-mode .admin-only { display: flex !important; }
 button.admin-only { display: none !important; }
 body.admin-mode button.admin-only { display: inline-block !important; }
 
-/* Mode bar */
-.mode-bar { padding: 6px 20px; font-size: 11px; font-weight: 600; letter-spacing: .4px;
+/* Mode bar — now lives inside .admin-bar */
+.mode-bar { padding: 6px 0; font-size: 11px; font-weight: 600; letter-spacing: .4px;
   text-transform: uppercase; transition: all .3s;
-  display: flex; align-items: center; justify-content: center; gap: 8px; position: relative; }
-.mode-bar.mode-view { background: var(--modebar-bg); color: var(--text3); border-bottom: 1px solid var(--border); }
-.mode-bar.mode-admin { background: var(--primary);
-  color: var(--on-primary); border-bottom: none;
-  text-shadow: 0 1px 2px rgba(0,0,0,0.15); }
+  display: flex; flex: 1; align-items: center; justify-content: flex-start; gap: 8px; }
+.mode-bar.mode-view { background: transparent; color: var(--text3); }
+.mode-bar.mode-admin { background: transparent;
+  color: var(--on-primary); text-shadow: 0 1px 2px rgba(0,0,0,0.15); }
 
-/* Nav */
-nav { position: sticky; top: 60px; z-index: 40; display: flex; padding: 0 16px; gap: 0;
+/* Nav — inside .sticky-block (no longer sticky on its own) */
+nav { display: flex; padding: 0 16px; gap: 0;
   background: var(--nav-bg); backdrop-filter: blur(16px) saturate(150%);
   border-bottom: 1px solid var(--border); overflow-x: auto; scrollbar-width: none; transition: background .4s; }
 nav::-webkit-scrollbar { display: none; }
@@ -341,7 +361,7 @@ main { position: relative; z-index: 5; max-width: 980px; margin: 0 auto; padding
 
 .gc { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--rs);
   padding: 10px 14px; margin-bottom: 7px; display: grid;
-  grid-template-columns: auto 1fr 28px 1fr auto auto; gap: 8px; align-items: center; transition: border-color .2s; }
+  grid-template-columns: auto 1fr 28px 1fr auto; gap: 8px; align-items: center; transition: border-color .2s; }
 .gc:hover { border-color: var(--border2); }
 .gc.done { border-color: rgba(107,33,168,.25); background: rgba(107,33,168,.03); }
 .pill { font-family: 'Barlow Condensed', sans-serif; font-size: 12px; font-weight: 700;
@@ -706,17 +726,15 @@ button, a, input, select, textarea { touch-action: manipulation; }
 input, textarea, select { max-width: 100%; }
 
 @media (max-width: 640px) {
-  /* Header: single row, truncate long tournament names */
-  header { height: 56px; padding: 0 14px; flex-wrap: nowrap; }
-  /* Nav must follow header height */
-  nav { top: 56px; }
+  /* Header: tighter padding on phones */
+  header { padding: 12px 14px 10px; }
+  /* Admin bar: tighter */
+  .admin-bar { padding: 0 14px 10px; }
 
   /* Game rows */
   .gc { grid-template-columns: auto 1fr 18px 1fr auto; gap: 4px; }
   /* 16px on score inputs prevents iOS auto-zoom on focus */
   .si { width: 32px; font-size: 16px; }
-  /* Rule tag clutters narrow rows — hide on mobile */
-  .game-rule { display: none; }
 
   /* All text inputs ≥ 16px = no iOS auto-zoom */
   .form-input, .modal-input, .text-inp, .time-inp,

@@ -442,6 +442,8 @@ function refreshAdmin() {
   const syncDot = document.getElementById('sync-indicator');
   if (syncDot) syncDot.classList.toggle('h', !admin);
   if (bar) bar.className = 'mode-bar ' + (admin ? 'mode-admin' : 'mode-view');
+  const adminBar = document.getElementById('admin-bar');
+  if (adminBar) adminBar.classList.toggle('mode-admin', admin);
   if (mtxt) {
     if (!admin) mtxt.textContent = 'View only — tap Admin to manage';
     else if (adminLevel===2 && meta.phase==='registration') mtxt.textContent = 'Master mode — full access';
@@ -1417,16 +1419,12 @@ function buildGameRow(catId, g, idx, isKO) {
          oninput="${isKO?`setKS('${catId}',${g.ri},${g.gi},'sb',this.value)`:`setGS('${catId}',${idx},'sb',this.value)`}"/>`
     : `<span class="ssep">${done?`${g.sa} : ${g.sb}`:'— : —'}</span>`;
 
-  const ruleTag = rule.change
-    ? `<span class="game-rule">to ${rule.pts} · switch/${rule.change}</span>`
-    : `<span class="game-rule">to ${rule.pts}</span>`;
   row.innerHTML = `
     <span class="pill ${pc}">C${g.court}</span>
     <span class="gt">${dn(g.a)}${!isKO&&g.gn?`<span class="gtag">${g.gn}</span>`:''}</span>
     <span class="gvs">vs</span>
     <span class="gt r">${dn(g.b)}</span>
-    <span class="sw">${scoreCell}</span>
-    ${ruleTag}`;
+    <span class="sw">${scoreCell}</span>`;
   const errId = isKO ? `kerr-${catId}-${g.ri}-${g.gi}` : `gerr-${catId}-${idx}`;
   const errD  = document.createElement('div');
   errD.id = errId; errD.className = 'score-err'; errD.style.display = 'none';
@@ -1479,7 +1477,7 @@ function renderScheduleContent() {
       const catName = categories.find(c=>c.id===g._catId)?.name || '';
       if (g._isKO) { key = `ko-${g._catId}-${g._rn}`; label = catName ? `${catName} — ${g._rn}` : g._rn; }
       else if (isThirdPlace) { key = `3p-${g._catId}`; label = catName ? `${catName} — 3/4` : '3/4'; }
-      else { key = `pool-${g._catId}`; label = catName || null; }
+      else { key = `pool-${g._catId}`; label = catName ? `${catName} — Pools` : 'Pools'; }
       if (!subGroups.has(key)) subGroups.set(key, {label, games:[]});
       subGroups.get(key).games.push(g);
     });
@@ -1489,7 +1487,10 @@ function renderScheduleContent() {
       if (needSubHeaders && label) {
         const sh = document.createElement('div');
         sh.className = 'tsub-hdr';
-        sh.textContent = label;
+        const firstG = sg[0];
+        const r = getRuleForGame(firstG._catId, firstG, firstG._isKO);
+        const ruleStr = r.change ? ` (to ${r.pts} switch ${r.change})` : ` (to ${r.pts})`;
+        sh.textContent = label + ruleStr;
         block.appendChild(sh);
       }
       sg.forEach(g => block.appendChild(buildGameRow(g._catId, g, g._idx, g._isKO)));
@@ -1691,15 +1692,20 @@ function setCat(id) {
 }
 
 function renderCatFilters() {
-  ['cat-filter','cat-filter-sched','cat-filter-bracket'].forEach(elId => {
-    const el=document.getElementById(elId);
-    if (!el) return;
-    if (categories.length<=1) { el.innerHTML=''; return; }
-    el.innerHTML=`<div class="cat-filter">
-      <button class="cat-btn ${!activeCat?'on':''}" onclick="setCat(null)">All</button>
-      ${categories.map(c=>`<button class="cat-btn ${activeCat===c.id?'on':''}" onclick="setCat('${c.id}')">${c.name}</button>`).join('')}
-    </div>`;
-  });
+  const el = document.getElementById('sticky-cat');
+  if (!el) return;
+  const onTournamentPage = ['standings','schedule','bracket'].some(p =>
+    document.getElementById('page-'+p)?.classList.contains('on'));
+  if (categories.length <= 1 || !onTournamentPage) {
+    el.innerHTML = '';
+    el.classList.add('h');
+    return;
+  }
+  el.classList.remove('h');
+  el.innerHTML = `<div class="cat-filter">
+    <button class="cat-btn ${!activeCat?'on':''}" onclick="setCat(null)">All</button>
+    ${categories.map(c=>`<button class="cat-btn ${activeCat===c.id?'on':''}" onclick="setCat('${c.id}')">${c.name}</button>`).join('')}
+  </div>`;
 }
 
 // ============ SETTINGS ============
@@ -2219,6 +2225,7 @@ function goPage(p) {
   pageEl.classList.add('on');
   const tab=document.getElementById('tab-'+p);
   if (tab) tab.classList.add('on');
+  renderCatFilters();
   if (p==='register')       renderRegisterPage();
   if (p==='participants')   renderParticipants();
   if (p==='registrations')  renderRegistrations();
@@ -2413,6 +2420,12 @@ async function autoAddPairToDB(name) {
 }
 
 // ============ BOOT ============
+// Prevent pinch-to-zoom (iOS ignores user-scalable=no since iOS 10)
+document.addEventListener('touchmove', e => {
+  if (e.touches.length > 1) e.preventDefault();
+}, { passive: false });
+document.addEventListener('gesturestart', e => e.preventDefault());
+
 window.addEventListener('load', async () => {
   const ok = await loadTournament();
   if (!ok) return;

@@ -6,7 +6,7 @@
 <title>Tournaments</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@700;800;900&display=swap" rel="stylesheet"/>
-<link rel="stylesheet" href="styles.css?v=33"/>
+<link rel="stylesheet" href="styles.css?v=34"/>
 </head>
 <body>
 
@@ -34,8 +34,6 @@
 <!-- MAIN APP -->
 <div id="view-app" class="view h">
 
-  <div id="sponsor-bar" class="sponsor-bar h"></div>
-
   <header>
     <div class="logo">
       <div class="lmark" id="logo-mark">
@@ -44,29 +42,33 @@
       </div>
       <span class="lname" id="header-name">Tournament</span>
     </div>
-    <div style="display:flex;align-items:center;gap:10px;">
-      <button class="admin-toggle" id="abtn" onclick="adminClick()"><span id="adm-txt">Admin</span></button>
-    </div>
   </header>
 
-  <div class="mode-bar mode-view" id="mode-bar">
-    <span id="mode-text">View only — tap Admin to manage</span>
-    <span id="sync-indicator" class="sync-dot sync-ok h"></span>
+  <div id="admin-bar" class="admin-bar">
+    <div id="mode-bar" class="mode-bar mode-view">
+      <span id="mode-text">Tap Admin to manage</span>
+      <span id="sync-indicator" class="sync-dot sync-ok h"></span>
+    </div>
+    <button class="admin-toggle" id="abtn" onclick="adminClick()"><span id="adm-txt">Admin</span></button>
   </div>
 
-  <nav id="main-nav">
-    <!-- Registration phase tabs -->
-    <button class="tab phase-reg" id="tab-register" onclick="goPage('register')">Register</button>
-    <button class="tab phase-reg" id="tab-participants" onclick="goPage('participants')">Participants</button>
-    <button class="tab phase-reg admin-only" id="tab-registrations" onclick="goPage('registrations')">Registrations</button>
-    <button class="tab phase-reg admin-only" id="tab-build" onclick="goPage('build')">Build</button>
-    <!-- Tournament phase tabs -->
-    <button class="tab phase-trn" id="tab-standings" onclick="goPage('standings')">Standings</button>
-    <button class="tab phase-trn" id="tab-schedule" onclick="goPage('schedule')">Schedule</button>
-    <button class="tab phase-trn" id="tab-bracket" onclick="goPage('bracket')">Bracket</button>
-    <!-- Shared master tabs -->
-    <button class="tab master-only" id="tab-settings" onclick="goPage('settings')">Settings</button>
-  </nav>
+  <div id="sticky-block" class="sticky-block">
+    <div id="sponsor-bar" class="sponsor-bar h"></div>
+    <nav id="main-nav">
+      <!-- Registration phase tabs -->
+      <button class="tab phase-reg" id="tab-register" onclick="goPage('register')">Register</button>
+      <button class="tab phase-reg" id="tab-participants" onclick="goPage('participants')">Participants</button>
+      <button class="tab phase-reg admin-only" id="tab-registrations" onclick="goPage('registrations')">Registrations</button>
+      <button class="tab phase-reg admin-only" id="tab-build" onclick="goPage('build')">Build</button>
+      <!-- Tournament phase tabs -->
+      <button class="tab phase-trn" id="tab-standings" onclick="goPage('standings')">Standings</button>
+      <button class="tab phase-trn" id="tab-schedule" onclick="goPage('schedule')">Schedule</button>
+      <button class="tab phase-trn" id="tab-bracket" onclick="goPage('bracket')">Bracket</button>
+      <!-- Shared master tabs -->
+      <button class="tab master-only" id="tab-settings" onclick="goPage('settings')">Settings</button>
+    </nav>
+    <div id="sticky-cat" class="sticky-cat h"></div>
+  </div>
 
   <main>
 
@@ -142,14 +144,12 @@
       <div class="page-header">
         <h2>Standings</h2>
       </div>
-      <div id="cat-filter"></div>
       <div id="standings-grid"></div>
     </div>
 
     <!-- SCHEDULE (tournament) -->
     <div class="pg" id="page-schedule">
       <div id="sbar" class="sbar"></div>
-      <div id="cat-filter-sched"></div>
       <div class="sched-search-box">
         <input class="team-search-input" id="sched-search" placeholder="Search team…" oninput="filterSchedule()"/>
       </div>
@@ -160,7 +160,6 @@
     <!-- BRACKET (tournament) -->
     <div class="pg" id="page-bracket">
       <div class="page-header"><h2>Knockout Bracket</h2></div>
-      <div id="cat-filter-bracket"></div>
       <div id="bracket-container"></div>
     </div>
 
@@ -251,6 +250,6 @@
   </div>
 </div>
 
-<script type="module" src="app.js?v=33"></script>
+<script type="module" src="app.js?v=34"></script>
 </body>
 </html>
