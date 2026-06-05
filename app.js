@@ -300,10 +300,16 @@ function applyTheme(primary, secondary) {
 
   const [rb3,gb3,bb3] = hexToRgb(bg3);
 
+  // ── Readable variants: primary/secondary forced readable on white cards ──
+  const primaryText   = readable(primary,   '#FFFFFF', 4.5);
+  const secondaryText = readable(secondary, '#FFFFFF', 4.5);
+
   const vars = {
     '--primary':            primary,
     '--primary2':           secondary,
     '--primary3':           primary3,
+    '--primary-text':       primaryText,
+    '--secondary-text':     secondaryText,
     '--bg':                 bg,
     '--bg2':                '#FFFFFF',
     '--bg3':                bg3,
@@ -431,7 +437,16 @@ async function setRegStatus(id, status) {
   if (!superAdmin) return;
   try {
     if (status === 'rejected') {
-      // Reject = permanent delete from Firestore
+      // Also remove from build roster if approved
+      const reg = registrations.find(r => r.id === id);
+      if (reg) {
+        const catId = reg.category;
+        const name = reg.p1 + (reg.p2 ? ' / ' + reg.p2 : '');
+        if (state[catId]?.roster) {
+          const ri = state[catId].roster.indexOf(name);
+          if (ri !== -1) { state[catId].roster.splice(ri, 1); await pushToCloud(); }
+        }
+      }
       await deleteDoc(doc(db, 'tournaments', tId, 'registrations', id));
       registrations = registrations.filter(r => r.id !== id);
     } else {
@@ -441,6 +456,7 @@ async function setRegStatus(id, status) {
     }
     renderRegistrations();
     renderParticipants();
+    renderBuildPage();
   } catch(e) { alert('Error updating status'); }
 }
 
@@ -579,6 +595,7 @@ function renderRegisterPage() {
 
 // ============ BUILD PAGE ============
 let dragSrc = null;
+let dragSrcCat = null;
 
 function renderBuildPage() {
   const el = document.getElementById('build-cats');
@@ -600,7 +617,8 @@ function renderBuildPage() {
         <span class="build-cat-name">${cat.name}</span>
         <span class="build-cat-count">${roster.length} pairs</span>
       </div>
-      <div class="build-list" id="blist-${cat.id}" data-cat="${cat.id}">
+      <div class="build-list" id="blist-${cat.id}" data-cat="${cat.id}"
+        ondragover="onListDragOver(event)" ondrop="onListDrop(event,'${cat.id}')">
         ${roster.map((name,i) => buildItem(cat.id, name, i)).join('')}
       </div>
       <div class="build-foot">
@@ -628,12 +646,19 @@ function buildItem(catId, name, i) {
 
 function editBuildItem(catId, idx) {
   if (!superAdmin) return;
-  editTarget = { catId, buildIdx: idx };
   const name = state[catId]?.roster[idx] || '';
+  editTarget = { catId, buildIdx: idx, oldName: name };
   const parts = name.split('/').map(s => s.trim());
   document.getElementById('edit-p1').value = parts[0] || '';
   document.getElementById('edit-p2').value = parts[1] || '';
   document.getElementById('edit-modal-title').textContent = 'Edit Pair';
+  const catRow = document.getElementById('edit-cat-row');
+  const catSel = document.getElementById('edit-cat');
+  if (catRow && catSel) {
+    catSel.innerHTML = categories.map(c =>
+      `<option value="${c.id}"${c.id===catId?' selected':''}>${c.name}</option>`).join('');
+    catRow.classList.remove('h');
+  }
   document.getElementById('edit-modal').classList.remove('h');
   document.getElementById('edit-p1').focus();
 }
@@ -663,13 +688,15 @@ async function deleteBuildItem(catId, idx) {
 function setupDragDrop(catId) {}
 
 function onDragStart(e) {
-  dragSrc = e.currentTarget;
+  dragSrc    = e.currentTarget;
+  dragSrcCat = dragSrc.dataset.cat;
   dragSrc.classList.add('dragging');
   e.dataTransfer.effectAllowed = 'move';
 }
 function onDragEnd(e) {
   e.currentTarget.classList.remove('dragging');
-  document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
+  document.querySelectorAll('.drag-over,.list-drag-over').forEach(el =>
+    el.classList.remove('drag-over','list-drag-over'));
 }
 function onDragOver(e) {
   e.preventDefault();
@@ -680,20 +707,60 @@ function onDragOver(e) {
     item.classList.add('drag-over');
   }
 }
-function onDrop(e, catId) {
+function onListDragOver(e) {
   e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  const list = e.currentTarget;
+  document.querySelectorAll('.list-drag-over').forEach(el => el.classList.remove('list-drag-over'));
+  list.classList.add('list-drag-over');
+}
+function onDrop(e, targetCatId) {
+  e.preventDefault();
+  e.stopPropagation();
   const target = e.currentTarget;
   if (!dragSrc || dragSrc === target) return;
-  const fromIdx = parseInt(dragSrc.dataset.idx);
-  const toIdx   = parseInt(target.dataset.idx);
-  const cs = state[catId];
-  if (!cs) return;
-  const roster = [...cs.roster];
-  const [moved] = roster.splice(fromIdx, 1);
-  roster.splice(toIdx, 0, moved);
-  cs.roster = roster;
-  pushToCloud();
+  const fromIdx  = parseInt(dragSrc.dataset.idx);
+  const toIdx    = parseInt(target.dataset.idx);
+  const srcCatId = dragSrcCat;
+  if (srcCatId === targetCatId) {
+    const cs = state[srcCatId];
+    if (!cs) return;
+    const roster = [...cs.roster];
+    const [moved] = roster.splice(fromIdx, 1);
+    roster.splice(toIdx, 0, moved);
+    cs.roster = roster;
+    pushToCloud(); renderBuildPage();
+  } else {
+    moveBetweenCategories(srcCatId, fromIdx, targetCatId, toIdx);
+  }
+}
+function onListDrop(e, targetCatId) {
+  e.preventDefault();
+  if (!dragSrc) return;
+  if (dragSrcCat === targetCatId) return; // item drop handles same-cat
+  moveBetweenCategories(dragSrcCat, parseInt(dragSrc.dataset.idx), targetCatId, -1);
+}
+async function moveBetweenCategories(srcCatId, fromIdx, dstCatId, toIdx) {
+  const srcCs = state[srcCatId], dstCs = state[dstCatId];
+  if (!srcCs || !dstCs) return;
+  const name = srcCs.roster[fromIdx];
+  if (name === undefined) return;
+  srcCs.roster.splice(fromIdx, 1);
+  if (toIdx < 0 || toIdx >= dstCs.roster.length) dstCs.roster.push(name);
+  else dstCs.roster.splice(toIdx, 0, name);
+  // Update registration's category in Firestore
+  const parts = name.split(' / ').map(s => s.trim());
+  const p1 = parts[0], p2 = parts[1] || '';
+  const reg = registrations.find(r => r.p1 === p1 && (r.p2||'') === p2 && r.category === srcCatId);
+  if (reg) {
+    try {
+      await updateDoc(doc(db, 'tournaments', tId, 'registrations', reg.id), { category: dstCatId });
+      reg.category = dstCatId;
+    } catch(e) { console.error('Could not update registration category', e); }
+  }
+  await pushToCloud();
   renderBuildPage();
+  renderRegistrations();
 }
 
 function moveBuildItem(catId, idx, dir) {
@@ -1037,6 +1104,7 @@ function openEditTeam(catId, gi, ti) {
   document.getElementById('edit-p1').value = parts[0]||'';
   document.getElementById('edit-p2').value = parts[1]||'';
   document.getElementById('edit-modal-title').textContent = `Edit — Group ${state[catId].groups[gi].name}`;
+  document.getElementById('edit-cat-row')?.classList.add('h');
   document.getElementById('edit-modal').classList.remove('h');
   document.getElementById('edit-p1').focus();
 }
@@ -1053,8 +1121,31 @@ function saveEdit() {
 
   // Build page roster edit
   if (editTarget.buildIdx !== undefined) {
-    state[editTarget.catId].roster[editTarget.buildIdx] = name;
-    closeEdit(); pushToCloud(); renderBuildPage();
+    const { catId, buildIdx, oldName } = editTarget;
+    const newCatId = document.getElementById('edit-cat')?.value || catId;
+    if (newCatId !== catId) {
+      // Cross-category move via edit
+      state[catId].roster.splice(buildIdx, 1);
+      if (!state[newCatId]) state[newCatId] = { roster:[], groups:[], sched:[], ko:[] };
+      state[newCatId].roster.push(name);
+      const oldParts = (oldName||'').split(' / ').map(s=>s.trim());
+      const reg = registrations.find(r =>
+        r.p1===oldParts[0] && (r.p2||'')===(oldParts[1]||'') && r.category===catId);
+      if (reg) {
+        updateDoc(doc(db,'tournaments',tId,'registrations',reg.id), {category:newCatId, p1, p2});
+        reg.category = newCatId; reg.p1 = p1; reg.p2 = p2;
+      }
+    } else {
+      state[catId].roster[buildIdx] = name;
+      const oldParts = (oldName||'').split(' / ').map(s=>s.trim());
+      const reg = registrations.find(r =>
+        r.p1===oldParts[0] && (r.p2||'')===(oldParts[1]||'') && r.category===catId);
+      if (reg) {
+        updateDoc(doc(db,'tournaments',tId,'registrations',reg.id), {p1, p2});
+        reg.p1 = p1; reg.p2 = p2;
+      }
+    }
+    closeEdit(); pushToCloud(); renderBuildPage(); renderRegistrations();
     return;
   }
 
@@ -1689,7 +1780,7 @@ Object.assign(window, {
   submitRegistration, setRegStatus, setRegPaid, setRegFilter, selectRegCat,
   openAddPair, closeAddPair, saveAddPair,
   buildTournament, shuffleBuildRoster, moveBuildItem,
-  onDragStart, onDragEnd, onDragOver, onDrop,
+  onDragStart, onDragEnd, onDragOver, onDrop, onListDragOver, onListDrop,
   openEditTeam, closeEdit, saveEdit, deleteTeam,
   editBuildItem, deleteBuildItem,
   setGS, setKS, filterSchedule,
