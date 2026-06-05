@@ -433,12 +433,11 @@
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
 import {
-  getFirestore, collection, getDocs, doc, setDoc, deleteDoc, updateDoc,
+  getFirestore, collection, getDocs, doc, getDoc, setDoc, deleteDoc, updateDoc,
   serverTimestamp, Timestamp
 } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
 
 // ── Config ──────────────────────────────────────────────────
-const SUPER_ADMIN_PASSWORD = 'Admin!Tourney24';
 const BASE_URL = 'https://albealrod.github.io/tournaments/';
 
 const firebaseConfig = {
@@ -455,9 +454,11 @@ const db    = getFirestore(fbApp);
 let tournaments = [];
 
 // ── Auth ────────────────────────────────────────────────────
-function checkAdminPw() {
+async function checkAdminPw() {
   const val = document.getElementById('adm-pw').value;
-  if (val === SUPER_ADMIN_PASSWORD) {
+  const snap = await getDoc(doc(db, 'config', 'superAdmin'));
+  const expected = snap.exists() ? snap.data().password : null;
+  if (expected && val === expected) {
     document.getElementById('screen-login').style.display = 'none';
     document.getElementById('screen-app').style.display   = 'block';
     document.getElementById('adm-pw').value = '';
