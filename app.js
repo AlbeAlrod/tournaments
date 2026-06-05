@@ -1448,57 +1448,79 @@ function renderBracketForCat(catId, container) {
   scroll.appendChild(tree);
   const HG=90, GAP=12;
 
-  cs.ko.forEach((round,ri) => {
+  // Helper: build a single match box element
+  const mkBox = (g, gi, ri) => {
+    const sa=parseInt(g.sa), sb=parseInt(g.sb);
+    const hs=isValidScore(sa,sb,catId);
+    const wa=hs&&sa>sb, wb=hs&&sb>sa;
+    let labelA=g.a||'TBD', labelB=g.b||'TBD', codeA='', codeB='', knownA=false, knownB=false;
+    if (ri===0) {
+      const sAk=g.seedA||seedPairs[gi]?.[0]||'TBD', sBk=g.seedB||seedPairs[gi]?.[1]||'TBD';
+      const sA=resolvePoolSeed(catId,sAk), sB=resolvePoolSeed(catId,sBk);
+      labelA=sA.known?sA.label:sAk; labelB=sB.known?sB.label:sBk;
+      codeA=sA.known?sAk:''; codeB=sB.known?sBk:'';
+      knownA=sA.known; knownB=sB.known;
+    } else {
+      knownA=!!(g.a&&!g.a.startsWith('Winner'));
+      knownB=!!(g.b&&!g.b.startsWith('Winner'));
+      if (g.directSeedA&&knownA) codeA=g.directSeedA;
+      if (g.directSeedB&&knownB) codeB=g.directSeedB;
+    }
+    const box=document.createElement('div'); box.className='bmatch-box';
+    box.innerHTML=`<div class="bmatch">
+      <div class="bteam ${wa?'win':''} ${knownA?'':'tbd'}${g.directSeedA?' bdirect':''}">
+        <span class="bname">${labelA}</span>${codeA?`<span class="bsc seed-tag">${codeA}</span>`:''}${hs?`<span class="bsc">${g.sa}</span>`:''}
+      </div>
+      <div class="bteam ${wb?'win':''} ${knownB?'':'tbd'}${g.directSeedB?' bdirect':''}">
+        <span class="bname">${labelB}</span>${codeB?`<span class="bsc seed-tag">${codeB}</span>`:''}${hs?`<span class="bsc">${g.sb}</span>`:''}
+      </div>
+    </div>`;
+    return box;
+  };
+
+  // Detect hybrid bracket: r0 and r1 same count, r1 has direct seeds
+  const isHybrid = cs.ko.length >= 2 &&
+    cs.ko[0].length === cs.ko[1]?.length &&
+    cs.ko[1]?.some(g => g.directSeedA || g.directSeedB);
+
+  const startRi = isHybrid ? 2 : 0;
+
+  if (isHybrid) {
+    // Render r0+r1 as paired horizontal lanes in one column
+    const col=document.createElement('div'); col.className='bround';
+    col.innerHTML=`<div class="brnd-title">${getKORoundName(catId,0)} <span class="brnd-arrow">→</span> ${getKORoundName(catId,1)}</div>`;
+    const lanesEl=document.createElement('div'); lanesEl.className='brnd-matches hybrid-lanes';
+    cs.ko[0].forEach((g0,gi) => {
+      const g1 = cs.ko[1][gi];
+      const lane = document.createElement('div');
+      lane.className = 'hlane';
+      if (gi>0) lane.style.marginTop='10px';
+      // R16 box (smaller)
+      const b0=mkBox(g0,gi,0); b0.classList.add('bmatch-box--sm'); lane.appendChild(b0);
+      // Arrow
+      const arr=document.createElement('div'); arr.className='hlane-arrow'; arr.textContent='→'; lane.appendChild(arr);
+      // QF box
+      lane.appendChild(mkBox(g1,gi,1));
+      lanesEl.appendChild(lane);
+    });
+    col.appendChild(lanesEl); tree.appendChild(col);
+  }
+
+  // Standard columns (all rounds if not hybrid; r2+ if hybrid)
+  cs.ko.forEach((round, ri) => {
+    if (ri < startRi) return;
     const col=document.createElement('div'); col.className='bround';
     col.innerHTML=`<div class="brnd-title">${getKORoundName(catId,ri)}</div>`;
     const matchesEl=document.createElement('div'); matchesEl.className='brnd-matches';
-    // Compute halvings = number of times game count dropped from r0 to this round
     let halvings=0;
-    for (let k=1;k<=ri;k++) { if(cs.ko[k].length<cs.ko[k-1].length) halvings++; }
-    matchesEl.style.paddingTop=(ri===0?0:((Math.pow(2,halvings)-1)*HG/2))+'px';
+    for (let k=startRi+1;k<=ri;k++) { if(cs.ko[k].length<cs.ko[k-1].length) halvings++; }
+    matchesEl.style.paddingTop=(ri===startRi?0:((Math.pow(2,halvings)-1)*HG/2))+'px';
     const matchGap=(Math.pow(2,halvings)-1)*HG+GAP;
-
     round.forEach((g,gi) => {
       const wrap=document.createElement('div'); wrap.className='bmatch-wrap';
       if (gi>0) wrap.style.marginTop=matchGap+'px';
-      const sa=parseInt(g.sa), sb=parseInt(g.sb);
-      const hs=isValidScore(sa,sb,catId);
-      const wa=hs&&sa>sb, wb=hs&&sb>sa;
-      let labelA,labelB,codeA='',codeB='',knownA=false,knownB=false;
-      if (ri===0) {
-        const sAkey = g.seedA || seedPairs[gi]?.[0] || 'TBD';
-        const sBkey = g.seedB || seedPairs[gi]?.[1] || 'TBD';
-        const sA=resolvePoolSeed(catId,sAkey), sB=resolvePoolSeed(catId,sBkey);
-        labelA=sA.known?sA.label:sAkey; labelB=sB.known?sB.label:sBkey;
-        codeA=sA.known?sAkey:''; codeB=sB.known?sBkey:'';
-        knownA=sA.known; knownB=sB.known;
-      } else {
-        const srcRound=getKORoundName(catId,ri-1);
-        labelA=g.a||`Winner of ${srcRound} ${gi*2+1}`;
-        labelB=g.b||`Winner of ${srcRound} ${gi*2+2}`;
-        knownA=!!(g.a&&!g.a.startsWith('Winner'));
-        knownB=!!(g.b&&!g.b.startsWith('Winner'));
-      }
-      const box=document.createElement('div'); box.className='bmatch-box';
-      if (g.isBye) {
-        // Bye: show single team advancing directly, no opponent
-        box.innerHTML=`<div class="bmatch bye-match">
-          <div class="bteam ${knownA?'win':'tbd'}">
-            <span class="bname">${labelA}</span>${codeA?`<span class="bsc seed-tag">${codeA}</span>`:''}
-            <span class="bye-tag">BYE</span>
-          </div>
-        </div>`;
-      } else {
-        box.innerHTML=`<div class="bmatch">
-          <div class="bteam ${wa?'win':''} ${knownA?'':'tbd'}">
-            <span class="bname">${labelA}</span>${codeA?`<span class="bsc seed-tag">${codeA}</span>`:''}${hs?`<span class="bsc">${g.sa}</span>`:''}
-          </div>
-          <div class="bteam ${wb?'win':''} ${knownB?'':'tbd'}">
-            <span class="bname">${labelB}</span>${codeB?`<span class="bsc seed-tag">${codeB}</span>`:''}${hs?`<span class="bsc">${g.sb}</span>`:''}
-          </div>
-        </div>`;
-      }
-      wrap.appendChild(box); matchesEl.appendChild(wrap);
+      wrap.appendChild(mkBox(g,gi,ri));
+      matchesEl.appendChild(wrap);
     });
     col.appendChild(matchesEl); tree.appendChild(col);
   });
@@ -1993,7 +2015,7 @@ function renderSponsorBar() {
   bar.classList.remove('h');
   bar.innerHTML = logos.map(l =>
     l.url
-      ? `<img class="sponsor-logo" src="${l.url}" alt="${l.alt||''}" title="${l.alt||''}"/>`
+      ? `<img class="sponsor-logo" src="${l.url}" alt="${l.alt||''}" title="${l.alt||''}"${l.imgStyle?` style="${escH(l.imgStyle)}"`:''}/>`
       : `<span class="sponsor-text">${l.alt||''}</span>`
   ).join('');
 }

@@ -661,6 +661,17 @@ body.master-mode button.master-only { display: inline-block !important; }
 .cf-btn.on { background: var(--primary); color: var(--on-primary); border-color: var(--primary);
   box-shadow: 0 2px 8px rgba(0,0,0,0.14); }
 
+/* ===== HYBRID BRACKET (שמינית → רבע paired lanes) ===== */
+.hybrid-lanes { display: flex; flex-direction: column; }
+.hlane { display: flex; align-items: center; gap: 6px; }
+.hlane-arrow { font-size: 16px; color: var(--border2); flex-shrink: 0; line-height: 1; padding: 0 2px; }
+.brnd-arrow { color: var(--border2); font-size: 13px; font-weight: 400; }
+/* Smaller match box for R16 side of hybrid lane */
+.bmatch-box--sm .bmatch { min-width: 130px; }
+.bmatch-box--sm .bteam { padding: 6px 9px; font-size: 11px; }
+/* Direct seed badge */
+.bteam.bdirect::before { content: '★ '; font-size: 9px; color: #D97706; vertical-align: middle; }
+
 /* ===== GROUP MANAGEMENT ===== */
 .grp-cat-block { margin-bottom: 20px; }
 .grp-cat-name { font-family: 'Barlow Condensed', sans-serif; font-size: 12px; font-weight: 700;
