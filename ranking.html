@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
+<title>פוצ׳ילינה — דירוג 2026</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@700;800;900&display=swap" rel="stylesheet"/>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{font-size:16px}
+body{
+  font-family:'Barlow',sans-serif;
+  background:#f7f0fb;
+  color:#1a1a2e;
+  min-height:100vh;
+  direction:rtl;
+}
+/* ── Header ── */
+.header{
+  background:linear-gradient(135deg,#E91E8C,#FF4FA8);
+  color:#fff;
+  padding:22px 24px 18px;
+  text-align:center;
+  box-shadow:0 2px 16px rgba(233,30,140,0.25);
+}
+.header-logo{
+  width:64px;height:64px;
+  border-radius:50%;
+  object-fit:cover;
+  border:3px solid rgba(255,255,255,0.6);
+  margin-bottom:10px;
+  display:block;
+  margin-left:auto;margin-right:auto;
+}
+.header-logo-placeholder{
+  width:64px;height:64px;border-radius:50%;
+  background:rgba(255,255,255,0.25);
+  display:flex;align-items:center;justify-content:center;
+  margin:0 auto 10px;
+  font-family:'Barlow Condensed',sans-serif;
+  font-size:28px;font-weight:900;color:#fff;
+}
+.header-title{
+  font-family:'Barlow Condensed',sans-serif;
+  font-size:30px;font-weight:900;
+  letter-spacing:2px;text-transform:uppercase;
+  line-height:1;
+}
+.header-sub{
+  font-size:13px;opacity:.85;margin-top:5px;font-weight:500;
+  letter-spacing:.3px;
+}
+/* ── Tabs ── */
+.tabs{
+  display:flex;justify-content:center;gap:8px;
+  padding:18px 16px 0;
+}
+.tab-btn{
+  padding:8px 26px;border-radius:20px;
+  border:2px solid #E91E8C;
+  background:transparent;color:#E91E8C;
+  font-family:'Barlow Condensed',sans-serif;
+  font-size:16px;font-weight:700;letter-spacing:1px;
+  cursor:pointer;transition:all .15s;
+}
+.tab-btn.on{background:#E91E8C;color:#fff;}
+/* ── Content ── */
+.section{max-width:720px;margin:18px auto;padding:0 12px 48px}
+.table-wrap{
+  background:#fff;border-radius:16px;overflow:hidden;
+  box-shadow:0 2px 16px rgba(233,30,140,0.09);
+}
+/* ── Ranking table ── */
+.rtable{width:100%;border-collapse:collapse;}
+.rtable thead tr{background:linear-gradient(135deg,#E91E8C,#FF4FA8);}
+.rtable th{
+  color:#fff;
+  font-family:'Barlow Condensed',sans-serif;
+  font-size:12px;font-weight:700;letter-spacing:1px;text-transform:uppercase;
+  padding:10px 12px;text-align:right;white-space:nowrap;
+}
+.rtable th.c{text-align:center;}
+.rtable td{
+  padding:10px 12px;font-size:14px;
+  border-bottom:1px solid #f5e8fb;vertical-align:middle;
+}
+.rtable tr:last-child td{border-bottom:none;}
+.rtable tbody tr:hover td{background:#fdf2fb;}
+/* ── Rank cell ── */
+.rnk{
+  font-family:'Barlow Condensed',sans-serif;
+  font-size:17px;font-weight:900;text-align:center;
+  width:38px;color:#E91E8C;
+}
+.rnk.m1{font-size:20px;}
+.rnk.m2{font-size:20px;}
+.rnk.m3{font-size:20px;}
+/* ── Player name ── */
+.pname{font-weight:600;font-size:15px;}
+.pname .pteam{font-size:11px;color:#b06090;font-weight:400;display:block;line-height:1.3;margin-top:1px;}
+/* ── Points badge ── */
+.pbadge{
+  display:inline-flex;align-items:center;justify-content:center;
+  border-radius:8px;padding:3px 8px;
+  font-size:13px;font-weight:700;min-width:44px;
+  background:#fce7f5;color:#E91E8C;white-space:nowrap;
+}
+.pbadge.best{background:#E91E8C;color:#fff;}
+.pbadge.none{background:#f3f4f6;color:#bbb;}
+/* ── Total ── */
+.tot{
+  font-family:'Barlow Condensed',sans-serif;
+  font-size:22px;font-weight:900;color:#E91E8C;text-align:center;
+}
+/* ── Loading / empty ── */
+.loading,.empty{
+  text-align:center;padding:48px 24px;
+  color:#b06090;font-size:15px;
+}
+.loading::before{content:'⏳ ';font-size:24px;}
+/* ── Season note ── */
+.season-note{
+  text-align:center;font-size:12px;
+  color:#b06090;margin-top:12px;opacity:.8;
+}
+/* ── Legend ── */
+.legend{
+  display:flex;flex-wrap:wrap;gap:8px;justify-content:center;
+  margin-top:14px;
+}
+.legend-item{
+  display:flex;align-items:center;gap:5px;
+  font-size:12px;color:#6b7280;
+}
+.legend-dot{
+  width:12px;height:12px;border-radius:3px;
+  background:#E91E8C;
+}
+.legend-dot.dim{background:#e5e7eb;}
+/* ── Mobile: hide per-tournament columns ── */
+@media(max-width:480px){
+  .tcol{display:none;}
+  .header-title{font-size:24px;}
+  .pname{font-size:14px;}
+  .tot{font-size:20px;}
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div id="logo-wrap"><div class="header-logo-placeholder">F</div></div>
+  <div class="header-title">פוצ׳ילינה — דירוג 2026</div>
+  <div class="header-sub">מצטבר • 3 טורנירים הטובים מתוך הסדרה</div>
+</div>
+
+<div class="tabs">
+  <button class="tab-btn on" onclick="setTab('queen')">QUEEN</button>
+  <button class="tab-btn"    onclick="setTab('princess')">PRINCESS</button>
+</div>
+
+<div class="section">
+  <div id="content" class="table-wrap">
+    <div class="loading">טוען נתונים…</div>
+  </div>
+  <div class="legend">
+    <div class="legend-item"><div class="legend-dot"></div><span>נספר בדירוג</span></div>
+    <div class="legend-item"><div class="legend-dot dim"></div><span>לא נספר (שמור לטובה)</span></div>
+  </div>
+  <div class="season-note" id="season-note"></div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
+import {
+  getFirestore, doc, onSnapshot
+} from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyA-rPlg0Oau16QcTjD20hDfkyveRSrD8I0",
+  authDomain: "tournaments-33619.firebaseapp.com",
+  projectId: "tournaments-33619",
+  storageBucket: "tournaments-33619.firebasestorage.app",
+  messagingSenderId: "409384565600",
+  appId: "1:409384565600:web:61bd55676343d6035abc05"
+};
+const db = getFirestore(initializeApp(firebaseConfig));
+
+// ── Season: add future tournaments here ─────────────────────────
+const SEASON = [
+  { id: 'futsilina-1', label: '#1' },
+  // { id: 'futsilina-2', label: '#2' },
+  // { id: 'futsilina-3', label: '#3' },
+  // { id: 'futsilina-4', label: '#4' },
+];
+const BEST_OF = 3; // best N tournaments count toward total
+
+// ── Scoring tables (from "איך מחשבות ניקוד") ────────────────────
+const SCORING = {
+  queen:   { bonus: 10, pts: { 1:300, 2:200, 3:150, 4:120, qf:80, r16:40, pool:20 } },
+  princess:{ bonus: 5,  pts: { 1:85,  2:60,  3:45,  4:36,  qf:24, pool:12 } }
+};
+
+// ── State ────────────────────────────────────────────────────────
+const tData = {};
+let activeTab = 'queen';
+
+// ── Helpers ──────────────────────────────────────────────────────
+function koFromFB(obj) {
+  if (!obj || Array.isArray(obj)) return obj || [];
+  return Object.keys(obj)
+    .sort((a,b) => parseInt(a.slice(1)) - parseInt(b.slice(1)))
+    .map(k => obj[k]);
+}
+
+function normN(s) {
+  return (s||'').replace(/\s*\/\s*/g,' ').replace(/\s+/g,' ').trim().toLowerCase();
+}
+
+function isMe(team, slot) { return normN(slot) === normN(team); }
+
+function validScore(g) {
+  const a=parseInt(g.sa), b=parseInt(g.sb);
+  return !isNaN(a)&&!isNaN(b)&&a>=0&&b>=0&&a!==b;
+}
+
+function wonGame(team, g) {
+  if (!validScore(g)) return false;
+  const sa=parseInt(g.sa), sb=parseInt(g.sb);
+  return (isMe(team,g.a)&&sa>sb)||(isMe(team,g.b)&&sb>sa);
+}
+
+function poolWins(sched, team) {
+  return (sched||[]).filter(g =>
+    g.gi >= 0 &&
+    (isMe(team,g.a)||isMe(team,g.b)) &&
+    validScore(g) && wonGame(team,g)
+  ).length;
+}
+
+// Returns numeric position (1,2,3,4) or string ('qf','r16','pool')
+function getPosition(cs, team) {
+  const ko  = koFromFB(cs.ko);
+  const n   = ko.length;
+
+  if (n > 0) {
+    const fin = ko[n-1]?.[0];
+    if (fin && !fin.isBye && validScore(fin) && (isMe(team,fin.a)||isMe(team,fin.b)))
+      return wonGame(team,fin) ? 1 : 2;
+  }
+
+  const t3 = (cs.sched||[]).find(g => g.isThirdPlace);
+  if (t3 && validScore(t3) && (isMe(team,t3.a)||isMe(team,t3.b)))
+    return wonGame(team,t3) ? 3 : 4;
+
+  for (let ri = n-2; ri >= 0; ri--) {
+    for (const g of (ko[ri]||[])) {
+      if (g.isBye || !validScore(g)) continue;
+      if (!isMe(team,g.a) && !isMe(team,g.b)) continue;
+      if (!wonGame(team,g)) {
+        const fromEnd = n - 1 - ri;
+        return fromEnd >= 3 ? 'r16' : 'qf';
+      }
+    }
+  }
+  return 'pool';
+}
+
+function posLabel(pos) {
+  if (pos===1) return '🥇 גמר';
+  if (pos===2) return '🥈 גמר';
+  if (pos===3) return '🥉 3/4';
+  if (pos===4) return '4 · 3/4';
+  if (pos==='qf')  return 'רבע גמר';
+  if (pos==='r16') return 'שמינית';
+  return 'בתים';
+}
+
+function calcPts(pos, wins, type) {
+  const sc = SCORING[type];
+  return (sc.pts[pos] ?? sc.pts.pool) + wins * sc.bonus;
+}
+
+function catType(name) {
+  const n = (name||'').toLowerCase();
+  if (n.includes('queen') || n.includes('מלכ')) return 'queen';
+  if (n.includes('princess') || n.includes('נסיכ')) return 'princess';
+  return null;
+}
+
+function splitPair(name) {
+  const p = name.split('/').map(s=>s.trim()).filter(Boolean);
+  return p.length >= 2 ? [p[0], p[1]] : [name.trim()];
+}
+
+// ── Calculate per-tournament points for a filter type ───────────
+function calcForTournament(data, type) {
+  const result = {}; // { player: { pts, pos, wins, team } }
+  (data.categories||[]).forEach(cat => {
+    if (catType(cat.name) !== type) return;
+    const cs = data.state?.[cat.id];
+    if (!cs) return;
+
+    const teams = new Set();
+    (cs.roster||[]).forEach(t => teams.add(t));
+    (cs.groups||[]).forEach(g => (g.teams||[]).forEach(t => teams.add(t)));
+
+    teams.forEach(team => {
+      const wins = poolWins(cs.sched, team);
+      const pos  = getPosition(cs, team);
+      const pts  = calcPts(pos, wins, type);
+      splitPair(team).forEach(player => {
+        if (!result[player] || result[player].pts < pts) {
+          result[player] = { pts, pos, wins, team };
+        }
+      });
+    });
+  });
+  return result;
+}
+
+// ── Build full season ranking ────────────────────────────────────
+function buildRanking(type) {
+  // playerTours[player] = array of { pts, pos, wins, team } | null per tournament
+  const playerTours = {};
+
+  SEASON.forEach(({ id }, ti) => {
+    const data = tData[id];
+    if (!data) return;
+    const tResult = calcForTournament(data, type);
+    Object.entries(tResult).forEach(([player, info]) => {
+      if (!playerTours[player]) playerTours[player] = new Array(SEASON.length).fill(null);
+      playerTours[player][ti] = info;
+    });
+  });
+
+  return Object.entries(playerTours)
+    .map(([player, byTour]) => {
+      const valid = byTour
+        .map((v,i) => ({ v, i }))
+        .filter(x => x.v !== null);
+      const sorted = [...valid].sort((a,b) => b.v.pts - a.v.pts);
+      const best   = sorted.slice(0, BEST_OF);
+      const bestIdx = new Set(best.map(x => x.i));
+      const total  = best.reduce((s,x) => s + x.v.pts, 0);
+      return { player, total, byTour, bestIdx };
+    })
+    .filter(r => r.total > 0)
+    .sort((a,b) => b.total - a.total || a.player.localeCompare(b.player));
+}
+
+// ── Render ───────────────────────────────────────────────────────
+function render() {
+  const rankings = buildRanking(activeTab);
+  const el   = document.getElementById('content');
+  const note = document.getElementById('season-note');
+
+  const loaded = SEASON.filter(({id}) => tData[id]).length;
+  note.textContent = `${loaded} מתוך ${SEASON.length} טורנירים נטענו • מתעדכן בזמן אמת`;
+
+  if (!rankings.length) {
+    el.innerHTML = '<div class="empty">אין נתונים עדיין<br><span style="font-size:13px;opacity:.6">תוצאות יופיעו כאן כשיוזנו ציונים</span></div>';
+    return;
+  }
+
+  const tHead = SEASON.map(({label}) =>
+    `<th class="c tcol">${label}</th>`
+  ).join('');
+
+  let rows = '';
+  let lastTotal = -1, displayRank = 0;
+  rankings.forEach((r, i) => {
+    if (r.total !== lastTotal) displayRank = i + 1;
+    lastTotal = r.total;
+
+    const medal = displayRank===1 ? '🥇' : displayRank===2 ? '🥈' : displayRank===3 ? '🥉' : displayRank;
+    const mc    = displayRank<=3 ? `m${displayRank}` : '';
+
+    const tCols = r.byTour.map((info, ti) => {
+      if (info === null)
+        return `<td class="tcol" style="text-align:center"><span class="pbadge none">—</span></td>`;
+      const isBest = r.bestIdx.has(ti);
+      return `<td class="tcol" style="text-align:center">
+        <span class="pbadge${isBest?' best':''}" title="${posLabel(info.pos)} · ${info.wins} ניצחונות בבתים · זוג: ${info.team}">${info.pts}</span>
+      </td>`;
+    }).join('');
+
+    rows += `<tr>
+      <td class="rnk ${mc}">${medal}</td>
+      <td class="pname">${escH(r.player)}</td>
+      ${tCols}
+      <td class="tot">${r.total}</td>
+    </tr>`;
+  });
+
+  el.innerHTML = `<table class="rtable">
+    <thead><tr>
+      <th class="c">#</th>
+      <th>שחקנית</th>
+      ${tHead}
+      <th class="c">סה"כ</th>
+    </tr></thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+}
+
+function escH(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── Tabs ─────────────────────────────────────────────────────────
+window.setTab = function(tab) {
+  activeTab = tab;
+  document.querySelectorAll('.tab-btn').forEach(b =>
+    b.classList.toggle('on', b.textContent.toLowerCase() === tab)
+  );
+  render();
+};
+
+// ── Apply logo from tournament meta ──────────────────────────────
+function applyLogo(data) {
+  const url = data?.meta?.logoUrl;
+  const wrap = document.getElementById('logo-wrap');
+  if (!wrap) return;
+  if (url) {
+    const img = document.createElement('img');
+    img.src = url; img.className = 'header-logo'; img.alt = '';
+    img.onerror = () => {}; // keep placeholder on error
+    wrap.innerHTML = '';
+    wrap.appendChild(img);
+  }
+}
+
+// ── Subscribe to all tournaments ─────────────────────────────────
+let logoApplied = false;
+SEASON.forEach(({ id }) => {
+  onSnapshot(doc(db, 'tournaments', id), snap => {
+    if (snap.exists()) {
+      tData[id] = snap.data();
+      if (!logoApplied) { applyLogo(tData[id]); logoApplied = true; }
+    }
+    render();
+  });
+});
+</script>
+</body>
+</html>
