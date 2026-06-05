@@ -1415,17 +1415,7 @@ function updateKOForCat(catId) {
 }
 
 function koGameLabel(catId, ri, gi) {
-  const cs = state[catId];
-  if (!cs?.ko?.[ri]) return '';
-  const round = cs.ko[ri];
-  if (round[gi]?.isBye) return '';
-  const fromEnd = cs.ko.length - 1 - ri;
-  const num = round.slice(0, gi).filter(g => !g.isBye).length + 1;
-  if (fromEnd === 0) return 'Final';
-  if (fromEnd === 1) return `SF${num}`;
-  if (fromEnd === 2) return `QF${num}`;
-  if (fromEnd === 3) return `R16-${num}`;
-  return `G${num}`;
+  return '';
 }
 
 // ============ ONE-TIME BRACKET FIX ============
