@@ -1341,6 +1341,13 @@ function resolvePoolSeed(catId, seed) {
   return { label:st[rank-1].name, known:true };
 }
 
+function getKOLoser(game, catId) {
+  if (!game || game.isBye) return null;
+  const sa=parseInt(game.sa), sb=parseInt(game.sb);
+  if (isValidScore(sa,sb,catId)) return sa>sb ? game.b : game.a;
+  return null;
+}
+
 function getKOWinner(game, catId) {
   if (!game) return null;
   if (game.isBye) {
@@ -1378,6 +1385,16 @@ function updateKOForCat(catId) {
       g.a = wa || `Winner of ${rndName} ${gi*2+1}`;
       g.b = wb || `Winner of ${rndName} ${gi*2+2}`;
     });
+  }
+
+  // Auto-fill 3rd-place game with SF losers
+  if (cs.ko.length >= 2) {
+    const sfRound = cs.ko[cs.ko.length - 2];
+    const thirdGame = cs.sched.find(g => g.isThirdPlace);
+    if (thirdGame && sfRound) {
+      thirdGame.a = getKOLoser(sfRound[0], catId) || 'מפסידה חצי גמר 1';
+      thirdGame.b = getKOLoser(sfRound[1], catId) || 'מפסידה חצי גמר 2';
+    }
   }
 }
 
