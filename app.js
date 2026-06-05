@@ -57,6 +57,7 @@ const dn = s => {
   if (!s || s.startsWith('Winner') || /^[A-Z]\d+$/.test(s)) return s;
   return s.replace(/\sו([^\s])/g, ' $1');
 };
+const dnH = s => escH(dn(s));
 
 // ============ KO SCORING RULES (per round position from end) ============
 const DEF_KO_RULES = {
@@ -587,9 +588,9 @@ function renderRegistrations() {
     const catName = cat ? cat.name : r.category;
     return `<div class="reg-row status-${r.status}">
       <div class="reg-info">
-        <div class="reg-name">${r.p1}${r.p2 ? ' / ' + r.p2 : ''}</div>
-        <div class="reg-meta">${catName} · ${new Date(r.createdAt?.seconds*1000||0).toLocaleDateString()}</div>
-        <div class="reg-phone">${r.phone||'—'}</div>
+        <div class="reg-name">${escH(r.p1)}${r.p2 ? ' / ' + escH(r.p2) : ''}</div>
+        <div class="reg-meta">${escH(catName)} · ${new Date(r.createdAt?.seconds*1000||0).toLocaleDateString()}</div>
+        <div class="reg-phone">${escH(r.phone||'—')}</div>
       </div>
       <span class="status-badge badge-${r.status}">${r.status}</span>
       <div class="reg-actions">
@@ -630,7 +631,7 @@ function renderParticipants() {
       <div class="part-grid">${list.map((r,i) => `
         <div class="part-card">
           <span class="part-num">${i+1}</span>
-          <span class="part-name">${dn(r.p1)}${r.p2 ? ' / '+dn(r.p2) : ''}</span>
+          <span class="part-name">${dnH(r.p1)}${r.p2 ? ' / '+dnH(r.p2) : ''}</span>
         </div>`).join('')}
       </div>
     </div>`;
@@ -651,7 +652,7 @@ function renderPayLink(wrapId) {
   wrap.innerHTML = `
     <span class="pay-label">Payment</span>
     <div class="pay-links">
-      ${links.map(l => `<a class="pay-link-btn" href="${l.url}" target="_blank" rel="noopener">${l.label}</a>`).join('')}
+      ${links.map(l => `<a class="pay-link-btn" href="${escH(l.url)}" target="_blank" rel="noopener">${escH(l.label)}</a>`).join('')}
     </div>`;
 }
 
@@ -732,7 +733,7 @@ function buildItem(catId, name, i) {
     ondragstart="onDragStart(event)" ondragover="onDragOver(event)"
     ondrop="onDrop(event,'${catId}')" ondragend="onDragEnd(event)">
     <span class="build-rank">${i+1}</span>
-    <span class="build-name">${dn(name)}</span>
+    <span class="build-name">${dnH(name)}</span>
     <button class="gedit-btn" onclick="editBuildItem('${catId}',${i})" title="Edit">Edit</button>
     <button class="build-arrow" onclick="moveBuildItem('${catId}',${i},-1)" title="Up">↑</button>
     <button class="build-arrow" onclick="moveBuildItem('${catId}',${i},1)" title="Down">↓</button>
@@ -907,6 +908,7 @@ async function saveAddPair() {
   if (!state[catId]) state[catId] = { roster:[], groups:[], sched:[], ko:[] };
   state[catId].roster.push(name);
   await addDoc(REGS_REF, { p1, p2, phone:'', category: catId, status:'approved', paid:false, createdAt: serverTimestamp() });
+  await pushToCloud();
   await loadRegistrations();
   // Auto-save both players to the database
   if (p1) addPlayerToDB(p1, '');
@@ -1178,7 +1180,7 @@ function makeStandingsCard(catId, grp, gi, catIdx) {
       ? `<td><button class="gedit-btn" onclick="openEditTeam('${catId}',${gi},${ti})">✎</button>${
           canDelete?`<button class="team-del" onclick="deleteTeam('${catId}',${gi},${ti})">✕</button>`:''}</td>` : '';
     return `<tr class="${isWinner?'winner':''}">
-      <td><span class="rnk">#${i+1}</span>${dn(t.name)}</td>
+      <td><span class="rnk">#${i+1}</span>${dnH(t.name)}</td>
       <td>${t.w}</td><td>${t.l}</td>
       <td class="${diffClass}">${diff!==0||t.w>0||t.l>0?diffStr:'—'}</td>
       <td><span class="pts-val">${t.pts}</span></td>
@@ -1186,7 +1188,7 @@ function makeStandingsCard(catId, grp, gi, catIdx) {
     </tr>`;
   }).join('');
   const adminTh = superAdmin ? '<th></th>' : '';
-  card.innerHTML = `<div class="scard-head"><span class="scard-name">GROUP ${grp.name}</span></div>
+  card.innerHTML = `<div class="scard-head"><span class="scard-name">GROUP ${escH(grp.name)}</span></div>
     <table class="stbl"><thead><tr><th>Team</th><th>W</th><th>L</th><th>+/−</th><th>Pts</th>${adminTh}</tr></thead>
     <tbody>${rows}</tbody></table>`;
   return card;
@@ -1442,9 +1444,9 @@ function buildGameRow(catId, g, idx, isKO) {
 
   row.innerHTML = `
     <span class="pill ${pc}">C${g.court}</span>
-    <span class="gt">${dn(g.a)}${!isKO&&g.gn?`<span class="gtag">${g.gn}</span>`:''}</span>
+    <span class="gt">${dnH(g.a)}${!isKO&&g.gn?`<span class="gtag">${escH(g.gn)}</span>`:''}</span>
     <span class="gvs">vs</span>
-    <span class="gt r">${dn(g.b)}</span>
+    <span class="gt r">${dnH(g.b)}</span>
     <span class="sw">${scoreCell}</span>`;
   const errId = isKO ? `kerr-${catId}-${g.ri}-${g.gi}` : `gerr-${catId}-${idx}`;
   const errD  = document.createElement('div');
@@ -1583,7 +1585,7 @@ function renderBracketForCat(catId, container) {
     if (g.isBye) {
       const seed=g.seedA||g.a||'TBD';
       const res=resolvePoolSeed(catId,seed);
-      const label=dn(res.known?res.label:seed);
+      const label=dnH(res.known?res.label:seed);
       const box=document.createElement('div'); box.className='bmatch-box bmatch-box--bye';
       box.innerHTML=`<div class="bmatch bmatch-bye">
         <div class="bteam ${res.known?'win':'tbd'}">
@@ -1599,7 +1601,7 @@ function renderBracketForCat(catId, container) {
     if (ri===0) {
       const sAk=g.seedA||seedPairs[gi]?.[0]||'TBD', sBk=g.seedB||seedPairs[gi]?.[1]||'TBD';
       const sA=resolvePoolSeed(catId,sAk), sB=resolvePoolSeed(catId,sBk);
-      labelA=dn(sA.known?sA.label:sAk); labelB=dn(sB.known?sB.label:sBk);
+      labelA=dnH(sA.known?sA.label:sAk); labelB=dnH(sB.known?sB.label:sBk);
       codeA=sA.known?sAk:''; codeB=sB.known?sBk:'';
       knownA=sA.known; knownB=sB.known;
     } else {
@@ -1607,7 +1609,7 @@ function renderBracketForCat(catId, container) {
       knownB=!!(g.b&&!g.b.startsWith('Winner'));
       if (g.directSeedA&&knownA) codeA=g.directSeedA;
       if (g.directSeedB&&knownB) codeB=g.directSeedB;
-      labelA=dn(labelA); labelB=dn(labelB);
+      labelA=dnH(labelA); labelB=dnH(labelB);
     }
     const box=document.createElement('div'); box.className='bmatch-box';
     box.innerHTML=`<div class="bmatch">
@@ -1684,7 +1686,7 @@ function renderBracketForCat(catId, container) {
     if (isValidScore(fsa,fsb,catId)) {
       const w=fsa>fsb?fin.a:fin.b;
       const champEl=document.createElement('div');
-      champEl.innerHTML=`<div class="champ-wrap"><div class="ci">CHAMPION</div><div class="champ-name">${w}</div></div>`;
+      champEl.innerHTML=`<div class="champ-wrap"><div class="ci">CHAMPION</div><div class="champ-name">${dnH(w)}</div></div>`;
       container.appendChild(champEl);
     }
   }
@@ -2216,6 +2218,7 @@ function addCategory() {
   pushToCloud(); renderSettings();
 }
 function deleteCategory(ci) {
+  if (meta.phase === 'tournament') { alert('Cannot delete categories during an active tournament.'); return; }
   if (!confirm('Delete this category?')) return;
   const id=categories[ci].id;
   categories.splice(ci,1);
@@ -2224,7 +2227,7 @@ function deleteCategory(ci) {
 }
 
 function resetAllScores() {
-  if (!admin||!confirm('Reset ALL scores?')) return;
+  if (!superAdmin||!confirm('Reset ALL scores?')) return;
   categories.forEach(cat => {
     const cs=state[cat.id];
     if (!cs) return;
@@ -2282,8 +2285,8 @@ function renderSponsorBar() {
   bar.classList.remove('h');
   bar.innerHTML = logos.map(l =>
     l.url
-      ? `<img class="sponsor-logo" src="${l.url}" alt="${l.alt||''}" title="${l.alt||''}"${l.imgStyle?` style="${escH(l.imgStyle)}"`:''}/>`
-      : `<span class="sponsor-text">${l.alt||''}</span>`
+      ? `<img class="sponsor-logo" src="${escH(l.url)}" alt="${escH(l.alt||'')}" title="${escH(l.alt||'')}"${l.imgStyle?` style="${escH(l.imgStyle)}"`:''}/>`
+      : `<span class="sponsor-text">${escH(l.alt||'')}</span>`
   ).join('');
 }
 
