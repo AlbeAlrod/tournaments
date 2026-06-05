@@ -60,7 +60,7 @@ const dn = s => {
 // ============ KO SCORING RULES (per round position from end) ============
 const DEF_KO_RULES = {
   pool:   { pts: 15, change: 5 },
-  r16:    { pts: 15, change: 5 },
+  r16:    { pts: 18, change: 6 },
   qf:     { pts: 18, change: 5 },
   sf:     { pts: 18, change: 5 },
   final:  { pts: 21, change: 7 },
