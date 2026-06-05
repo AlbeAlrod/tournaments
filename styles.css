@@ -363,8 +363,11 @@ main { position: relative; z-index: 5; max-width: 980px; margin: 0 auto; padding
 .gc { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--rs);
   padding: 10px 14px; margin-bottom: 7px; display: grid;
   grid-template-columns: auto 1fr 28px 1fr auto; gap: 8px; align-items: center; transition: border-color .2s; }
+.gc.ko-game { grid-template-columns: auto auto 1fr 28px 1fr auto; }
 .gc:hover { border-color: var(--border2); }
 .gc.done { border-color: rgba(107,33,168,.25); background: rgba(107,33,168,.03); }
+.ko-lbl { font-family: 'Barlow Condensed', sans-serif; font-size: 12px; font-weight: 900;
+  color: var(--primary); white-space: nowrap; letter-spacing: .3px; }
 .pill { font-family: 'Barlow Condensed', sans-serif; font-size: 12px; font-weight: 700;
   padding: 3px 8px; border-radius: 20px; white-space: nowrap; letter-spacing: .3px; }
 /* Court pills for KO games */
@@ -410,6 +413,8 @@ main { position: relative; z-index: 5; max-width: 980px; margin: 0 auto; padding
 .brnd-matches { display: flex; flex-direction: column; }
 .bmatch-wrap { display: flex; align-items: center; }
 .bmatch-box { margin: 5px 6px; min-width: 165px; }
+.bm-label { font-family: 'Barlow Condensed', sans-serif; font-size: 11px; font-weight: 900;
+  color: var(--primary); text-align: center; margin-bottom: 3px; letter-spacing: .5px; }
 .bmatch { border: 1px solid var(--border); border-radius: var(--rs); background: var(--bg2); overflow: hidden; }
 .bteam { padding: 8px 11px; font-size: 12px; color: var(--text2); border-bottom: 1px solid var(--border);
   display: flex; justify-content: space-between; align-items: center; gap: 6px; min-height: 34px; }
@@ -734,6 +739,7 @@ input, textarea, select { max-width: 100%; }
 
   /* Game rows */
   .gc { grid-template-columns: auto 1fr 18px 1fr auto; gap: 4px; }
+  .gc.ko-game { grid-template-columns: auto auto 1fr 18px 1fr auto; }
   /* 16px on score inputs prevents iOS auto-zoom on focus */
   .si { width: 32px; font-size: 16px; }
 

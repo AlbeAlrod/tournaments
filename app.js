@@ -1408,6 +1408,20 @@ function updateKOForCat(catId) {
   }
 }
 
+function koGameLabel(catId, ri, gi) {
+  const cs = state[catId];
+  if (!cs?.ko?.[ri]) return '';
+  const round = cs.ko[ri];
+  if (round[gi]?.isBye) return '';
+  const fromEnd = cs.ko.length - 1 - ri;
+  const num = round.slice(0, gi).filter(g => !g.isBye).length + 1;
+  if (fromEnd === 0) return 'Final';
+  if (fromEnd === 1) return `SF${num}`;
+  if (fromEnd === 2) return `QF${num}`;
+  if (fromEnd === 3) return `R16-${num}`;
+  return `G${num}`;
+}
+
 // ============ ONE-TIME BRACKET FIX ============
 async function fixBracketPairings() {
   if (!superAdmin) { alert('Requires superAdmin'); return; }
@@ -1464,7 +1478,8 @@ function buildGameRow(catId, g, idx, isKO) {
   const pc = `gi${isKO ? (g.court-1)%4 : (g.gi ?? 0) % 4}`;
   const wrap = document.createElement('div');
   const row  = document.createElement('div');
-  row.className = 'gc'+(done?' done':'');
+  const koLbl = isKO ? koGameLabel(catId, g.ri, g.gi) : '';
+  row.className = 'gc'+(done?' done':'')+(isKO?' ko-game':'');
   const scoreCell = (admin && meta.phase === 'tournament')
     ? `<input class="si" type="number" min="0" inputmode="numeric" placeholder="—" value="${g.sa}"
          oninput="${isKO?`setKS('${catId}',${g.ri},${g.gi},'sa',this.value)`:`setGS('${catId}',${idx},'sa',this.value)`}"/>
@@ -1475,6 +1490,7 @@ function buildGameRow(catId, g, idx, isKO) {
 
   row.innerHTML = `
     <span class="pill ${pc}">C${g.court}</span>
+    ${koLbl?`<span class="ko-lbl">${koLbl}</span>`:''}
     <span class="gt">${dnH(g.a)}${!isKO&&g.gn?`<span class="gtag">${escH(g.gn)}</span>`:''}</span>
     <span class="gvs">vs</span>
     <span class="gt r">${dnH(g.b)}</span>
@@ -1644,7 +1660,8 @@ function renderBracketForCat(catId, container) {
       labelA=dnH(labelA); labelB=dnH(labelB);
     }
     const box=document.createElement('div'); box.className='bmatch-box';
-    box.innerHTML=`<div class="bmatch">
+    const glbl=koGameLabel(catId,ri,gi);
+    box.innerHTML=(glbl?`<div class="bm-label">${glbl}</div>`:'')+`<div class="bmatch">
       <div class="bteam ${wa?'win':''} ${knownA?'':'tbd'}${g.directSeedA?' bdirect':''}">
         <span class="bname">${labelA}</span>${codeA?`<span class="bsc seed-tag">${codeA}</span>`:''}${hs?`<span class="bsc">${g.sa}</span>`:''}
       </div>
