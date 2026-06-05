@@ -23,6 +23,8 @@ const tId = new URLSearchParams(location.search).get('t');
 let meta = { name:'', logoUrl:'', primaryColor:'#6B21A8', secondaryColor:'#7C3AED',
   paymentLink:'', paymentLinkLabel:'', paymentLink2:'', paymentLink2Label:'',
   regNote:'', sponsorLogos: [],
+  groupColors: [],   // [gi0,gi1,gi2,gi3] — empty = use defaults
+  bgColor: '',       // override body background — empty = auto from primary
   phase:'registration', regOpen:true, showRegistered:true };
 let categories = [];   // [{id, name, cfg}]
 let state = {};        // {[catId]: {roster:[], groups:[], sched:[], ko:[]}}
@@ -345,6 +347,8 @@ function applyTheme(primary, secondary) {
     const s=document.createElement('style'); s.id='theme-style'; document.head.appendChild(s); return s;
   })();
   style.textContent = `:root{${Object.entries(vars).map(([k,v])=>`${k}:${v};`).join('')}}`;
+  // Apply custom background override if set
+  document.body.style.backgroundColor = meta.bgColor || '';
 
   const lm = document.getElementById('logo-mark');
   if (lm) lm.style.background = primary;
@@ -1101,9 +1105,10 @@ function makeStandingsCard(catId, grp, gi, catIdx) {
   const card = document.createElement('div');
   card.className = 'scard';
   card.dataset.ci = catIdx ?? 0;
-  // Group colors — sampled from flyer: pink, blue, yellow, dark
-  const _grpColors  = ['#E91E8C','#1565C0','#FFD600','#111111'];
-  const _grpOnColors= ['#fff',   '#fff',   '#111111','#fff'];
+  // Group colors: custom meta.groupColors overrides defaults
+  const _grpDefaults = ['#E91E8C','#111111','#FFD600','#111111']; // B=black now
+  const _grpColors  = _grpDefaults.map((d,i) => (meta.groupColors||[])[i] || d);
+  const _grpOnColors= _grpColors.map(c => c.startsWith('#') ? onColor(c) : '#fff');
   const _grpColor   = _grpColors[gi % 4];
   const _grpOn      = _grpOnColors[gi % 4];
   card.style.setProperty('--cat-color',    _grpColor);
@@ -1166,11 +1171,25 @@ function openEditTeam(catId, gi, ti) {
   if (!superAdmin) return;
   editTarget = {catId, gi, ti};
   const name = state[catId].groups[gi].teams[ti];
-  const parts = name.split('/').map(s=>s.trim());
-  document.getElementById('edit-p1').value = parts[0]||'';
-  document.getElementById('edit-p2').value = parts[1]||'';
+  // Split on '/' or first space
+  let p1, p2;
+  if (name.includes('/')) {
+    [p1, p2] = name.split('/').map(s=>s.trim());
+  } else {
+    const sp = name.indexOf(' ');
+    p1 = sp > 0 ? name.slice(0, sp) : name;
+    p2 = sp > 0 ? name.slice(sp + 1) : '';
+  }
+  document.getElementById('edit-p1').value = p1||'';
+  document.getElementById('edit-p2').value = p2||'';
   document.getElementById('edit-modal-title').textContent = `Edit — Group ${state[catId].groups[gi].name}`;
-  document.getElementById('edit-cat-row')?.classList.add('h');
+  // Show category selector in tournament phase too
+  const catRow = document.getElementById('edit-cat-row');
+  const catSel = document.getElementById('edit-cat');
+  if (catRow && catSel) {
+    catSel.innerHTML = categories.map(c => `<option value="${c.id}"${c.id===catId?' selected':''}>${c.name}</option>`).join('');
+    catRow.classList.remove('h');
+  }
   document.getElementById('edit-modal').classList.remove('h');
   document.getElementById('edit-p1').focus();
 }
@@ -1182,7 +1201,7 @@ function saveEdit() {
   if (!superAdmin || !editTarget) return;
   const p1 = document.getElementById('edit-p1').value.trim();
   const p2 = document.getElementById('edit-p2').value.trim();
-  const name = p2?`${p1} / ${p2}`:p1;
+  const name = p2?`${p1} ${p2}`:p1;
   if (!name) return;
 
   // Build page roster edit
@@ -1469,7 +1488,7 @@ function renderBracketForCat(catId, container) {
       const box=document.createElement('div'); box.className='bmatch-box bmatch-box--bye';
       box.innerHTML=`<div class="bmatch bmatch-bye">
         <div class="bteam ${res.known?'win':'tbd'}">
-          <span class="bname">${label}</span><span class="bye-badge">BYE →</span>
+          <span class="bname">${label}</span><span class="bye-badge">ישיר ↗</span>
         </div>
       </div>`;
       return box;
@@ -1541,9 +1560,18 @@ function renderBracketForCat(catId, container) {
     for (let k=startRi+1;k<=ri;k++) { if(cs.ko[k].length<cs.ko[k-1].length) halvings++; }
     matchesEl.style.paddingTop=(ri===startRi?0:((Math.pow(2,halvings)-1)*HG/2))+'px';
     const matchGap=(Math.pow(2,halvings)-1)*HG+GAP;
+    // Detect BYE-pair pattern: even=BYE, odd=real game
+    const hasByePairs = ri===startRi && round.some(g=>g.isBye) && round[0]?.isBye;
     round.forEach((g,gi) => {
       const wrap=document.createElement('div'); wrap.className='bmatch-wrap';
-      if (gi>0) wrap.style.marginTop=matchGap+'px';
+      if (gi>0) {
+        if (hasByePairs) {
+          // Within pair: small gap; between pairs: larger gap (HG/2 = 45px)
+          wrap.style.marginTop = (gi % 2 === 1 ? GAP : Math.floor(HG/2)) + 'px';
+        } else {
+          wrap.style.marginTop=matchGap+'px';
+        }
+      }
       wrap.appendChild(mkBox(g,gi,ri));
       matchesEl.appendChild(wrap);
     });
@@ -1641,10 +1669,23 @@ function renderSettings() {
           oninput="if(/^#[0-9A-Fa-f]{6}$/.test(this.value)){document.getElementById('cp-secondary').value=this.value;updateMeta('secondaryColor',this.value)}"/>
       </div>
     </div>
-    <div class="sett-row" style="border-bottom:none;padding-bottom:0">
+    <div class="sett-row">
       <div class="sett-label"><span class="sett-name">Preview</span></div>
       <div class="theme-preview" style="background:linear-gradient(135deg,${pc},${sc})">
         <span style="color:${onColor(pc)};font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:14px;letter-spacing:1px">Aa</span>
+      </div>
+    </div>
+    <div class="sett-row" style="border-bottom:none;padding-bottom:0">
+      <div class="sett-label">
+        <span class="sett-name">Background Color</span>
+        <span class="sett-desc">Site background override</span>
+      </div>
+      <div class="sett-ctrl color-pick-row">
+        <input type="color" class="color-inp" id="cp-bg" value="${meta.bgColor||'#ffffff'}"
+          oninput="document.getElementById('ct-bg').value=this.value;updateBgColor(this.value)"/>
+        <input class="text-inp text-mono" id="ct-bg" style="width:100px" value="${meta.bgColor||'#ffffff'}"
+          oninput="if(/^#[0-9A-Fa-f]{6}$/.test(this.value)){document.getElementById('cp-bg').value=this.value;updateBgColor(this.value)}"/>
+        <button class="add-cat-btn" style="font-size:11px;padding:5px 10px" onclick="updateBgColor('')">Reset</button>
       </div>
     </div>`;
   container.appendChild(dsec);
@@ -1666,6 +1707,28 @@ function renderSettings() {
       </div>
     </div>`;
   container.appendChild(lsec);
+
+  // ── GROUP COLORS ─────────────────────────────────────────────────
+  const grpNames = ['A','B','C','D'];
+  const grpDefaults = ['#E91E8C','#111111','#FFD600','#111111'];
+  const gcsec = document.createElement('div');
+  gcsec.className = 'sett-section';
+  gcsec.innerHTML = `<div class="sett-section-title">Group Colors</div>` +
+    grpNames.map((n,i) => {
+      const cur = (meta.groupColors||[])[i] || grpDefaults[i];
+      return `<div class="sett-row${i===grpNames.length-1?' last-row':''}">
+        <div class="sett-label"><span class="sett-name">Group ${n}</span></div>
+        <div class="sett-ctrl color-pick-row">
+          <input type="color" class="color-inp" id="gcp-${i}" value="${cur}"
+            oninput="document.getElementById('gct-${i}').value=this.value;updateGroupColor(${i},this.value)"/>
+          <input class="text-inp text-mono" id="gct-${i}" style="width:100px" value="${cur}"
+            oninput="if(/^#[0-9A-Fa-f]{6}$/.test(this.value)){document.getElementById('gcp-${i}').value=this.value;updateGroupColor(${i},this.value)}"/>
+          <button class="add-cat-btn" style="font-size:11px;padding:5px 10px"
+            onclick="updateGroupColor(${i},'${grpDefaults[i]}');renderSettings()">Reset</button>
+        </div>
+      </div>`;
+    }).join('');
+  container.appendChild(gcsec);
 
   // ── SPONSORS ────────────────────────────────────────────────────
   const ssec = document.createElement('div');
@@ -1801,6 +1864,20 @@ function renderSettings() {
     </p>
     <button class="gen-btn" onclick="openStartModal()">▶ Start Tournament</button>`;
   container.appendChild(startSection);
+}
+
+// ── Site colors ──────────────────────────────────────────────────
+function updateBgColor(color) {
+  meta.bgColor = color;
+  document.body.style.backgroundColor = color;
+  pushMetaOnly();
+}
+function updateGroupColor(gi, color) {
+  if (!Array.isArray(meta.groupColors)) meta.groupColors = [];
+  meta.groupColors[gi] = color;
+  pushMetaOnly();
+  renderStandings();
+  renderBuildPage();
 }
 
 // ── Category color ───────────────────────────────────────────────
@@ -2085,7 +2162,8 @@ Object.assign(window, {
   updateMeta, updateCatName, updateCatCfg, adjCatCfg,
   addCategory, deleteCategory, resetAllScores,
   updateSponsorLogo, removeSponsorLogo, addSponsorLogo,
-  updateCatColor, renameGroup, moveTeam
+  updateCatColor, renameGroup, moveTeam,
+  updateGroupColor, updateBgColor
 });
 
 // ============ BOOT ============

@@ -331,7 +331,7 @@ main { position: relative; z-index: 5; max-width: 980px; margin: 0 auto; padding
 .p4 { background: rgba(139,92,246,.13); color: #5B21B6; }
 /* Group pills for pool games — flyer colors */
 .gi0 { background: #E91E8C; color: #fff; }          /* בית א — ורוד */
-.gi1 { background: #1565C0; color: #fff; }          /* בית ב — כחול */
+.gi1 { background: #111111; color: #fff; }          /* בית ב — שחור */
 .gi2 { background: #FFD600; color: #111; }          /* בית ג — צהוב */
 .gi3 { background: #111111; color: #fff; }          /* בית ד — שחור */
 .gt { font-size: 13px; color: var(--text); font-weight: 500; overflow: hidden;
@@ -636,7 +636,7 @@ body.master-mode button.master-only { display: inline-block !important; }
 /* ===== BYE GAME in bracket ===== */
 .bmatch-box--bye { opacity: 0.85; }
 .bmatch-bye { background: var(--bg3) !important; border: 1px dashed var(--border2); }
-.bmatch-bye .bteam { padding: 6px 10px; min-height: 36px; flex-wrap: wrap; gap: 6px; }
+.bmatch-bye .bteam { padding: 8px 11px; min-height: 34px; flex-wrap: wrap; gap: 6px; }
 .bye-badge { font-family: 'Barlow Condensed', sans-serif; font-size: 10px; font-weight: 700;
   letter-spacing: 1px; text-transform: uppercase; color: var(--primary-text);
   background: var(--bg2); border: 1px solid var(--border2);
