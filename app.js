@@ -924,6 +924,7 @@ function roundName(count) {
 function getKORoundName(catId, ri) {
   const cs = state[catId];
   if (!cs||!cs.ko[ri]) return '';
+  if (cs.ko[ri][0]?._label) return cs.ko[ri][0]._label;
   return roundName(cs.ko[ri].length * 2);
 }
 
@@ -1088,10 +1089,11 @@ function makeStandingsCard(catId, grp, gi, catIdx) {
     const diffStr = diff>0?`+${diff}`:String(diff);
     const diffClass = diff>0?'diff-pos':diff<0?'diff-neg':'diff-zero';
     const ti = cs.groups[gi].teams.indexOf(t.name);
-    const canEdit = superAdmin && meta.phase === 'registration';
+    const canEdit = superAdmin;
+    const canDelete = superAdmin && meta.phase === 'registration';
     const adminCtrls = canEdit
-      ? `<td><button class="gedit-btn" onclick="openEditTeam('${catId}',${gi},${ti})">Edit</button>
-         <button class="team-del" onclick="deleteTeam('${catId}',${gi},${ti})">✕</button></td>` : '';
+      ? `<td><button class="gedit-btn" onclick="openEditTeam('${catId}',${gi},${ti})">✎</button>${
+          canDelete?`<button class="team-del" onclick="deleteTeam('${catId}',${gi},${ti})">✕</button>`:''}</td>` : '';
     return `<tr class="${isWinner?'winner':''}">
       <td><span class="rnk">#${i+1}</span>${t.name}</td>
       <td>${t.w}</td><td>${t.l}</td>
@@ -1100,7 +1102,7 @@ function makeStandingsCard(catId, grp, gi, catIdx) {
       ${adminCtrls}
     </tr>`;
   }).join('');
-  const adminTh = (superAdmin && meta.phase === 'registration') ? '<th></th>' : '';
+  const adminTh = superAdmin ? '<th></th>' : '';
   card.innerHTML = `<div class="scard-head"><span class="scard-name">GROUP ${grp.name}</span></div>
     <table class="stbl"><thead><tr><th>Team</th><th>W</th><th>L</th><th>+/−</th><th>Pts</th>${adminTh}</tr></thead>
     <tbody>${rows}</tbody></table>`;
@@ -1136,7 +1138,7 @@ function renderStandings() {
 // ============ EDIT / DELETE TEAMS ============
 let editTarget = null;
 function openEditTeam(catId, gi, ti) {
-  if (!superAdmin || meta.phase !== 'registration') return;
+  if (!superAdmin) return;
   editTarget = {catId, gi, ti};
   const name = state[catId].groups[gi].teams[ti];
   const parts = name.split('/').map(s=>s.trim());
@@ -1152,7 +1154,7 @@ function closeEdit() {
   editTarget = null;
 }
 function saveEdit() {
-  if (!superAdmin || !editTarget || meta.phase !== 'registration') return;
+  if (!superAdmin || !editTarget) return;
   const p1 = document.getElementById('edit-p1').value.trim();
   const p2 = document.getElementById('edit-p2').value.trim();
   const name = p2?`${p1} / ${p2}`:p1;
@@ -1249,36 +1251,52 @@ function getKOWinner(game, catId) {
 }
 
 function updateKOForCat(catId) {
-  const cs  = state[catId];
+  const cs = state[catId];
   if (!cs||!cs.ko.length) return;
-  const cfg = categories.find(c=>c.id===catId)?.cfg||DEF_CAT_CFG;
-  const adv = cfg.advPerGroup||0;
-  const ng  = cs.groups.length;
-  const koSeeds = [];
-  for (let rank=1; rank<=adv; rank++)
-    for (let g=0; g<ng; g++)
-      koSeeds.push(`${String.fromCharCode(65+g)}${rank}`);
-  const nKO = koSeeds.length;
-  const paired = [];
-  for (let i=0; i<Math.floor(nKO/2); i++) paired.push([koSeeds[i], koSeeds[nKO-1-i]]);
 
+  // r0: resolve pool seeds (use explicit seedA/seedB stored in each game)
   if (cs.ko[0]) {
-    paired.forEach(([sA,sB],i) => {
-      if (!cs.ko[0][i]) return;
-      const rA = resolvePoolSeed(catId, sA);
-      const rB = resolvePoolSeed(catId, sB);
-      cs.ko[0][i].a = rA.known ? rA.label : sA;
-      cs.ko[0][i].b = rB.known ? rB.label : sB;
+    cs.ko[0].forEach(g => {
+      if (!g.seedA && !g.seedB) return;
+      const rA = resolvePoolSeed(catId, g.seedA||'');
+      const rB = resolvePoolSeed(catId, g.seedB||'');
+      if (g.seedA) g.a = rA.known ? rA.label : g.seedA;
+      if (g.seedB) g.b = rB.known ? rB.label : g.seedB;
     });
   }
+
   for (let ri=1; ri<cs.ko.length; ri++) {
-    cs.ko[ri].forEach((g,gi) => {
-      if (g.isThirdPlace) return; // 3rd-place game — labels stay fixed, not winner-propagated
-      const wa = getKOWinner(cs.ko[ri-1][gi*2], catId);
-      const wb = getKOWinner(cs.ko[ri-1][gi*2+1], catId);
-      const rndName = getKORoundName(catId, ri-1);
-      g.a = wa||`Winner of ${rndName} ${gi*2+1}`;
-      g.b = wb||`Winner of ${rndName} ${gi*2+2}`;
+    const prev = cs.ko[ri-1];
+    const rndName = getKORoundName(catId, ri-1);
+    // Detect ratio: 2:1 (normal halving) or 1:1 (hybrid bracket where direct seeds fill one slot)
+    const ratio = prev.length / cs.ko[ri].length; // 2 = normal, 1 = hybrid
+
+    cs.ko[ri].forEach((g, gi) => {
+      if (g.isThirdPlace) return;
+
+      // 'a' side
+      if (g.directSeedA) {
+        const r = resolvePoolSeed(catId, g.directSeedA);
+        g.a = r.known ? r.label : g.directSeedA;
+      } else if (ratio >= 2) {
+        const wa = getKOWinner(prev[gi*2], catId);
+        g.a = wa || `Winner of ${rndName} ${gi*2+1}`;
+      } else {
+        const wa = getKOWinner(prev[gi], catId);
+        g.a = wa || `Winner of ${rndName} ${gi+1}`;
+      }
+
+      // 'b' side
+      if (g.directSeedB) {
+        const r = resolvePoolSeed(catId, g.directSeedB);
+        g.b = r.known ? r.label : g.directSeedB;
+      } else if (ratio >= 2) {
+        const wb = getKOWinner(prev[gi*2+1], catId);
+        g.b = wb || `Winner of ${rndName} ${gi*2+2}`;
+      } else {
+        const wb = getKOWinner(prev[gi], catId);
+        g.b = wb || `Winner of ${rndName} ${gi+1}`;
+      }
     });
   }
 }
@@ -1449,17 +1467,23 @@ function renderBracketForCat(catId, container) {
       const wa=hs&&sa>sb, wb=hs&&sb>sa;
       let labelA,labelB,codeA='',codeB='',knownA=false,knownB=false;
       if (ri===0) {
-        const pair=gi<seedPairs.length?seedPairs[gi]:[g.seedA||'TBD',g.seedB||'TBD'];
-        const sA=resolvePoolSeed(catId,pair[0]), sB=resolvePoolSeed(catId,pair[1]);
-        labelA=sA.known?sA.label:pair[0]; labelB=sB.known?sB.label:pair[1];
-        codeA=sA.known?pair[0]:''; codeB=sB.known?pair[1]:'';
+        // Use explicit seedA/B stored in game, fall back to computed pairs
+        const sAkey = g.seedA || seedPairs[gi]?.[0] || 'TBD';
+        const sBkey = g.seedB || seedPairs[gi]?.[1] || 'TBD';
+        const sA=resolvePoolSeed(catId,sAkey), sB=resolvePoolSeed(catId,sBkey);
+        labelA=sA.known?sA.label:sAkey; labelB=sB.known?sB.label:sBkey;
+        codeA=sA.known?sAkey:''; codeB=sB.known?sBkey:'';
         knownA=sA.known; knownB=sB.known;
       } else {
+        // Use stored g.a/g.b values (set by updateKOForCat), with directSeed tag display
         const srcRound=getKORoundName(catId,ri-1);
-        labelA=g.a&&!g.a.startsWith('Winner')?g.a:`Winner of ${srcRound} ${gi*2+1}`;
-        labelB=g.b&&!g.b.startsWith('Winner')?g.b:`Winner of ${srcRound} ${gi*2+2}`;
+        labelA=g.a||(g.directSeedA||`Winner of ${srcRound} ${gi*2+1}`);
+        labelB=g.b||(g.directSeedB||`Winner of ${srcRound} ${gi*2+2}`);
         knownA=!!(g.a&&!g.a.startsWith('Winner'));
         knownB=!!(g.b&&!g.b.startsWith('Winner'));
+        // Show seed tag for direct qualifiers
+        if (g.directSeedA && knownA) codeA=g.directSeedA;
+        if (g.directSeedB && knownB) codeB=g.directSeedB;
       }
       const box=document.createElement('div'); box.className='bmatch-box';
       box.innerHTML=`<div class="bmatch">
