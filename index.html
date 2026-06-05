@@ -6,7 +6,7 @@
 <title>Tournaments</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@700;800;900&display=swap" rel="stylesheet"/>
-<link rel="stylesheet" href="styles.css?v=30"/>
+<link rel="stylesheet" href="styles.css?v=31"/>
 </head>
 <body>
 
@@ -227,15 +227,18 @@
   </div>
 </div>
 
+<!-- global player datalist for autocomplete -->
+<datalist id="player-datalist"></datalist>
+
 <!-- ADD PAIR MODAL (master) -->
 <div class="overlay h" id="addpair-modal" onclick="if(event.target===this)closeAddPair()">
   <div class="modal">
     <h3>Add Pair Directly</h3>
     <div class="modal-row">
-      <input class="modal-input" id="ap-p1" placeholder="Player 1"/>
+      <input class="modal-input" id="ap-p1" placeholder="Player 1" list="player-datalist" autocomplete="off"/>
     </div>
     <div class="modal-row">
-      <input class="modal-input" id="ap-p2" placeholder="Player 2"/>
+      <input class="modal-input" id="ap-p2" placeholder="Player 2" list="player-datalist" autocomplete="off"/>
     </div>
     <div class="modal-row">
       <select class="modal-input" id="ap-cat"></select>
@@ -247,6 +250,6 @@
   </div>
 </div>
 
-<script type="module" src="app.js?v=30"></script>
+<script type="module" src="app.js?v=31"></script>
 </body>
 </html>

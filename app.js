@@ -44,6 +44,8 @@ let firebaseReady = false;
 
 let TREF = null;
 let REGS_REF = null;
+let PLAYERS_REF = null;
+let playerDB = []; // [{name, phone}]
 
 // ============ HTML ESCAPE ============
 const escH = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -896,6 +898,9 @@ async function saveAddPair() {
   state[catId].roster.push(name);
   await addDoc(REGS_REF, { p1, p2, phone:'', category: catId, status:'approved', paid:false, createdAt: serverTimestamp() });
   await loadRegistrations();
+  // Auto-save both players to the database
+  if (p1) addPlayerToDB(p1, '');
+  if (p2) addPlayerToDB(p2, '');
   closeAddPair();
   renderBuildPage();
 }
@@ -1266,7 +1271,10 @@ function saveEdit() {
   state[catId].groups[gi].teams[ti] = name;
   state[catId].sched.forEach(g => { if(g.a===old)g.a=name; if(g.b===old)g.b=name; });
   state[catId].ko.forEach(r => r.forEach(g => { if(g.a===old)g.a=name; if(g.b===old)g.b=name; }));
-  closeEdit(); pushToCloud(); renderStandings();
+  // Also update flat roster
+  const rIdx = state[catId].roster?.indexOf(old);
+  if (rIdx >= 0) state[catId].roster[rIdx] = name;
+  closeEdit(); pushToCloud(); renderStandings(); renderScheduleContent(); renderBracket();
 }
 function deleteTeam(catId, gi, ti) {
   if (!superAdmin || meta.phase !== 'registration') return;
@@ -1808,6 +1816,9 @@ function renderSettings() {
     </div>`;
   container.appendChild(ssec);
 
+  // ── PLAYERS DATABASE ────────────────────────────────────────────
+  renderPlayerDBSection(container);
+
   // ── GROUPS ──────────────────────────────────────────────────────
   const groupHasCats = categories.some(cat => state[cat.id]?.groups?.length);
   if (groupHasCats) {
@@ -2275,8 +2286,81 @@ Object.assign(window, {
   updateSponsorLogo, removeSponsorLogo, addSponsorLogo,
   updateCatColor, renameGroup, moveTeam,
   updateGroupColor, updateBgColor,
-  updateKORuleField
+  updateKORuleField,
+  addPlayerToDB, removePlayerFromDB
 });
+
+// ============ PLAYER DATABASE ============
+async function loadPlayerDB() {
+  try {
+    PLAYERS_REF = doc(db, 'players', 'global');
+    const snap = await getDoc(PLAYERS_REF);
+    playerDB = snap.exists() ? (snap.data().list || []) : [];
+  } catch(e) { playerDB = []; }
+  updatePlayerDatalist();
+}
+
+function updatePlayerDatalist() {
+  const dl = document.getElementById('player-datalist');
+  if (!dl) return;
+  dl.innerHTML = playerDB.map(p => `<option value="${escH(p.name)}">${escH(p.name)}${p.phone?' ('+p.phone+')':''}</option>`).join('');
+}
+
+async function savePlayerDB() {
+  if (!PLAYERS_REF) PLAYERS_REF = doc(db, 'players', 'global');
+  await setDoc(PLAYERS_REF, { list: playerDB, updatedAt: serverTimestamp() });
+  updatePlayerDatalist();
+}
+
+async function addPlayerToDB(name, phone) {
+  name = name?.trim(); if (!name) return;
+  if (!playerDB.find(p => p.name.toLowerCase() === name.toLowerCase())) {
+    playerDB.push({ name, phone: phone||'' });
+    await savePlayerDB();
+    renderSettings();
+  }
+}
+
+async function removePlayerFromDB(idx) {
+  playerDB.splice(idx, 1);
+  await savePlayerDB();
+  renderSettings();
+}
+
+function renderPlayerDBSection(container) {
+  const sec = document.createElement('div');
+  sec.className = 'sett-section';
+  sec.innerHTML = `
+    <div class="sett-section-title">Players Database</div>
+    <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+      <input class="text-inp" id="new-player-name" style="flex:1;min-width:120px" placeholder="Player name…"/>
+      <input class="text-inp" id="new-player-phone" style="width:130px" placeholder="Phone (optional)"/>
+      <button class="add-cat-btn" onclick="addPlayerToDB(document.getElementById('new-player-name').value,document.getElementById('new-player-phone').value);document.getElementById('new-player-name').value='';document.getElementById('new-player-phone').value=''">+ Add</button>
+    </div>
+    <div class="player-db-list">${playerDB.length
+      ? playerDB.map((p,i) => `
+        <div class="player-db-row">
+          <span class="player-db-name">${escH(p.name)}</span>
+          <span class="player-db-phone">${escH(p.phone||'')}</span>
+          <button class="team-del" onclick="removePlayerFromDB(${i})">✕</button>
+        </div>`).join('')
+      : '<p class="sett-empty-note">No players yet. Add above or they auto-populate when pairs are added.</p>'}
+    </div>`;
+  container.appendChild(sec);
+}
+
+// Auto-add both players of a new pair to the DB
+async function autoAddPairToDB(name) {
+  if (!name) return;
+  const parts = name.includes('/') ? name.split('/').map(s=>s.trim()) : [name];
+  for (const p of parts) {
+    if (p && !playerDB.find(x => x.name.toLowerCase() === p.toLowerCase())) {
+      playerDB.push({ name: p, phone: '' });
+    }
+  }
+  await savePlayerDB();
+  updatePlayerDatalist();
+}
 
 // ============ BOOT ============
 window.addEventListener('load', async () => {
@@ -2285,6 +2369,7 @@ window.addEventListener('load', async () => {
 
   activeCat = null;
   firebaseReady = true;
+  loadPlayerDB(); // load player database in background
   document.getElementById('view-loading').classList.add('h');
   document.getElementById('view-app').classList.remove('h');
 
