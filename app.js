@@ -1384,12 +1384,16 @@ function updateKOForCat(catId) {
   for (let ri=1; ri<cs.ko.length; ri++) {
     const prev = cs.ko[ri-1];
     const rndName = getKORoundName(catId, ri-1);
+    // Cross pairing when 4 QF games reduce to 2 SF games (QF1×QF4, QF2×QF3)
+    const isCross = prev.length === 4 && cs.ko[ri].filter(g=>!g.isThirdPlace).length === 2;
     cs.ko[ri].forEach((g, gi) => {
       if (g.isThirdPlace) return;
-      const wa = getKOWinner(prev[gi*2],   catId);
-      const wb = getKOWinner(prev[gi*2+1], catId);
-      g.a = wa || `Winner of ${rndName} ${gi*2+1}`;
-      g.b = wb || `Winner of ${rndName} ${gi*2+2}`;
+      const idxA = isCross ? gi               : gi*2;
+      const idxB = isCross ? prev.length-1-gi : gi*2+1;
+      const wa = getKOWinner(prev[idxA], catId);
+      const wb = getKOWinner(prev[idxB], catId);
+      g.a = wa || `Winner of ${rndName} ${idxA+1}`;
+      g.b = wb || `Winner of ${rndName} ${idxB+1}`;
     });
   }
 
@@ -1402,6 +1406,33 @@ function updateKOForCat(catId) {
       thirdGame.b = getKOLoser(sfRound[1], catId) || 'מפסידה חצי גמר 2';
     }
   }
+}
+
+// ============ ONE-TIME BRACKET FIX ============
+async function fixBracketPairings() {
+  if (!superAdmin) { alert('Requires superAdmin'); return; }
+
+  // QUEEN r0 fix:
+  // Current: [BYE(C1), A2vsB3, BYE(D1), B2vsA3, BYE(A1), C2vsD3, BYE(B1), D2vsC3]
+  // Desired: [BYE(A1), B2vsA3, BYE(B1), A2vsB3, BYE(C1), D2vsC3, BYE(D1), C2vsD3]
+  const q = state['queen'];
+  if (q?.ko?.[0]?.length === 8) {
+    const r = q.ko[0];
+    q.ko[0] = [r[4], r[3], r[6], r[1], r[0], r[7], r[2], r[5]];
+  }
+
+  // PRINCESS r0 fix:
+  // Current: [A1vsB4, A2vsB3, A3vsB2, A4vsB1]
+  // Desired: [A1vsB4, B1vsA4, A2vsB3, B2vsA3]
+  const p = state['princess'];
+  if (p?.ko?.[0]?.length === 4) {
+    const r = p.ko[0];
+    p.ko[0] = [r[0], r[3], r[1], r[2]];
+  }
+
+  await pushToCloud();
+  renderAll();
+  alert('Bracket pairings fixed and saved!');
 }
 
 // ============ SCHEDULE PAGE ============
@@ -1459,6 +1490,7 @@ function renderScheduleContent() {
   const el = document.getElementById('schedule-content');
   if (!el) return;
   const cats = activeCat ? categories.filter(c=>c.id===activeCat) : categories;
+  cats.forEach(cat => { if (state[cat.id]) updateKOForCat(cat.id); });
   const hasAny = cats.some(cat => (state[cat.id]?.sched||[]).length>0);
   if (!hasAny) {
     el.innerHTML = `<div class="empty"><h3>No schedule yet</h3><p>Build the tournament first.</p></div>`;
@@ -2334,7 +2366,8 @@ Object.assign(window, {
   updateCatColor, renameGroup, moveTeam,
   updateGroupColor, updateBgColor,
   updateKORuleField,
-  addPlayerToDB, removePlayerFromDB, importPlayersFromTournament
+  addPlayerToDB, removePlayerFromDB, importPlayersFromTournament,
+  fixBracketPairings
 });
 
 // ============ PLAYER DATABASE ============
