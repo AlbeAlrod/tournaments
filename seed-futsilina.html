@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<title>Seed — Futsilina Tournament #1</title>
+<style>
+body{font-family:monospace;background:#0a0a14;color:#eee;padding:30px;max-width:700px;margin:0 auto}
+h1{color:#FF1493;margin-bottom:6px}
+p{color:#aaa;margin-bottom:24px;font-size:13px}
+button{padding:14px 32px;background:#E91E8C;color:#fff;border:none;border-radius:8px;font-size:16px;font-weight:700;cursor:pointer;margin-right:10px}
+button:hover{opacity:.88}
+button.del{background:#c62828}
+#log{margin-top:24px;background:#111;border-radius:8px;padding:16px;white-space:pre-wrap;font-size:12px;line-height:1.7;max-height:400px;overflow-y:auto;color:#0f0}
+.warn{color:#FF1493}
+.ok{color:#0f0}
+</style>
+</head>
+<body>
+<h1>Seed — Futsilina Tournament #1</h1>
+<p>Opens admin.html → click "Seed QUEEN + PRINCESS" to write all data to Firestore.<br>
+   Run once only. Tournament ID: <strong>futsilina-1</strong></p>
+
+<button onclick="seedAll()">▶ Seed QUEEN + PRINCESS</button>
+<button class="del" onclick="deleteTournament()">✕ Delete tournament</button>
+
+<div id="log">Waiting…</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
+import {
+  getFirestore, doc, setDoc, deleteDoc, serverTimestamp, Timestamp
+} from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyA-rPlg0Oau16QcTjD20hDfkyveRSrD8I0",
+  authDomain: "tournaments-33619.firebaseapp.com",
+  projectId: "tournaments-33619",
+  storageBucket: "tournaments-33619.firebasestorage.app",
+  messagingSenderId: "409384565600",
+  appId: "1:409384565600:web:61bd55676343d6035abc05"
+};
+const fbApp = initializeApp(firebaseConfig);
+const db    = getFirestore(fbApp);
+const T_ID  = 'futsilina-1';
+
+// ── helpers ─────────────────────────────────────────────────
+const log = msg => {
+  const el = document.getElementById('log');
+  el.textContent += msg + '\n';
+  el.scrollTop = el.scrollHeight;
+};
+function g(gi, gn, a, b, court, si, time) {
+  return { gi, gn, a, b, court, si, time, sa:'', sb:'', catId: gi <= 3 ? 'queen' : 'princess' };
+}
+
+// ── QUEEN data ───────────────────────────────────────────────
+const QUEEN_GROUPS = [
+  { name:'A', teams:['תום ומוריאל',"נוי וביסמוץ'",'לואנה ודפני','מעיין ופלוטקין','אור ולריה'] },
+  { name:'B', teams:["מרג' ואילי","אלה ובצ'ינה",'טאיס וראקל','קלי ועדי','ים וליהי'] },
+  { name:'C', teams:['רוני וניצן','קורין ואלבי','אלינור והילה','עדי ודזורן','שירה ואופיר'] },
+  { name:'D', teams:['שירי וגבריאל','עמית ועלמה','ברנדה ודנה','רביד וליאן'] }
+];
+
+// Pool schedule — exactly as shown in the flyer
+const Q = (gi,gn,a,b,c,si,t) => ({gi,gn,a,b,court:c,si,time:t,sa:'',sb:'',catId:'queen'});
+const QUEEN_SCHED = [
+  // 08:30
+  Q(0,'A',"נוי וביסמוץ'",'אור ולריה',1,0,'08:30'),
+  Q(1,'B',"אלה ובצ'ינה",'ים וליהי',2,0,'08:30'),
+  Q(2,'C','קורין ואלבי','שירה ואופיר',3,0,'08:30'),
+  Q(3,'D','שירי וגבריאל','ברנדה ודנה',4,0,'08:30'),
+  // 08:45
+  Q(0,'A','לואנה ודפני','מעיין ופלוטקין',1,1,'08:45'),
+  Q(1,'B','טאיס וראקל','קלי ועדי',2,1,'08:45'),
+  Q(2,'C','אלינור והילה','עדי ודזורן',3,1,'08:45'),
+  Q(3,'D','עמית ועלמה','רביד וליאן',4,1,'08:45'),
+  // 09:00
+  Q(0,'A','תום ומוריאל','אור ולריה',1,2,'09:00'),
+  Q(1,'B',"מרג' ואילי",'ים וליהי',2,2,'09:00'),
+  Q(2,'C','רוני וניצן','שירה ואופיר',3,2,'09:00'),
+  Q(3,'D','עמית ועלמה','ברנדה ודנה',4,2,'09:00'),
+  // 09:15
+  Q(0,'A',"נוי וביסמוץ'",'מעיין ופלוטקין',1,3,'09:15'),
+  Q(1,'B',"אלה ובצ'ינה",'קלי ועדי',2,3,'09:15'),
+  Q(2,'C','קורין ואלבי','עדי ודזורן',3,3,'09:15'),
+  Q(3,'D','שירי וגבריאל','רביד וליאן',4,3,'09:15'),
+  // 09:30
+  Q(0,'A','תום ומוריאל','לואנה ודפני',1,4,'09:30'),
+  Q(1,'B',"מרג' ואילי",'טאיס וראקל',2,4,'09:30'),
+  Q(2,'C','רוני וניצן','אלינור והילה',3,4,'09:30'),
+  Q(3,'D','ברנדה ודנה','רביד וליאן',4,4,'09:30'),
+  // 09:45
+  Q(0,'A','מעיין ופלוטקין','אור ולריה',1,5,'09:45'),
+  Q(1,'B','קלי ועדי','ים וליהי',2,5,'09:45'),
+  Q(2,'C','עדי ודזורן','שירה ואופיר',3,5,'09:45'),
+  Q(3,'D','שירי וגבריאל','עמית ועלמה',4,5,'09:45'),
+  // 10:00 — D has no game
+  Q(0,'A',"נוי וביסמוץ'",'לואנה ודפני',1,6,'10:00'),
+  Q(1,'B',"אלה ובצ'ינה",'טאיס וראקל',2,6,'10:00'),
+  Q(2,'C','קורין ואלבי','אלינור והילה',3,6,'10:00'),
+  // 10:15
+  Q(0,'A','תום ומוריאל','מעיין ופלוטקין',1,7,'10:15'),
+  Q(1,'B',"מרג' ואילי",'קלי ועדי',2,7,'10:15'),
+  Q(2,'C','רוני וניצן','עדי ודזורן',3,7,'10:15'),
+  // 10:30
+  Q(0,'A','לואנה ודפני','אור ולריה',1,8,'10:30'),
+  Q(1,'B','טאיס וראקל','ים וליהי',2,8,'10:30'),
+  Q(2,'C','אלינור והילה','שירה ואופיר',3,8,'10:30'),
+  // 10:45
+  Q(0,'A','תום ומוריאל',"נוי וביסמוץ'",1,9,'10:45'),
+  Q(1,'B',"מרג' ואילי","אלה ובצ'ינה",2,9,'10:45'),
+  Q(2,'C','רוני וניצן','קורין ואלבי',3,9,'10:45'),
+  // 3rd-place game (gi=-1 so it doesn't affect group standings)
+  {gi:-1,gn:'',a:'מפסידה חצי גמר 1',b:'מפסידה חצי גמר 2',court:1,si:17,time:'12:40',sa:'',sb:'',catId:'queen'},
+];
+
+// KO bracket — top 2 per group → 8 teams → QF / SF / Final
+// Seed pairing: seeds[i] vs seeds[7-i], seeds=[A1,A2,B1,B2,C1,C2,D1,D2]
+const QQ = (a,b,sA,sB,c,si,t,extra={}) =>
+  ({a,b,seedA:sA,seedB:sB,sa:'',sb:'',catId:'queen',court:c,si,time:t,...extra});
+const QUEEN_KO = {
+  r0: [
+    QQ('A1','D2','A1','D2',1,10,'11:00'),
+    QQ('B1','C2','B1','C2',2,10,'11:00'),
+    QQ('A2','D1','A2','D1',1,11,'11:15'),
+    QQ('B2','C1','B2','C1',2,11,'11:15'),
+  ],
+  r1: [
+    {a:'Winner of Quarterfinals 1',b:'Winner of Quarterfinals 2',sa:'',sb:'',catId:'queen',court:1,si:14,time:'12:00'},
+    {a:'Winner of Quarterfinals 3',b:'Winner of Quarterfinals 4',sa:'',sb:'',catId:'queen',court:1,si:15,time:'12:20'},
+  ],
+  r2: [
+    {a:'Winner of Semifinals 1',b:'Winner of Semifinals 2',sa:'',sb:'',catId:'queen',court:1,si:18,time:'13:00'},
+  ],
+};
+
+// ── PRINCESS data ────────────────────────────────────────────
+const PRINCESS_GROUPS = [
+  { name:'A', teams:['עמית ולירי','מאיה ודקל','שירה ונועה','דליה וסוזן'] },
+  { name:'B', teams:['אורטל ועפרי','אליה ושירי','מוריאל ושירה','מאיה ורוני'] }
+];
+
+const P = (gi,gn,a,b,c,si,t) => ({gi,gn,a,b,court:c,si,time:t,sa:'',sb:'',catId:'princess'});
+const PRINCESS_SCHED = [
+  // 10:00-10:45 — single court
+  P(0,'A','דליה וסוזן','מאיה ודקל',1,0,'10:00'),
+  P(1,'B','מוריאל ושירה','אורטל ועפרי',1,1,'10:15'),
+  P(0,'A','שירה ונועה','עמית ולירי',1,2,'10:30'),
+  P(1,'B','מאיה ורוני','אליה ושירי',1,3,'10:45'),
+  // 11:00-11:45 — two courts
+  P(0,'A','שירה ונועה','מאיה ודקל',1,4,'11:00'),
+  P(1,'B','מוריאל ושירה','אליה ושירי',2,4,'11:00'),
+  P(0,'A','דליה וסוזן','עמית ולירי',1,5,'11:15'),
+  P(1,'B','מאיה ורוני','אורטל ועפרי',2,5,'11:15'),
+  P(0,'A','דליה וסוזן','שירה ונועה',1,6,'11:30'),
+  P(1,'B','אורטל ועפרי','אליה ושירי',2,6,'11:30'),
+  P(0,'A','מאיה ודקל','עמית ולירי',1,7,'11:45'),
+  P(1,'B','מאיה ורוני','מוריאל ושירה',2,7,'11:45'),
+  // 3rd-place
+  {gi:-1,gn:'',a:'מפסידה חצי גמר 1',b:'מפסידה חצי גמר 2',court:1,si:12,time:'13:00',sa:'',sb:'',catId:'princess'},
+];
+
+// KO — advPerGroup=4, 2 groups → 8 teams, seeds=[A1,A2,A3,A4,B1,B2,B3,B4]
+// pairs: A1×B4, A2×B3, A3×B2, A4×B1
+const PP = (a,b,sA,sB,c,si,t) =>
+  ({a,b,seedA:sA,seedB:sB,sa:'',sb:'',catId:'princess',court:c,si,time:t});
+const PRINCESS_KO = {
+  r0: [
+    PP('A1','B4','A1','B4',1,8,'12:00'),
+    PP('A2','B3','A2','B3',2,8,'12:00'),
+    PP('A3','B2','A3','B2',1,9,'12:20'),
+    PP('A4','B1','A4','B1',2,9,'12:20'),
+  ],
+  r1: [
+    {a:'Winner of Quarterfinals 1',b:'Winner of Quarterfinals 2',sa:'',sb:'',catId:'princess',court:1,si:11,time:'12:40'},
+    {a:'Winner of Quarterfinals 3',b:'Winner of Quarterfinals 4',sa:'',sb:'',catId:'princess',court:2,si:11,time:'12:40'},
+  ],
+  r2: [
+    {a:'Winner of Semifinals 1',b:'Winner of Semifinals 2',sa:'',sb:'',catId:'princess',court:1,si:13,time:'13:15'},
+  ],
+};
+
+// ── Seed function ─────────────────────────────────────────────
+async function seedAll() {
+  document.getElementById('log').textContent = '';
+  log('▶ Starting seed…');
+
+  const meta = {
+    name: "פוצ'ילינה — טורניר דירוג #1",
+    logoUrl: '',            // ← add logo URL here if desired
+    primaryColor:   '#E91E8C',
+    secondaryColor: '#1565C0',
+    adminPassword:  'level1',
+    masterPassword: 'level2',
+    // Sponsor logos — replace URLs with actual hosted images
+    sponsorLogos: [
+      { url:'', alt:'TAFC Israel' },
+      { url:'', alt:'Oak Berry' },
+      { url:'https://upload.wikimedia.org/wikipedia/commons/thumb/6/6a/Rip_Curl_logo.svg/320px-Rip_Curl_logo.svg.png', alt:'Rip Curl' },
+      { url:'', alt:'Sponsor' },
+      { url:'', alt:"Futilina" },
+    ],
+    phase:          'tournament',
+    regOpen:        false,
+    showRegistered: false,
+    paymentLink: '', paymentLinkLabel: '',
+    paymentLink2: '', paymentLink2Label: '',
+    regNote: '',
+  };
+
+  const categories = [
+    {
+      id: 'queen', name: 'QUEEN',
+      cfg: { courts:4, gameDur:15, breakDur:0, numGroups:4, advPerGroup:2,
+             pointsToWin:15, sets:1, pointsThirdSet:15, startTime:'08:30' }
+    },
+    {
+      id: 'princess', name: 'PRINCESS',
+      cfg: { courts:2, gameDur:15, breakDur:0, numGroups:2, advPerGroup:4,
+             pointsToWin:15, sets:1, pointsThirdSet:15, startTime:'10:00' }
+    }
+  ];
+
+  const state = {
+    queen: {
+      roster: QUEEN_GROUPS.flatMap(g => g.teams),
+      groups: QUEEN_GROUPS,
+      sched:  QUEEN_SCHED,
+      ko:     QUEEN_KO,
+    },
+    princess: {
+      roster: PRINCESS_GROUPS.flatMap(g => g.teams),
+      groups: PRINCESS_GROUPS,
+      sched:  PRINCESS_SCHED,
+      ko:     PRINCESS_KO,
+    }
+  };
+
+  log(`  Writing tournament "${T_ID}"…`);
+  try {
+    await setDoc(doc(db, 'tournaments', T_ID), {
+      meta, categories, state,
+      updatedAt: serverTimestamp()
+    });
+    log('✓ Done! Tournament written to Firestore.');
+    log(`  URL: https://albealrod.github.io/tournaments/?t=${T_ID}`);
+    log('  Admin password:   level1');
+    log('  Manager password: level2');
+  } catch(e) {
+    log('✗ ERROR: ' + e.message);
+    console.error(e);
+  }
+}
+
+async function deleteTournament() {
+  if (!confirm(`Delete tournament "${T_ID}"?`)) return;
+  try {
+    await deleteDoc(doc(db, 'tournaments', T_ID));
+    log('✓ Deleted.');
+  } catch(e) {
+    log('✗ ERROR: ' + e.message);
+  }
+}
+
+Object.assign(window, { seedAll, deleteTournament });
+</script>
+</body>
+</html>

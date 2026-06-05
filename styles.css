@@ -503,6 +503,25 @@ input:checked + .toggle-slider::before { transform: translateX(20px); }
   text-decoration: none; transition: all .18s; white-space: nowrap; }
 .pay-link-btn:hover { background: var(--primary-text); color: var(--bg2); }
 
+/* ===== SPONSOR BAR ===== */
+.sponsor-bar {
+  display: flex; align-items: center; justify-content: center;
+  gap: 20px; flex-wrap: wrap;
+  padding: 10px 20px;
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+}
+.sponsor-bar.h { display: none; }
+.sponsor-logo {
+  height: 36px; width: auto; object-fit: contain;
+  filter: grayscale(30%); opacity: .85; transition: opacity .2s;
+}
+.sponsor-logo:hover { opacity: 1; filter: none; }
+.sponsor-text {
+  font-family: 'Barlow Condensed', sans-serif; font-size: 13px; font-weight: 700;
+  letter-spacing: 1px; text-transform: uppercase; color: var(--text3);
+}
+
 @media (max-width: 640px) {
   header { flex-wrap: wrap; height: auto; padding: 10px 14px 8px; gap: 6px; }
   .gc { grid-template-columns: auto 1fr 20px 1fr auto; gap: 5px; }

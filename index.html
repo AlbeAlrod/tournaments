@@ -6,7 +6,7 @@
 <title>Tournaments</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@700;800;900&display=swap" rel="stylesheet"/>
-<link rel="stylesheet" href="styles.css?v=15"/>
+<link rel="stylesheet" href="styles.css?v=16"/>
 </head>
 <body>
 
@@ -33,6 +33,8 @@
 
 <!-- MAIN APP -->
 <div id="view-app" class="view h">
+
+  <div id="sponsor-bar" class="sponsor-bar h"></div>
 
   <header>
     <div class="logo">
@@ -174,7 +176,11 @@
 <!-- LOGIN MODAL -->
 <div class="overlay h" id="pw-modal" onclick="if(event.target===this)closeLogin()">
   <div class="modal">
-    <h3>Admin Login</h3>
+    <h3>Login</h3>
+    <div class="modal-row" style="margin-bottom:14px;">
+      <button id="role-btn-admin"   onclick="selectLoginRole('admin')">Admin</button>
+      <button id="role-btn-manager" onclick="selectLoginRole('manager')">Manager</button>
+    </div>
     <div class="modal-row">
       <input class="modal-input" id="pw-inp" type="password" placeholder="Password"
         onkeydown="if(event.key==='Enter')tryLogin()"/>
@@ -242,6 +248,6 @@
   </div>
 </div>
 
-<script type="module" src="app.js?v=15"></script>
+<script type="module" src="app.js?v=16"></script>
 </body>
 </html>

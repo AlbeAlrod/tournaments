@@ -22,13 +22,16 @@ const tId = new URLSearchParams(location.search).get('t');
 // ============ STATE ============
 let meta = { name:'', logoUrl:'', primaryColor:'#6B21A8', secondaryColor:'#7C3AED',
   paymentLink:'', paymentLinkLabel:'', paymentLink2:'', paymentLink2Label:'',
-  regNote:'',
+  regNote:'', sponsorLogos: [],
   phase:'registration', regOpen:true, showRegistered:true };
 let categories = [];   // [{id, name, cfg}]
 let state = {};        // {[catId]: {roster:[], groups:[], sched:[], ko:[]}}
 let registrations = [];// [{id, p1, p2, phone, category, status, paid, createdAt}]
 
-let admin = false;  // true when admin password entered; capabilities depend on meta.phase
+let adminLevel = 0;    // 0=view  1=admin(scores in tournament)  2=manager(full in reg + scores)
+let admin = false;
+let superAdmin = false;
+let loginRole = 'admin';
 
 let activeCat = null;  // selected category id for tournament views
 let regFilter = 'all'; // pending|approved|rejected|all
@@ -340,18 +343,35 @@ function applyTheme(primary, secondary) {
 // ============ AUTH ============
 function adminClick() {
   if (admin) {
-    admin = false;
+    adminLevel = 0; admin = false; superAdmin = false;
     refreshAdmin(); rerender(); return;
   }
+  loginRole = 'admin';
+  updateRoleButtons();
   document.getElementById('pw-modal').classList.remove('h');
   setTimeout(() => document.getElementById('pw-inp').focus(), 80);
 }
 
+function selectLoginRole(role) {
+  loginRole = role;
+  updateRoleButtons();
+  document.getElementById('pw-inp').focus();
+}
+
+function updateRoleButtons() {
+  const on  = `flex:1;padding:10px 6px;border-radius:var(--rs);border:2px solid var(--primary);background:var(--primary);color:#fff;font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:700;cursor:pointer`;
+  const off = `flex:1;padding:10px 6px;border-radius:var(--rs);border:2px solid var(--border2);background:transparent;color:var(--primary);font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:700;cursor:pointer`;
+  document.getElementById('role-btn-admin')?.setAttribute('style',   loginRole==='admin'   ? on : off);
+  document.getElementById('role-btn-manager')?.setAttribute('style', loginRole==='manager' ? on : off);
+}
+
 function tryLogin() {
   const val      = document.getElementById('pw-inp').value.trim();
-  const expected = meta.adminPassword;
+  const expected = loginRole === 'manager' ? meta.masterPassword : meta.adminPassword;
   if (val && expected && val === expected) {
-    admin = true;
+    adminLevel = loginRole === 'manager' ? 2 : 1;
+    admin      = true;
+    superAdmin = adminLevel === 2;
     closeLogin(); refreshAdmin(); rerender();
   } else {
     document.getElementById('pw-err').classList.remove('h');
@@ -367,30 +387,27 @@ function closeLogin() {
 }
 
 function refreshAdmin() {
-  // admin-mode body class: only when admin + registration phase (controls nav tab visibility)
-  const regAdmin = admin && meta.phase === 'registration';
-  document.body.classList.toggle('admin-mode', regAdmin);
+  // admin-mode: manager (level2) in registration phase → shows registration management tabs
+  const regManager = superAdmin && meta.phase === 'registration';
+  document.body.classList.toggle('admin-mode', regManager);
 
   const txt  = document.getElementById('adm-txt');
   const btn  = document.getElementById('abtn');
   const bar  = document.getElementById('mode-bar');
   const mtxt = document.getElementById('mode-text');
-  if (txt)  txt.textContent  = admin ? 'Admin ✓' : 'Admin';
-  if (btn)  btn.classList.toggle('on', admin);
-  if (bar)  bar.className = 'mode-bar ' + (admin ? 'mode-admin' : 'mode-view');
+  if (txt) txt.textContent = adminLevel===2 ? 'Manager ✓' : adminLevel===1 ? 'Admin ✓' : 'Admin';
+  if (btn) btn.classList.toggle('on', admin);
+  if (bar) bar.className = 'mode-bar ' + (admin ? 'mode-admin' : 'mode-view');
   if (mtxt) {
-    if (!admin)                       mtxt.textContent = 'View only — tap Admin to manage';
-    else if (meta.phase==='registration') mtxt.textContent = 'Admin mode — manage registrations & build';
-    else                              mtxt.textContent = 'Admin mode — score entry';
+    if (!admin) mtxt.textContent = 'View only — tap Admin to manage';
+    else if (adminLevel===2 && meta.phase==='registration') mtxt.textContent = 'Manager mode — full access';
+    else mtxt.textContent = 'Admin mode — score entry';
   }
-  // Hide public Register tab from admin in registration phase
   const regTab = document.getElementById('tab-register');
-  if (regTab) regTab.classList.toggle('h', regAdmin);
-  // If admin on register page in registration phase, redirect to registrations
-  if (regAdmin && document.getElementById('page-register')?.classList.contains('on')) {
+  if (regTab) regTab.classList.toggle('h', regManager);
+  if (regManager && document.getElementById('page-register')?.classList.contains('on')) {
     goPage('registrations');
   }
-  // If admin in tournament phase is on a registration-only page, redirect to standings
   if (admin && meta.phase === 'tournament') {
     const onRegPage = ['registrations','build','settings'].some(p =>
       document.getElementById('page-'+p)?.classList.contains('on'));
@@ -537,7 +554,7 @@ function renderParticipants() {
   const el = document.getElementById('participants-list');
   const hiddenMsg = document.getElementById('participants-hidden-msg');
   if (!el) return;
-  if (!meta.showRegistered && !admin) {
+  if (!meta.showRegistered && !superAdmin) {
     hiddenMsg?.classList.remove('h');
     el.innerHTML = '';
     return;
@@ -666,7 +683,7 @@ function buildItem(catId, name, i) {
 }
 
 function editBuildItem(catId, idx) {
-  if (!admin || meta.phase !== 'registration') return;
+  if (!superAdmin || meta.phase !== 'registration') return;
   const name = state[catId]?.roster[idx] || '';
   editTarget = { catId, buildIdx: idx, oldName: name };
   const parts = name.split('/').map(s => s.trim());
@@ -685,7 +702,7 @@ function editBuildItem(catId, idx) {
 }
 
 async function deleteBuildItem(catId, idx) {
-  if (!admin || meta.phase !== 'registration') return;
+  if (!superAdmin || meta.phase !== 'registration') return;
   const name = state[catId]?.roster[idx];
   if (name) {
     const parts = name.split(' / ').map(s => s.trim());
@@ -785,7 +802,7 @@ async function moveBetweenCategories(srcCatId, fromIdx, dstCatId, toIdx) {
 }
 
 function moveBuildItem(catId, idx, dir) {
-  if (!admin || meta.phase !== 'registration') return;
+  if (!superAdmin || meta.phase !== 'registration') return;
   const cs = state[catId];
   if (!cs) return;
   const roster = cs.roster;
@@ -797,7 +814,7 @@ function moveBuildItem(catId, idx, dir) {
 }
 
 function shuffleBuildRoster(catId) {
-  if (!admin || meta.phase !== 'registration') return;
+  if (!superAdmin || meta.phase !== 'registration') return;
   const cs = state[catId];
   if (!cs) return;
   if (!cs.roster.length) {
@@ -837,7 +854,7 @@ async function saveAddPair() {
 }
 
 async function buildTournament(catId) {
-  if (!admin || meta.phase !== 'registration') return;
+  if (!superAdmin || meta.phase !== 'registration') return;
   const cs  = state[catId];
   const cat = categories.find(c => c.id === catId);
   if (!cat || !cs) return;
@@ -1066,7 +1083,7 @@ function makeStandingsCard(catId, grp, gi) {
     const diffStr = diff>0?`+${diff}`:String(diff);
     const diffClass = diff>0?'diff-pos':diff<0?'diff-neg':'diff-zero';
     const ti = cs.groups[gi].teams.indexOf(t.name);
-    const canEdit = admin && meta.phase === 'registration';
+    const canEdit = superAdmin && meta.phase === 'registration';
     const adminCtrls = canEdit
       ? `<td><button class="gedit-btn" onclick="openEditTeam('${catId}',${gi},${ti})">Edit</button>
          <button class="team-del" onclick="deleteTeam('${catId}',${gi},${ti})">✕</button></td>` : '';
@@ -1078,7 +1095,7 @@ function makeStandingsCard(catId, grp, gi) {
       ${adminCtrls}
     </tr>`;
   }).join('');
-  const adminTh = (admin && meta.phase === 'registration') ? '<th></th>' : '';
+  const adminTh = (superAdmin && meta.phase === 'registration') ? '<th></th>' : '';
   card.innerHTML = `<div class="scard-head"><span class="scard-name">GROUP ${grp.name}</span></div>
     <table class="stbl"><thead><tr><th>Team</th><th>W</th><th>L</th><th>+/−</th><th>Pts</th>${adminTh}</tr></thead>
     <tbody>${rows}</tbody></table>`;
@@ -1112,7 +1129,7 @@ function renderStandings() {
 // ============ EDIT / DELETE TEAMS ============
 let editTarget = null;
 function openEditTeam(catId, gi, ti) {
-  if (!admin || meta.phase !== 'registration') return;
+  if (!superAdmin || meta.phase !== 'registration') return;
   editTarget = {catId, gi, ti};
   const name = state[catId].groups[gi].teams[ti];
   const parts = name.split('/').map(s=>s.trim());
@@ -1128,7 +1145,7 @@ function closeEdit() {
   editTarget = null;
 }
 function saveEdit() {
-  if (!admin || !editTarget || meta.phase !== 'registration') return;
+  if (!superAdmin || !editTarget || meta.phase !== 'registration') return;
   const p1 = document.getElementById('edit-p1').value.trim();
   const p2 = document.getElementById('edit-p2').value.trim();
   const name = p2?`${p1} / ${p2}`:p1;
@@ -1173,7 +1190,7 @@ function saveEdit() {
   closeEdit(); pushToCloud(); renderStandings();
 }
 function deleteTeam(catId, gi, ti) {
-  if (!admin || meta.phase !== 'registration') return;
+  if (!superAdmin || meta.phase !== 'registration') return;
   const grp = state[catId].groups[gi];
   if (grp.teams.length<=1) { alert('Group needs at least 1 team'); return; }
   grp.teams.splice(ti,1);
@@ -1249,6 +1266,7 @@ function updateKOForCat(catId) {
   }
   for (let ri=1; ri<cs.ko.length; ri++) {
     cs.ko[ri].forEach((g,gi) => {
+      if (g.isThirdPlace) return; // 3rd-place game — labels stay fixed, not winner-propagated
       const wa = getKOWinner(cs.ko[ri-1][gi*2], catId);
       const wb = getKOWinner(cs.ko[ri-1][gi*2+1], catId);
       const rndName = getKORoundName(catId, ri-1);
@@ -1493,7 +1511,7 @@ function renderCatFilters() {
 // ============ SETTINGS ============
 function renderSettings() {
   const container = document.getElementById('settings-container');
-  if (!container || !admin || meta.phase !== 'registration') return;
+  if (!container || !superAdmin || meta.phase !== 'registration') return;
   container.innerHTML = '';
 
   // Registration control
@@ -1696,7 +1714,7 @@ function resetAllScores() {
 // ============ NAV ============
 function goPage(p) {
   const regOnly = p==='settings'||p==='build'||p==='registrations';
-  if (regOnly && (!admin || meta.phase !== 'registration')) return;
+  if (regOnly && (!superAdmin || meta.phase !== 'registration')) return;
   document.querySelectorAll('.pg').forEach(e=>e.classList.remove('on'));
   document.querySelectorAll('.tab').forEach(e=>e.classList.remove('on'));
   const pageEl=document.getElementById('page-'+p);
@@ -1731,6 +1749,19 @@ function rerender() {
   if (active==='register')      renderRegisterPage();
 }
 
+function renderSponsorBar() {
+  const bar = document.getElementById('sponsor-bar');
+  if (!bar) return;
+  const logos = meta.sponsorLogos;
+  if (!logos || !logos.length) { bar.classList.add('h'); return; }
+  bar.classList.remove('h');
+  bar.innerHTML = logos.map(l =>
+    l.url
+      ? `<img class="sponsor-logo" src="${l.url}" alt="${l.alt||''}" title="${l.alt||''}"/>`
+      : `<span class="sponsor-text">${l.alt||''}</span>`
+  ).join('');
+}
+
 function renderAll() {
   applyTheme(meta.primaryColor, meta.secondaryColor);
   applyLogo(meta.logoUrl);
@@ -1743,6 +1774,7 @@ function renderAll() {
   document.body.classList.toggle('phase-registration', isReg);
   document.body.classList.toggle('phase-tournament', !isReg);
 
+  renderSponsorBar();
   renderCatFilters();
   refreshAdmin();
   renderRegisterPage();
@@ -1752,12 +1784,12 @@ function renderAll() {
   renderCourtFilter();
   renderScheduleContent();
   renderBracket();
-  if (admin && meta.phase === 'registration') renderSettings();
+  if (superAdmin && meta.phase === 'registration') renderSettings();
 }
 
 // ============ EXPOSE GLOBALS ============
 Object.assign(window, {
-  adminClick, tryLogin, closeLogin,
+  adminClick, selectLoginRole, tryLogin, closeLogin,
   openStartModal, closeStartModal, confirmStartTournament,
   goPage, setCat, setCourt,
   submitRegistration, setRegStatus, setRegPaid, setRegFilter, selectRegCat,
