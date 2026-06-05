@@ -40,6 +40,7 @@ let regFilter = 'all'; // pending|approved|rejected|all
 let schedFilter = [];
 let activeCourt = 'all';
 let applyingRemote = false;
+let skipNextSnapshot = 0;
 let firebaseReady = false;
 
 let TREF = null;
@@ -122,6 +123,7 @@ async function pushToCloud() {
   if (!firebaseReady || applyingRemote || !TREF) return;
   const stateObj = {};
   Object.entries(state).forEach(([cid, cs]) => { stateObj[cid] = catStateToFB(cs); });
+  skipNextSnapshot++;
   try {
     await setDoc(TREF, {
       meta, categories,
@@ -130,6 +132,7 @@ async function pushToCloud() {
     }, { merge: true });
     setSyncStatus(true);
   } catch(e) {
+    skipNextSnapshot--;
     console.error('Push error', e);
     setSyncStatus(false);
   }
@@ -197,6 +200,7 @@ async function loadTournament() {
   // Live listener
   onSnapshot(TREF, snap => {
     if (!snap.exists() || applyingRemote) return;
+    if (skipNextSnapshot > 0) { skipNextSnapshot--; return; }
     applyingRemote = true;
     const data = snap.data();
     if (data.meta) meta = { ...meta, ...data.meta };
