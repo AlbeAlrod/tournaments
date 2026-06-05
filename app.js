@@ -1734,6 +1734,7 @@ function renderBracketForCat(catId, container) {
     col.appendChild(matchesEl); tree.appendChild(col);
   });
   container.appendChild(scroll);
+  drawBracketLines(scroll, catId);
 
   const fin=cs.ko[cs.ko.length-1][0];
   if (fin) {
@@ -1745,6 +1746,66 @@ function renderBracketForCat(catId, container) {
       container.appendChild(champEl);
     }
   }
+}
+
+function drawBracketLines(scroll, catId) {
+  const cs = state[catId];
+  if (!cs?.ko?.length) return;
+  requestAnimationFrame(() => {
+    scroll.querySelector('.bsvg')?.remove();
+    const sR = scroll.getBoundingClientRect();
+    if (!sR.width) return;
+    const SL = scroll.scrollLeft, ST = scroll.scrollTop;
+    const svg = document.createElementNS('http://www.w3.org/2000/svg','svg');
+    svg.className = 'bsvg';
+    Object.assign(svg.style, {
+      position:'absolute', top:'0', left:'0', pointerEvents:'none',
+      width: scroll.scrollWidth+'px', height: scroll.scrollHeight+'px',
+      overflow:'visible', zIndex:'0'
+    });
+    scroll.style.position = 'relative';
+
+    const rounds = [...scroll.querySelectorAll('.bround')];
+    const C = 'rgba(255,255,255,0.2)';
+
+    const mk = (x1,y1,x2,y2) => {
+      const el = document.createElementNS('http://www.w3.org/2000/svg','line');
+      el.setAttribute('x1',Math.round(x1)); el.setAttribute('y1',Math.round(y1));
+      el.setAttribute('x2',Math.round(x2)); el.setAttribute('y2',Math.round(y2));
+      el.setAttribute('stroke',C); el.setAttribute('stroke-width','1.5');
+      el.setAttribute('stroke-linecap','round');
+      svg.appendChild(el);
+    };
+
+    const pos = wrap => {
+      const b = wrap.querySelector('.bmatch-box');
+      if (!b) return null;
+      const r = b.getBoundingClientRect();
+      return {
+        rx: r.left - sR.left + SL + r.width,
+        lx: r.left - sR.left + SL,
+        my: r.top  - sR.top  + ST + r.height / 2
+      };
+    };
+
+    for (let ci = 0; ci < rounds.length - 1; ci++) {
+      const srcWraps = [...rounds[ci].querySelectorAll('.bmatch-wrap')];
+      const dstWraps = [...rounds[ci+1].querySelectorAll('.bmatch-wrap')];
+      if (!srcWraps.length || !dstWraps.length) continue;
+      const srcPos = srcWraps.map(pos).filter(Boolean);
+      const dstPos = dstWraps.map(pos).filter(Boolean);
+
+      dstPos.forEach((dst, di) => {
+        const s0 = srcPos[di*2], s1 = srcPos[di*2+1];
+        if (!s0) return;
+        const vx = (Math.max(s0.rx, s1?.rx ?? s0.rx) + dst.lx) / 2;
+        mk(s0.rx, s0.my, vx, s0.my);
+        if (s1) { mk(s1.rx, s1.my, vx, s1.my); mk(vx, s0.my, vx, s1.my); }
+        mk(vx, dst.my, dst.lx, dst.my);
+      });
+    }
+    scroll.prepend(svg);
+  });
 }
 
 function renderBracket() {

@@ -404,8 +404,10 @@ main { position: relative; z-index: 5; max-width: 980px; margin: 0 auto; padding
 .binfo { font-size: 13px; color: var(--primary-text); margin-bottom: 16px; background: var(--bg2);
   border: 1px solid var(--border); border-radius: var(--rs); padding: 10px 14px; }
 .binfo span { color: var(--green); font-weight: 500; }
-.bscroll { overflow-x: auto; padding-bottom: 20px; }
+.bscroll { overflow-x: auto; padding-bottom: 20px; position: relative; }
 .btree { display: flex; gap: 0; min-width: fit-content; }
+.bsvg { position: absolute; top: 0; left: 0; pointer-events: none; z-index: 0; }
+.bmatch-box { position: relative; z-index: 1; }
 .bround { display: flex; flex-direction: column; }
 .brnd-title { font-family: 'Barlow Condensed', sans-serif; font-size: 12px; font-weight: 700;
   color: var(--primary-text); text-transform: uppercase; letter-spacing: .12em;
