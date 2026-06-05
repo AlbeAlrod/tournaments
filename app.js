@@ -4,7 +4,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
 import {
   getFirestore, doc, getDoc, setDoc, onSnapshot, serverTimestamp,
-  collection, addDoc, getDocs, updateDoc, query, orderBy
+  collection, addDoc, getDocs, updateDoc, deleteDoc, query, orderBy
 } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
 
 // ============ FIREBASE ============
@@ -269,45 +269,36 @@ function applyTheme(primary, secondary) {
 
   const [r1,g1,b1] = hexToRgb(primary);
   const [h1,s1,l1] = hexToHsl(primary);
-  const [r2,g2,b2] = hexToRgb(secondary);
   const [h2,s2,l2] = hexToHsl(secondary);
 
-  // ── Backgrounds (light tint of primary hue) ──
-  const bgL  = Math.max(95, 98 - s1*0.04);
-  const bg3L = Math.max(90, bgL - 5);
-  const surL = Math.max(84, bgL - 10);
-  const bg   = hslToHex(h1, Math.min(s1*0.35, 22), bgL);
-  const bg3  = hslToHex(h1, Math.min(s1*0.45, 28), bg3L);
-  const surf = hslToHex(h1, Math.min(s1*0.55, 35), surL);
+  // ── Backgrounds: barely-there tint — feels white, reads as brand ──
+  const bg   = hslToHex(h1, Math.min(s1 * 0.07, 6),  98);
+  const bg3  = hslToHex(h1, Math.min(s1 * 0.13, 11), 95);
+  const surf = hslToHex(h1, Math.min(s1 * 0.22, 18), 91);
 
-  // ── Text: start from dark hue variants, then force contrast ──
-  const rawText  = hslToHex(h1, Math.min(s1*0.6,  60), Math.max(6,  l1*0.22));
-  const rawText2 = hslToHex(h1, Math.min(s1*0.75, 80), Math.max(16, l1*0.45));
-  const rawText3 = hslToHex(h1, Math.min(s1,     100), Math.min(l1, 52));
-  const text  = readable(rawText,  bg, 7.0);  // body text — strict
-  const text2 = readable(rawText2, bg, 5.0);  // headings
-  const text3 = readable(rawText3, bg, 4.5);  // secondary text
+  // ── Text: deep tones grounded in primary hue, forced WCAG contrast ──
+  const rawText  = hslToHex(h1, Math.min(s1 * 0.30, 28), 10);
+  const rawText2 = hslToHex(h1, Math.min(s1 * 0.50, 44), 22);
+  const rawText3 = hslToHex(h1, Math.min(s1 * 0.60, 54), 42);
+  const text  = readable(rawText,  bg, 7.0);
+  const text2 = readable(rawText2, bg, 5.0);
+  const text3 = readable(rawText3, bg, 4.5);
 
-  // ── primary3 for tab / label text on light nav bg ──
-  const rawP3 = hslToHex(h2, Math.min(s2*0.85, 88), Math.min(l2, 55));
+  // ── primary3: nav / tab labels — readable on nav bg ──
+  const rawP3 = hslToHex(h2, Math.min(s2 * 0.80, 70), Math.min(l2, 46));
   const primary3 = readable(rawP3, bg3, 4.5);
 
-  // ── Text color on colored backgrounds (buttons, group headers, bracket) ──
-  // Use average of primary+secondary since most backgrounds are their gradient
-  const midLum = (luminance(primary) + luminance(secondary)) / 2;
-  // ── Text on colored backgrounds: always white + dark shadow scaled by lightness ──
-  // shadowStr: 0 for dark backgrounds (no shadow needed), up to 0.9 for very light ones
-  const shadowStr = Math.max(0, Math.min(0.9, (midLum - 0.04) * 1.8));
-  const onPrimaryShadow = shadowStr > 0.06
-    ? `0 1px 3px rgba(0,0,0,${shadowStr.toFixed(2)}),` +
-      `0 0 6px rgba(0,0,0,${(shadowStr * 0.5).toFixed(2)}),` +
-      `-1px 0 2px rgba(0,0,0,${(shadowStr * 0.4).toFixed(2)}),` +
-      ` 1px 0 2px rgba(0,0,0,${(shadowStr * 0.4).toFixed(2)})`
+  // ── on-primary: WCAG text for primary-bg buttons / headers ──
+  const onPrimaryText = onColor(primary);
+  const lum = luminance(primary);
+  const shadowStr = onPrimaryText === '#FFFFFF'
+    ? Math.max(0, Math.min(0.55, (lum - 0.04) * 1.4))
+    : 0;
+  const onPrimaryShadow = shadowStr > 0.04
+    ? `0 1px 2px rgba(0,0,0,${shadowStr.toFixed(2)}), 0 0 3px rgba(0,0,0,${(shadowStr * 0.3).toFixed(2)})`
     : 'none';
 
-  // ── Header / nav ──
-  const [rB,gB,bB]   = hexToRgb(bg);
-  const [rB3,gB3,bB3] = hexToRgb(bg3);
+  const [rb3,gb3,bb3] = hexToRgb(bg3);
 
   const vars = {
     '--primary':            primary,
@@ -317,17 +308,17 @@ function applyTheme(primary, secondary) {
     '--bg2':                '#FFFFFF',
     '--bg3':                bg3,
     '--surface':            surf,
-    '--border':             `rgba(${r1},${g1},${b1},0.13)`,
-    '--border2':            `rgba(${r1},${g1},${b1},0.28)`,
+    '--border':             `rgba(${r1},${g1},${b1},0.09)`,
+    '--border2':            `rgba(${r1},${g1},${b1},0.20)`,
     '--text':               text,
     '--text2':              text2,
     '--text3':              text3,
-    '--on-primary':         onColor(primary),
-    '--on-primary-shadow':  onColor(primary) === '#FFFFFF' ? onPrimaryShadow : 'none',
-    '--header-bg':          `rgba(${rB},${gB},${bB},0.95)`,
-    '--nav-bg':             `rgba(${rB3},${gB3},${bB3},0.96)`,
-    '--modebar-bg':         `rgba(${r1},${g1},${b1},0.07)`,
-    '--modebar-admin-bg':   `rgba(${r1},${g1},${b1},0.10)`,
+    '--on-primary':         onPrimaryText,
+    '--on-primary-shadow':  onPrimaryShadow,
+    '--header-bg':          'rgba(255,255,255,0.94)',
+    '--nav-bg':             `rgba(${rb3},${gb3},${bb3},0.97)`,
+    '--modebar-bg':         `rgba(${r1},${g1},${b1},0.05)`,
+    '--modebar-admin-bg':   `rgba(${r1},${g1},${b1},0.08)`,
   };
 
   const style = document.getElementById('theme-style') || (() => {
@@ -439,9 +430,15 @@ async function submitRegistration() {
 async function setRegStatus(id, status) {
   if (!superAdmin) return;
   try {
-    await updateDoc(doc(db, 'tournaments', tId, 'registrations', id), { status });
-    const r = registrations.find(r => r.id === id);
-    if (r) r.status = status;
+    if (status === 'rejected') {
+      // Reject = permanent delete from Firestore
+      await deleteDoc(doc(db, 'tournaments', tId, 'registrations', id));
+      registrations = registrations.filter(r => r.id !== id);
+    } else {
+      await updateDoc(doc(db, 'tournaments', tId, 'registrations', id), { status });
+      const r = registrations.find(r => r.id === id);
+      if (r) r.status = status;
+    }
     renderRegistrations();
     renderParticipants();
   } catch(e) { alert('Error updating status'); }
@@ -473,6 +470,7 @@ function setRegFilter(f) {
 function renderRegistrations() {
   const el = document.getElementById('registrations-list');
   if (!el) return;
+  renderPayLink('reg-pay-wrap-master');
   let list = [...registrations];
   if (regFilter !== 'all') list = list.filter(r => r.status === regFilter);
   if (!list.length) {
@@ -546,6 +544,7 @@ function renderPayLink(wrapId) {
 
   wrap.className = 'pay-section';
   wrap.innerHTML = `
+    <span class="pay-label">Payment</span>
     <div class="pay-links">
       ${links.map(l => `<a class="pay-link-btn" href="${l.url}" target="_blank" rel="noopener">${l.label}</a>`).join('')}
     </div>`;
@@ -639,11 +638,26 @@ function editBuildItem(catId, idx) {
   document.getElementById('edit-p1').focus();
 }
 
-function deleteBuildItem(catId, idx) {
+async function deleteBuildItem(catId, idx) {
   if (!superAdmin) return;
+  const name = state[catId]?.roster[idx];
+  if (name) {
+    const parts = name.split(' / ').map(s => s.trim());
+    const p1 = parts[0], p2 = parts[1] || '';
+    const reg = registrations.find(r =>
+      r.category === catId && r.p1 === p1 && (r.p2 || '') === p2 && r.status === 'approved'
+    );
+    if (reg) {
+      try {
+        await deleteDoc(doc(db, 'tournaments', tId, 'registrations', reg.id));
+        registrations = registrations.filter(r => r.id !== reg.id);
+      } catch(e) { console.error('Could not delete registration', e); }
+    }
+  }
   state[catId].roster.splice(idx, 1);
   pushToCloud();
   renderBuildPage();
+  renderRegistrations();
 }
 
 function setupDragDrop(catId) {}

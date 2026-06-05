@@ -46,8 +46,10 @@ body { font-family: 'Barlow', sans-serif; background: var(--bg); color: var(--te
 /* Header */
 header { position: sticky; top: 0; z-index: 50; display: flex; align-items: center;
   justify-content: space-between; padding: 0 20px; height: 58px;
-  background: var(--header-bg); backdrop-filter: blur(16px);
-  border-bottom: 1px solid var(--border); transition: background .4s; }
+  background: var(--header-bg); backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--border);
+  box-shadow: 0 1px 0 var(--border), 0 4px 16px rgba(0,0,0,0.05);
+  transition: background .4s; }
 .logo { display: flex; align-items: center; gap: 10px; }
 .lmark { width: 40px; height: 40px; background: var(--primary); border-radius: 8px;
   display: flex; align-items: center; justify-content: center; overflow: hidden; flex-shrink: 0; }
@@ -109,24 +111,24 @@ main { position: relative; z-index: 5; max-width: 980px; margin: 0 auto; padding
 
 /* Registration Form */
 .form-card { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--r);
-  padding: 24px; max-width: 480px; }
-.form-row { margin-bottom: 16px; }
-.form-row label { display: block; font-size: 13px; font-weight: 600; color: var(--text2);
-  margin-bottom: 6px; text-transform: uppercase; letter-spacing: .4px; }
-.form-input { width: 100%; background: var(--bg3); border: 1px solid var(--border);
-  border-radius: var(--rs); color: var(--text); padding: 10px 12px; font-size: 14px;
-  font-family: 'Barlow', sans-serif; transition: border-color .2s; }
-.form-input:focus { outline: none; border-color: var(--primary2); }
+  padding: 28px 30px; max-width: 480px; box-shadow: 0 2px 12px rgba(0,0,0,0.06); }
+.form-row { margin-bottom: 18px; }
+.form-row label { display: block; font-size: 10px; font-weight: 700; color: var(--text3);
+  margin-bottom: 7px; text-transform: uppercase; letter-spacing: 1px; }
+.form-input { width: 100%; background: var(--bg); border: 1.5px solid var(--border);
+  border-radius: var(--rs); color: var(--text); padding: 11px 14px; font-size: 15px;
+  font-family: 'Barlow', sans-serif; transition: all .18s; }
+.form-input:focus { outline: none; border-color: var(--primary); background: var(--bg2); }
 .frm-err { color: var(--red); font-size: 13px; margin-bottom: 10px; padding: 8px 12px;
   background: rgba(220,38,38,.06); border-radius: var(--rs); border-left: 2px solid var(--red); }
 .frm-err.h, .frm-ok.h { display: none; }
 .frm-ok { color: var(--green); font-size: 13px; margin-bottom: 10px; padding: 8px 12px;
   background: rgba(5,150,105,.06); border-radius: var(--rs); border-left: 2px solid var(--green); }
-.submit-btn { width: 100%; padding: 14px; background: var(--primary);
-  color: var(--on-primary); border: none; border-radius: var(--r); font-family: 'Barlow Condensed', sans-serif;
-  font-size: 18px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase;
-  cursor: pointer; margin-top: 8px; transition: opacity .2s; }
-.submit-btn:hover { opacity: .9; }
+.submit-btn { width: 100%; padding: 15px; background: var(--primary);
+  color: var(--on-primary); border: none; border-radius: var(--rs); font-family: 'Barlow Condensed', sans-serif;
+  font-size: 17px; font-weight: 800; letter-spacing: 1.5px; text-transform: uppercase;
+  cursor: pointer; margin-top: 10px; transition: opacity .18s; }
+.submit-btn:hover { opacity: .88; }
 
 /* Participants list */
 .part-cat { margin-bottom: 24px; }
@@ -134,16 +136,18 @@ main { position: relative; z-index: 5; max-width: 980px; margin: 0 auto; padding
   letter-spacing: 3px; color: var(--text2); text-transform: uppercase;
   border-bottom: 2px solid var(--primary); padding-bottom: 4px; margin-bottom: 12px; }
 .part-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; }
-.part-card { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--rs);
-  padding: 10px 14px; display: flex; align-items: center; gap: 10px; }
+.part-card { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--r);
+  padding: 12px 16px; display: flex; align-items: center; gap: 10px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.04); }
 .part-num { font-family: 'Barlow Condensed', sans-serif; font-size: 18px; font-weight: 800;
   color: var(--primary); width: 28px; flex-shrink: 0; }
 .part-name { font-size: 13px; color: var(--text); }
 
 /* Registrations admin table */
-.reg-row { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--rs);
-  padding: 12px 14px; margin-bottom: 8px; display: grid;
-  grid-template-columns: 1fr auto auto auto auto; gap: 10px; align-items: center; }
+.reg-row { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--r);
+  padding: 14px 16px; margin-bottom: 8px; display: grid;
+  grid-template-columns: 1fr auto auto; gap: 12px; align-items: center;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.04); }
 .reg-row.status-approved { border-left: 3px solid var(--green); }
 .reg-row.status-rejected { border-left: 3px solid var(--red); opacity: .7; }
 .reg-row.status-pending { border-left: 3px solid var(--amber); }
@@ -175,7 +179,7 @@ main { position: relative; z-index: 5; max-width: 980px; margin: 0 auto; padding
 
 /* Build page */
 .build-cat { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--r);
-  margin-bottom: 20px; overflow: hidden; }
+  margin-bottom: 20px; overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
 .build-cat-head { padding: 14px 18px; background: var(--primary);
   display: flex; align-items: center; justify-content: space-between; }
 .build-cat-name { font-family: 'Barlow Condensed', sans-serif; font-size: 18px; font-weight: 800;
@@ -223,7 +227,7 @@ main { position: relative; z-index: 5; max-width: 980px; margin: 0 auto; padding
 .cat-section-header { font-family: 'Barlow Condensed', sans-serif; font-weight: 900; font-size: 13px;
   letter-spacing: 4px; text-transform: uppercase; color: var(--text2); padding: 6px 0 4px;
   border-bottom: 2px solid var(--primary); margin: 18px 0 12px; }
-.scard { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--r); overflow: hidden; }
+.scard { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--r); overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
 .scard-head { padding: 10px 14px; background: var(--primary);
   display: flex; justify-content: space-between; align-items: center; }
 .scard-name { font-family: 'Barlow Condensed', sans-serif; font-size: 17px; font-weight: 800;
@@ -375,7 +379,7 @@ main { position: relative; z-index: 5; max-width: 980px; margin: 0 auto; padding
   border: 1px solid rgba(220,38,38,.3); border-radius: var(--rs); font-size: 14px;
   cursor: pointer; font-family: 'Barlow', sans-serif; }
 .sett-section { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--r);
-  padding: 20px; margin-bottom: 14px; }
+  padding: 22px; margin-bottom: 14px; box-shadow: 0 1px 5px rgba(0,0,0,0.04); }
 .sett-section-title { font-family: 'Barlow Condensed', sans-serif; font-size: 13px; font-weight: 700;
   letter-spacing: 3px; color: var(--primary); text-transform: uppercase;
   border-bottom: 2px solid var(--primary); padding-bottom: 4px; margin-bottom: 16px; }
@@ -423,7 +427,8 @@ input:checked + .toggle-slider::before { transform: translateX(20px); }
   backdrop-filter: blur(6px); display: flex; align-items: center; justify-content: center; }
 .overlay.h { display: none; }
 .modal { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--r);
-  padding: 24px; width: 90%; max-width: 380px; }
+  padding: 28px 26px; width: 90%; max-width: 380px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.14); }
 .modal h3 { font-family: 'Barlow Condensed', sans-serif; font-size: 20px; font-weight: 800;
   color: var(--text); margin-bottom: 16px; text-transform: uppercase; }
 .modal-row { display: flex; gap: 8px; margin-bottom: 10px; }
@@ -470,15 +475,24 @@ input:checked + .toggle-slider::before { transform: translateX(20px); }
 .reg-note.h { display: none; }
 
 /* ===== PAYMENT LINKS ===== */
-.pay-section { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--border); }
+.pay-section { margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--border); }
+/* Standalone variant — used on Registrations page (not inside a card) */
+.pay-section-card.pay-section {
+  margin: 0 0 18px 0; padding: 16px 20px; border-top: none;
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: var(--r); box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+}
 .pay-section.h { display: none; }
-.pay-links { display: flex; gap: 8px; flex-wrap: wrap; }
-.pay-link-btn { display: inline-flex; align-items: center; padding: 5px 14px;
-  border: 1.5px solid var(--border2); color: var(--text2); background: transparent;
-  border-radius: 999px; font-size: 13px; font-weight: 600; font-family: 'Barlow', sans-serif;
-  text-decoration: none; transition: all .2s; white-space: nowrap; }
-.pay-link-btn:hover { border-color: var(--primary); color: var(--primary);
-  background: var(--bg3); }
+.pay-label { display: block; font-size: 10px; font-weight: 700; color: var(--text3);
+  text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px; }
+.pay-links { display: flex; gap: 10px; flex-wrap: wrap; }
+.pay-link-btn { display: inline-flex; align-items: center; justify-content: center;
+  flex: 1; min-width: 120px; padding: 12px 22px;
+  border: 1.5px solid var(--primary); color: var(--primary); background: transparent;
+  border-radius: var(--rs); font-family: 'Barlow Condensed', sans-serif;
+  font-size: 16px; font-weight: 800; letter-spacing: .8px; text-transform: uppercase;
+  text-decoration: none; transition: all .18s; white-space: nowrap; }
+.pay-link-btn:hover { background: var(--primary); color: var(--on-primary); }
 
 @media (max-width: 640px) {
   header { flex-wrap: wrap; height: auto; padding: 10px 14px 8px; gap: 6px; }
