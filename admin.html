@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Tournaments Admin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@700;800;900&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="styles.css?v=14"/>
+<style>
+/* ── Shared overrides ── */
+.h { display: none !important; }
+
+/* ── Login screen ── */
+#screen-login {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg);
+}
+.login-box {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 36px 32px;
+  width: 100%;
+  max-width: 360px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.10);
+}
+.login-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+.login-title h1 {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 24px;
+  font-weight: 900;
+  color: var(--text);
+  text-transform: uppercase;
+  letter-spacing: .5px;
+}
+.login-sub {
+  font-size: 13px;
+  color: var(--text3);
+  margin-bottom: 20px;
+}
+.pw-err {
+  color: #DC2626;
+  font-size: 13px;
+  margin-top: 8px;
+  padding: 8px 12px;
+  background: rgba(220,38,38,.06);
+  border-radius: var(--rs);
+  border-left: 2px solid #DC2626;
+}
+
+/* ── App screen ── */
+#screen-app { display: none; }
+
+/* ── Admin header ── */
+.adm-header {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: rgba(255,255,255,0.94);
+  backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--border);
+  box-shadow: 0 1px 0 var(--border), 0 4px 16px rgba(0,0,0,0.05);
+  padding: 0 24px;
+  height: 58px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.adm-header-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.adm-header-title {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--text);
+  letter-spacing: 1px;
+}
+.logout-btn {
+  padding: 8px 16px;
+  background: transparent;
+  color: var(--text3);
+  border: 1px solid var(--border2);
+  border-radius: var(--rs);
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: .5px;
+  cursor: pointer;
+  transition: all .2s;
+}
+.logout-btn:hover { background: var(--bg3); color: var(--text); }
+
+/* ── Main wrap ── */
+.adm-wrap {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 28px 20px 80px;
+}
+.adm-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 22px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.adm-toolbar h2 {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 26px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  color: var(--text);
+}
+.new-btn {
+  padding: 11px 22px;
+  background: var(--primary);
+  color: var(--on-primary);
+  border: none;
+  border-radius: var(--rs);
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: opacity .18s;
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,0.10);
+}
+.new-btn:hover { opacity: .88; }
+
+/* ── Table ── */
+.t-table-wrap { overflow-x: auto; }
+.t-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  overflow: hidden;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+}
+.t-table th {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--text3);
+  padding: 12px 14px;
+  text-align: left;
+  background: var(--bg3);
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+.t-table td {
+  font-size: 13px;
+  color: var(--text);
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+.t-table tr:last-child td { border-bottom: none; }
+.t-table tbody tr:hover td { background: var(--bg3); }
+.t-name { font-weight: 600; white-space: nowrap; }
+.t-id {
+  font-family: monospace;
+  font-size: 12px;
+  color: var(--text3);
+  background: var(--bg3);
+  padding: 2px 7px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+.t-link {
+  color: var(--primary-text);
+  text-decoration: none;
+  font-size: 12px;
+  max-width: 260px;
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.t-link:hover { text-decoration: underline; }
+.t-pw { font-family: monospace; font-size: 13px; color: var(--text2); white-space: nowrap; }
+.t-expiry { font-size: 12px; color: var(--text3); white-space: nowrap; }
+.status-pill {
+  display: inline-block;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .5px;
+  text-transform: uppercase;
+  padding: 3px 10px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.status-active  { background: rgba(5,150,105,.12); color: #059669; }
+.status-expired { background: rgba(220,38,38,.12);  color: #DC2626; }
+.del-btn {
+  padding: 5px 12px;
+  background: transparent;
+  color: #DC2626;
+  border: 1px solid rgba(220,38,38,.3);
+  border-radius: var(--rs);
+  font-size: 12px;
+  cursor: pointer;
+  font-family: 'Barlow', sans-serif;
+  transition: all .15s;
+  white-space: nowrap;
+}
+.del-btn:hover { background: rgba(220,38,38,.08); }
+.refresh-btn {
+  padding: 5px 12px;
+  background: transparent;
+  color: var(--primary-text);
+  border: 1px solid var(--border2);
+  border-radius: var(--rs);
+  font-size: 12px;
+  cursor: pointer;
+  font-family: 'Barlow', sans-serif;
+  transition: all .15s;
+  white-space: nowrap;
+  margin-right: 6px;
+}
+.refresh-btn:hover { background: var(--surface); }
+.empty-state td {
+  text-align: center;
+  padding: 48px;
+  color: var(--text3);
+  font-size: 14px;
+}
+
+/* ── Create modal ── */
+.modal-wide { max-width: 500px; }
+.form-group { margin-bottom: 14px; }
+.form-label {
+  display: block;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text3);
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+.id-wrap { display: flex; gap: 8px; }
+.id-wrap .modal-input { flex: 1; font-family: monospace; font-size: 13px; }
+.regen-btn {
+  padding: 0 12px;
+  background: var(--bg3);
+  border: 1px solid var(--border2);
+  border-radius: var(--rs);
+  color: var(--text3);
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  font-family: 'Barlow', sans-serif;
+  transition: all .15s;
+}
+.regen-btn:hover { background: var(--surface); }
+.pw-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.cr-err {
+  font-size: 13px;
+  margin-bottom: 10px;
+  padding: 8px 12px;
+  background: rgba(220,38,38,.06);
+  border-radius: var(--rs);
+  border-left: 2px solid #DC2626;
+  color: #DC2626;
+}
+
+/* ── Lmark reuse ── */
+.adm-lmark {
+  width: 36px;
+  height: 36px;
+  background: var(--primary);
+  border-radius: 7px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.adm-lmark span {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 900;
+  font-size: 18px;
+  color: var(--on-primary);
+}
+</style>
+</head>
+<body>
+
+<!-- ══ LOGIN ══════════════════════════════════════════════════ -->
+<div id="screen-login">
+  <div class="login-box">
+    <div class="login-title">
+      <div class="adm-lmark"><span>T</span></div>
+      <h1>Tournaments Admin</h1>
+    </div>
+    <p class="login-sub">Enter the super-admin password to manage tournaments.</p>
+    <div class="form-row">
+      <input class="form-input" type="password" id="adm-pw" placeholder="Password"
+        onkeydown="if(event.key==='Enter')checkAdminPw()"/>
+    </div>
+    <div id="adm-pw-err" class="pw-err h">Incorrect password.</div>
+    <button class="submit-btn" style="margin-top:14px" onclick="checkAdminPw()">Login</button>
+  </div>
+</div>
+
+<!-- ══ APP ════════════════════════════════════════════════════ -->
+<div id="screen-app">
+
+  <div class="adm-header">
+    <div class="adm-header-left">
+      <div class="adm-lmark"><span>T</span></div>
+      <span class="adm-header-title">Tournaments Admin</span>
+    </div>
+    <button class="logout-btn" onclick="adminLogout()">Logout</button>
+  </div>
+
+  <div class="adm-wrap">
+    <div class="adm-toolbar">
+      <h2>All Tournaments</h2>
+      <div style="display:flex;gap:8px">
+        <button class="refresh-btn" onclick="loadTournaments()">Refresh</button>
+        <button class="new-btn" onclick="openCreateModal()">+ New Tournament</button>
+      </div>
+    </div>
+
+    <div class="t-table-wrap">
+      <table class="t-table">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>ID</th>
+            <th>Link</th>
+            <th>Expires</th>
+            <th>Admin PW</th>
+            <th>Master PW</th>
+            <th>Status</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="t-tbody">
+          <tr class="empty-state"><td colspan="8">Loading…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ══ CREATE MODAL ════════════════════════════════════════ -->
+<div class="overlay h" id="create-modal" onclick="if(event.target===this)closeCreateModal()">
+  <div class="modal modal-wide">
+    <h3>New Tournament</h3>
+
+    <div class="form-group">
+      <label class="form-label">Tournament Name</label>
+      <input class="modal-input" id="cr-name" placeholder="e.g. Summer League 2024"
+        oninput="refreshId()" style="width:100%"/>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Tournament ID <span style="font-weight:400;letter-spacing:0;text-transform:none;color:var(--text3)">— used in the URL (?t=…)</span></label>
+      <div class="id-wrap">
+        <input class="modal-input" id="cr-id" placeholder="auto-generated"/>
+        <button class="regen-btn" onclick="regenId()" title="Generate new ID">&#8635;</button>
+      </div>
+    </div>
+
+    <div class="pw-grid">
+      <div class="form-group">
+        <label class="form-label">Admin Password</label>
+        <input class="modal-input" id="cr-admin-pw" placeholder="Password" style="width:100%"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Master Password</label>
+        <input class="modal-input" id="cr-master-pw" placeholder="Password" style="width:100%"/>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Expiry Date &amp; Time <span style="font-weight:400;letter-spacing:0;text-transform:none;color:var(--text3)">— optional</span></label>
+      <input class="modal-input" id="cr-expiry" type="datetime-local" style="width:100%"/>
+    </div>
+
+    <div id="cr-err" class="cr-err h"></div>
+
+    <div class="modal-btns">
+      <button class="mbtn mbtn-ok" onclick="createTournament()">Create</button>
+      <button class="mbtn mbtn-cancel" onclick="closeCreateModal()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
+import {
+  getFirestore, collection, getDocs, doc, setDoc, deleteDoc,
+  serverTimestamp, Timestamp
+} from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
+
+// ── Config ──────────────────────────────────────────────────
+const SUPER_ADMIN_PASSWORD = 'Admin!Tourney24';
+const BASE_URL = 'https://albealrod.github.io/tournaments/';
+
+const firebaseConfig = {
+  apiKey: "AIzaSyA-rPlg0Oau16QcTjD20hDfkyveRSrD8I0",
+  authDomain: "tournaments-33619.firebaseapp.com",
+  projectId: "tournaments-33619",
+  storageBucket: "tournaments-33619.firebasestorage.app",
+  messagingSenderId: "409384565600",
+  appId: "1:409384565600:web:61bd55676343d6035abc05"
+};
+const fbApp = initializeApp(firebaseConfig);
+const db    = getFirestore(fbApp);
+
+let tournaments = [];
+
+// ── Auth ────────────────────────────────────────────────────
+function checkAdminPw() {
+  const val = document.getElementById('adm-pw').value;
+  if (val === SUPER_ADMIN_PASSWORD) {
+    document.getElementById('screen-login').style.display = 'none';
+    document.getElementById('screen-app').style.display   = 'block';
+    document.getElementById('adm-pw').value = '';
+    loadTournaments();
+  } else {
+    document.getElementById('adm-pw-err').classList.remove('h');
+    document.getElementById('adm-pw').value = '';
+    document.getElementById('adm-pw').focus();
+  }
+}
+
+function adminLogout() {
+  document.getElementById('screen-app').style.display   = 'none';
+  document.getElementById('screen-login').style.display = '';
+  document.getElementById('adm-pw-err').classList.add('h');
+  setTimeout(() => document.getElementById('adm-pw').focus(), 80);
+}
+
+// ── Data ────────────────────────────────────────────────────
+async function loadTournaments() {
+  const tbody = document.getElementById('t-tbody');
+  tbody.innerHTML = '<tr class="empty-state"><td colspan="8">Loading…</td></tr>';
+  try {
+    const snap = await getDocs(collection(db, 'tournaments'));
+    tournaments = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    renderTable();
+  } catch(e) {
+    tbody.innerHTML = `<tr class="empty-state"><td colspan="8" style="color:#DC2626">Error: ${esc(e.message)}</td></tr>`;
+  }
+}
+
+function expiryMs(t) {
+  const exp = t.meta?.expiresAt;
+  if (!exp) return null;
+  return exp.seconds ? exp.seconds * 1000 : 0;
+}
+
+function formatExpiry(t) {
+  const ms = expiryMs(t);
+  if (ms === null) return '—';
+  const d = new Date(ms);
+  return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+function statusHtml(t) {
+  const ms = expiryMs(t);
+  if (ms === null || Date.now() <= ms) return '<span class="status-pill status-active">Active</span>';
+  return '<span class="status-pill status-expired">Expired</span>';
+}
+
+function renderTable() {
+  const tbody = document.getElementById('t-tbody');
+  if (!tournaments.length) {
+    tbody.innerHTML = '<tr class="empty-state"><td colspan="8">No tournaments yet. Create one above.</td></tr>';
+    return;
+  }
+  const sorted = [...tournaments].sort((a, b) =>
+    (a.meta?.name || a.id).localeCompare(b.meta?.name || b.id)
+  );
+  tbody.innerHTML = sorted.map(t => {
+    const name     = t.meta?.name      || '(unnamed)';
+    const adminPw  = t.meta?.adminPassword  || '—';
+    const masterPw = t.meta?.masterPassword || '—';
+    const link     = BASE_URL + '?t=' + t.id;
+    return `<tr>
+      <td class="t-name">${esc(name)}</td>
+      <td><span class="t-id">${esc(t.id)}</span></td>
+      <td><a class="t-link" href="${esc(link)}" target="_blank" rel="noopener" title="${esc(link)}">${esc(link)}</a></td>
+      <td class="t-expiry">${formatExpiry(t)}</td>
+      <td class="t-pw">${esc(adminPw)}</td>
+      <td class="t-pw">${esc(masterPw)}</td>
+      <td>${statusHtml(t)}</td>
+      <td><button class="del-btn" onclick="deleteTournament('${esc(t.id)}')">Delete</button></td>
+    </tr>`;
+  }).join('');
+}
+
+function esc(s) {
+  return String(s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── Create ──────────────────────────────────────────────────
+function openCreateModal() {
+  document.getElementById('cr-name').value     = '';
+  document.getElementById('cr-id').value       = '';
+  document.getElementById('cr-admin-pw').value = '';
+  document.getElementById('cr-master-pw').value= '';
+  document.getElementById('cr-expiry').value   = '';
+  document.getElementById('cr-err').classList.add('h');
+  document.getElementById('create-modal').classList.remove('h');
+  setTimeout(() => document.getElementById('cr-name').focus(), 80);
+}
+
+function closeCreateModal() {
+  document.getElementById('create-modal').classList.add('h');
+}
+
+function generateId(name) {
+  const slug = (name || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 24);
+  const suffix = Math.random().toString(36).slice(2, 6);
+  return slug ? `${slug}-${suffix}` : `tournament-${suffix}`;
+}
+
+function refreshId() {
+  const name = document.getElementById('cr-name').value.trim();
+  if (name) document.getElementById('cr-id').value = generateId(name);
+}
+
+function regenId() {
+  const name = document.getElementById('cr-name').value.trim();
+  document.getElementById('cr-id').value = generateId(name);
+}
+
+async function createTournament() {
+  const name     = document.getElementById('cr-name').value.trim();
+  const tId      = document.getElementById('cr-id').value.trim();
+  const adminPw  = document.getElementById('cr-admin-pw').value.trim();
+  const masterPw = document.getElementById('cr-master-pw').value.trim();
+  const expiryVal= document.getElementById('cr-expiry').value;
+  const errEl    = document.getElementById('cr-err');
+  errEl.classList.add('h');
+
+  if (!name)     { showErr(errEl, 'Tournament name is required.');   return; }
+  if (!tId)      { showErr(errEl, 'Tournament ID is required.');     return; }
+  if (!/^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/.test(tId)) {
+    showErr(errEl, 'ID must contain only lowercase letters, numbers, and hyphens (no leading/trailing hyphens).');
+    return;
+  }
+  if (!adminPw)  { showErr(errEl, 'Admin password is required.');   return; }
+  if (!masterPw) { showErr(errEl, 'Master password is required.');  return; }
+
+  // Check ID not already in use
+  if (tournaments.some(t => t.id === tId)) {
+    showErr(errEl, `ID "${tId}" is already taken — choose a different one.`);
+    return;
+  }
+
+  const metaObj = {
+    name,
+    adminPassword:  adminPw,
+    masterPassword: masterPw,
+    logoUrl:         '',
+    primaryColor:   '#6B21A8',
+    secondaryColor: '#7C3AED',
+    paymentLink:    '', paymentLinkLabel:  '',
+    paymentLink2:   '', paymentLink2Label: '',
+    regNote:        '',
+    phase:          'registration',
+    regOpen:        true,
+    showRegistered: true,
+  };
+  if (expiryVal) {
+    metaObj.expiresAt = Timestamp.fromDate(new Date(expiryVal));
+  }
+
+  try {
+    await setDoc(doc(db, 'tournaments', tId), {
+      meta:       metaObj,
+      categories: [],
+      state:      {},
+      updatedAt:  serverTimestamp()
+    });
+    closeCreateModal();
+    await loadTournaments();
+  } catch(e) {
+    showErr(errEl, 'Error creating tournament: ' + e.message);
+  }
+}
+
+function showErr(el, msg) {
+  el.textContent = msg;
+  el.classList.remove('h');
+}
+
+// ── Delete ──────────────────────────────────────────────────
+async function deleteTournament(tId) {
+  const t    = tournaments.find(x => x.id === tId);
+  const name = t?.meta?.name || tId;
+  if (!confirm(`Delete "${name}" (${tId})?\n\nThis cannot be undone. Subcollections (registrations) must be removed manually from the Firestore console.`)) return;
+  try {
+    await deleteDoc(doc(db, 'tournaments', tId));
+    await loadTournaments();
+  } catch(e) {
+    alert('Error deleting: ' + e.message);
+  }
+}
+
+// ── Expose globals ──────────────────────────────────────────
+Object.assign(window, {
+  checkAdminPw, adminLogout,
+  openCreateModal, closeCreateModal,
+  createTournament, deleteTournament,
+  loadTournaments, refreshId, regenId
+});
+
+// ── Boot ────────────────────────────────────────────────────
+document.getElementById('adm-pw').addEventListener('keydown', e => {
+  if (e.key === 'Enter') checkAdminPw();
+});
+document.getElementById('adm-pw').focus();
+</script>
+</body>
+</html>

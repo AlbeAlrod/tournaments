@@ -1,8 +1,5 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
 import {
-  getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged
-} from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
-import {
   getFirestore, doc, getDoc, setDoc, onSnapshot, serverTimestamp,
   collection, addDoc, getDocs, updateDoc, deleteDoc, query, orderBy
 } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
@@ -18,10 +15,6 @@ const firebaseConfig = {
 };
 const fbApp = initializeApp(firebaseConfig);
 const db    = getFirestore(fbApp);
-const auth  = getAuth(fbApp);
-
-const EMAIL_ADMIN  = 'vl.admin@tournaments.app';
-const EMAIL_MASTER = 'vl.master@tournaments.app';
 
 // ============ URL PARAM ============
 const tId = new URLSearchParams(location.search).get('t');
@@ -134,6 +127,17 @@ async function loadTournament() {
   } else {
     const data = snap.data();
     if (data.meta) meta = { ...meta, ...data.meta };
+    // Expiry check — show expired page and stop loading
+    if (meta.expiresAt) {
+      const expMs = meta.expiresAt.seconds
+        ? meta.expiresAt.seconds * 1000
+        : (typeof meta.expiresAt.toMillis === 'function' ? meta.expiresAt.toMillis() : 0);
+      if (Date.now() > expMs) {
+        document.getElementById('view-loading').classList.add('h');
+        document.getElementById('view-expired').classList.remove('h');
+        return false;
+      }
+    }
     if (data.categories) categories = data.categories;
     if (data.state) {
       Object.entries(data.state).forEach(([cid, cs]) => {
@@ -339,7 +343,6 @@ function applyTheme(primary, secondary) {
 // ============ AUTH ============
 function adminClick() {
   if (admin) {
-    signOut(auth);
     adminLevel = 0; admin = false; superAdmin = false;
     refreshAdmin(); rerender(); return;
   }
@@ -362,16 +365,15 @@ function updateRoleButtons() {
   document.getElementById('role-btn-master').style.cssText = loginRole === 'master' ? on : off;
 }
 
-async function tryLogin() {
-  const val   = document.getElementById('pw-inp').value.trim();
-  const email = loginRole === 'master' ? EMAIL_MASTER : EMAIL_ADMIN;
-  try {
-    await signInWithEmailAndPassword(auth, email, val);
+function tryLogin() {
+  const val      = document.getElementById('pw-inp').value.trim();
+  const expected = loginRole === 'master' ? meta.masterPassword : meta.adminPassword;
+  if (val && expected && val === expected) {
     adminLevel = loginRole === 'master' ? 2 : 1;
     admin      = true;
     superAdmin = adminLevel === 2;
     closeLogin(); refreshAdmin(); rerender();
-  } catch(e) {
+  } else {
     document.getElementById('pw-err').classList.remove('h');
     document.getElementById('pw-inp').value = '';
     document.getElementById('pw-inp').focus();
@@ -1805,27 +1807,13 @@ window.addEventListener('load', async () => {
   const ok = await loadTournament();
   if (!ok) return;
 
-  await new Promise(resolve => {
-    const unsub = onAuthStateChanged(auth, user => {
-      unsub();
-      if (user) {
-        if (user.email===EMAIL_MASTER)     { adminLevel=2; admin=true; superAdmin=true; }
-        else if (user.email===EMAIL_ADMIN) { adminLevel=1; admin=true; superAdmin=false; }
-      }
-      resolve();
-    });
-  });
-
   activeCat = null;
-
   firebaseReady = true;
   document.getElementById('view-loading').classList.add('h');
   document.getElementById('view-app').classList.remove('h');
 
   renderAll();
 
-  // Show first relevant page
-  const isReg = meta.phase==='registration';
-  if (isReg) goPage(superAdmin ? 'registrations' : 'register');
-  else goPage('standings');
+  const isReg = meta.phase === 'registration';
+  goPage(isReg ? 'register' : 'standings');
 });
