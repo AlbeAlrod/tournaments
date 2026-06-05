@@ -1102,23 +1102,33 @@ function scoreError(sa, sb, catId, ptwOverride) {
 }
 
 // ============ STANDINGS ============
+// Normalize name for matching: "תום / מוריאל" ↔ "תום מוריאל" → same key
+const normName = s => (s||'').replace(/\s*\/\s*/g,' ').replace(/\s+/g,' ').trim().toLowerCase();
+
 function getStandings(catId, gi) {
   const cs  = state[catId];
   if (!cs) return [];
   const grp = cs.groups[gi];
   const rec = {};
-  grp.teams.forEach(t => rec[t]={w:0,l:0,pts:0,scored:0,against:0});
+  // Build norm→canonical map so sched entries with different format still match
+  const normMap = {};
+  grp.teams.forEach(t => {
+    rec[t] = {w:0,l:0,pts:0,scored:0,against:0};
+    normMap[normName(t)] = t;
+  });
+  const resolve = s => normMap[normName(s)] || s;
   cs.sched.filter(g=>g.gi===gi).forEach(g => {
     const sa=parseInt(g.sa), sb=parseInt(g.sb);
     if (!isValidScore(sa, sb, catId)) return;
-    if (rec[g.a]) { rec[g.a].scored+=sa; rec[g.a].against+=sb; }
-    if (rec[g.b]) { rec[g.b].scored+=sb; rec[g.b].against+=sa; }
+    const a=resolve(g.a), b=resolve(g.b);
+    if (rec[a]) { rec[a].scored+=sa; rec[a].against+=sb; }
+    if (rec[b]) { rec[b].scored+=sb; rec[b].against+=sa; }
     if (sa>sb) {
-      if (rec[g.a]) { rec[g.a].w++; rec[g.a].pts+=2; }
-      if (rec[g.b]) { rec[g.b].l++; rec[g.b].pts+=1; }
+      if (rec[a]) { rec[a].w++; rec[a].pts+=2; }
+      if (rec[b]) { rec[b].l++; rec[b].pts+=1; }
     } else {
-      if (rec[g.b]) { rec[g.b].w++; rec[g.b].pts+=2; }
-      if (rec[g.a]) { rec[g.a].l++; rec[g.a].pts+=1; }
+      if (rec[b]) { rec[b].w++; rec[b].pts+=2; }
+      if (rec[a]) { rec[a].l++; rec[a].pts+=1; }
     }
   });
   return grp.teams.map(t => ({name:t,...rec[t],diff:(rec[t].scored-rec[t].against)}))
@@ -1395,10 +1405,10 @@ function buildGameRow(catId, g, idx, isKO) {
   row.className = 'gc'+(done?' done':'');
   const scoreCell = (admin && meta.phase === 'tournament')
     ? `<input class="si" type="number" min="0" inputmode="numeric" placeholder="—" value="${g.sa}"
-         onchange="${isKO?`setKS('${catId}',${g.ri},${g.gi},'sa',this.value)`:`setGS('${catId}',${idx},'sa',this.value)`}"/>
+         oninput="${isKO?`setKS('${catId}',${g.ri},${g.gi},'sa',this.value)`:`setGS('${catId}',${idx},'sa',this.value)`}"/>
        <span class="ssep">:</span>
        <input class="si" type="number" min="0" inputmode="numeric" placeholder="—" value="${g.sb}"
-         onchange="${isKO?`setKS('${catId}',${g.ri},${g.gi},'sb',this.value)`:`setGS('${catId}',${idx},'sb',this.value)`}"/>`
+         oninput="${isKO?`setKS('${catId}',${g.ri},${g.gi},'sb',this.value)`:`setGS('${catId}',${idx},'sb',this.value)`}"/>`
     : `<span class="ssep">${done?`${g.sa} : ${g.sb}`:'— : —'}</span>`;
 
   const ruleTag = rule.change
@@ -2287,7 +2297,7 @@ Object.assign(window, {
   updateCatColor, renameGroup, moveTeam,
   updateGroupColor, updateBgColor,
   updateKORuleField,
-  addPlayerToDB, removePlayerFromDB
+  addPlayerToDB, removePlayerFromDB, importPlayersFromTournament
 });
 
 // ============ PLAYER DATABASE ============
@@ -2337,6 +2347,12 @@ function renderPlayerDBSection(container) {
       <input class="text-inp" id="new-player-phone" style="width:130px" placeholder="Phone (optional)"/>
       <button class="add-cat-btn" onclick="addPlayerToDB(document.getElementById('new-player-name').value,document.getElementById('new-player-phone').value);document.getElementById('new-player-name').value='';document.getElementById('new-player-phone').value=''">+ Add</button>
     </div>
+    <div style="margin-bottom:10px">
+      <button class="add-cat-btn" onclick="importPlayersFromTournament()" style="font-size:12px">
+        ↓ Import all players from this tournament
+      </button>
+      <span style="font-size:11px;color:var(--text3);margin-left:8px">${playerDB.length} players</span>
+    </div>
     <div class="player-db-list">${playerDB.length
       ? playerDB.map((p,i) => `
         <div class="player-db-row">
@@ -2344,9 +2360,37 @@ function renderPlayerDBSection(container) {
           <span class="player-db-phone">${escH(p.phone||'')}</span>
           <button class="team-del" onclick="removePlayerFromDB(${i})">✕</button>
         </div>`).join('')
-      : '<p class="sett-empty-note">No players yet. Add above or they auto-populate when pairs are added.</p>'}
+      : '<p class="sett-empty-note">No players yet — click Import or add pairs via the modal.</p>'}
     </div>`;
   container.appendChild(sec);
+}
+
+// Import all individual players from this tournament's groups into the DB
+async function importPlayersFromTournament() {
+  let added = 0;
+  categories.forEach(cat => {
+    const cs = state[cat.id];
+    if (!cs) return;
+    (cs.groups||[]).forEach(grp => {
+      grp.teams.forEach(pairName => {
+        // Split pair name into individual players
+        const parts = pairName.includes('/') ? pairName.split('/').map(s=>s.trim()) : [pairName];
+        parts.forEach(name => {
+          if (name && !playerDB.find(p => normName(p.name) === normName(name))) {
+            playerDB.push({ name, phone: '' });
+            added++;
+          }
+        });
+      });
+    });
+  });
+  if (added > 0) {
+    await savePlayerDB();
+    renderSettings();
+    alert(`Imported ${added} new players.`);
+  } else {
+    alert('All players are already in the database.');
+  }
 }
 
 // Auto-add both players of a new pair to the DB

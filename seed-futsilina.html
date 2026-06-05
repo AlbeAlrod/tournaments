@@ -272,13 +272,34 @@ async function seedAll() {
       finalMeta = { ...meta };
       metaPreserve.forEach(k => { if (existingMeta[k] !== undefined) finalMeta[k] = existingMeta[k]; });
 
-      // Preserve team names (groups + roster) edited by Master — only overwrite sched/ko
+      // Preserve team names (groups + roster) — remap sched entries to match preserved names
       const exState = existing.state || {};
       finalState = { ...state };
       ['queen','princess'].forEach(catId => {
-        if (exState[catId]?.groups?.length) {
-          finalState[catId] = { ...state[catId], groups: exState[catId].groups, roster: exState[catId].roster };
-        }
+        if (!exState[catId]?.groups?.length) return;
+        const exGroups = exState[catId].groups;
+        const seedGroups = state[catId].groups;
+        // Build seed-name → existing-name map
+        const nameMap = {};
+        const normN = s => (s||'').replace(/\s*\/\s*/g,' ').replace(/\s+/g,' ').trim();
+        exGroups.forEach((grp, gi) => {
+          grp.teams.forEach((exName, ti) => {
+            const seedName = seedGroups[gi]?.teams[ti];
+            if (seedName) nameMap[normN(seedName)] = exName;
+          });
+        });
+        // Remap sched entries so game a/b names match preserved group names
+        const remappedSched = state[catId].sched.map(g => ({
+          ...g,
+          a: nameMap[normN(g.a)] || g.a,
+          b: nameMap[normN(g.b)] || g.b,
+        }));
+        finalState[catId] = {
+          ...state[catId],
+          groups: exGroups,
+          roster: exState[catId].roster,
+          sched:  remappedSched,
+        };
       });
       log('  ↳ Tournament exists — preserving Master customizations (meta + team names).');
     }
