@@ -46,6 +46,13 @@ let REGS_REF = null;
 // ============ HTML ESCAPE ============
 const escH = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 
+// ============ DISPLAY NAME — removes "ו" connector between partner names ============
+// "תום ומוריאל" → "תום מוריאל"  |  "מרג' ואילי" → "מרג' אילי"
+const dn = s => {
+  if (!s || s.startsWith('Winner') || /^[A-Z]\d+$/.test(s)) return s;
+  return s.replace(/\sו([^\s])/g, ' $1');
+};
+
 // ============ DEFAULT CATEGORY CONFIG ============
 const DEF_CAT_CFG = {
   courts: 2, gameDur: 30, breakDur: 0, numGroups: 2, advPerGroup: 2,
@@ -582,7 +589,7 @@ function renderParticipants() {
       <div class="part-grid">${list.map((r,i) => `
         <div class="part-card">
           <span class="part-num">${i+1}</span>
-          <span class="part-name">${r.p1}${r.p2 ? ' / '+r.p2 : ''}</span>
+          <span class="part-name">${dn(r.p1)}${r.p2 ? ' / '+dn(r.p2) : ''}</span>
         </div>`).join('')}
       </div>
     </div>`;
@@ -684,7 +691,7 @@ function buildItem(catId, name, i) {
     ondragstart="onDragStart(event)" ondragover="onDragOver(event)"
     ondrop="onDrop(event,'${catId}')" ondragend="onDragEnd(event)">
     <span class="build-rank">${i+1}</span>
-    <span class="build-name">${name}</span>
+    <span class="build-name">${dn(name)}</span>
     <button class="gedit-btn" onclick="editBuildItem('${catId}',${i})" title="Edit">Edit</button>
     <button class="build-arrow" onclick="moveBuildItem('${catId}',${i},-1)" title="Up">↑</button>
     <button class="build-arrow" onclick="moveBuildItem('${catId}',${i},1)" title="Down">↓</button>
@@ -1094,9 +1101,9 @@ function makeStandingsCard(catId, grp, gi, catIdx) {
   const card = document.createElement('div');
   card.className = 'scard';
   card.dataset.ci = catIdx ?? 0;
-  // Group colors (per flyer): pink, blue, yellow, dark
-  const _grpColors  = ['#E91E8C','#2196F3','#FACC15','#1a1a1a'];
-  const _grpOnColors= ['#fff',   '#fff',   '#1a1a1a','#fff'];
+  // Group colors — sampled from flyer: pink, blue, yellow, dark
+  const _grpColors  = ['#E91E8C','#1565C0','#FFD600','#111111'];
+  const _grpOnColors= ['#fff',   '#fff',   '#111111','#fff'];
   const _grpColor   = _grpColors[gi % 4];
   const _grpOn      = _grpOnColors[gi % 4];
   card.style.setProperty('--cat-color',    _grpColor);
@@ -1113,7 +1120,7 @@ function makeStandingsCard(catId, grp, gi, catIdx) {
       ? `<td><button class="gedit-btn" onclick="openEditTeam('${catId}',${gi},${ti})">✎</button>${
           canDelete?`<button class="team-del" onclick="deleteTeam('${catId}',${gi},${ti})">✕</button>`:''}</td>` : '';
     return `<tr class="${isWinner?'winner':''}">
-      <td><span class="rnk">#${i+1}</span>${t.name}</td>
+      <td><span class="rnk">#${i+1}</span>${dn(t.name)}</td>
       <td>${t.w}</td><td>${t.l}</td>
       <td class="${diffClass}">${diff!==0||t.w>0||t.l>0?diffStr:'—'}</td>
       <td><span class="pts-val">${t.pts}</span></td>
@@ -1263,7 +1270,12 @@ function resolvePoolSeed(catId, seed) {
 
 function getKOWinner(game, catId) {
   if (!game) return null;
-  if (game.isBye) return game.a || null; // bye → auto-advance
+  if (game.isBye) {
+    const seed = game.seedA || game.a;
+    if (!seed) return null;
+    if (/^[A-Z]\d+$/.test(seed)) { const r=resolvePoolSeed(catId,seed); return r.known?r.label:null; }
+    return seed; // already resolved
+  }
   const sa=parseInt(game.sa), sb=parseInt(game.sb);
   if (isValidScore(sa,sb,catId)) return sa>sb?game.a:game.b;
   return null;
@@ -1335,9 +1347,9 @@ function buildGameRow(catId, g, idx, isKO) {
 
   row.innerHTML = `
     <span class="pill ${pc}">C${g.court}</span>
-    <span class="gt">${g.a}${!isKO&&g.gn?`<span class="gtag">${g.gn}</span>`:''}</span>
+    <span class="gt">${dn(g.a)}${!isKO&&g.gn?`<span class="gtag">${g.gn}</span>`:''}</span>
     <span class="gvs">vs</span>
-    <span class="gt r">${g.b}</span>
+    <span class="gt r">${dn(g.b)}</span>
     <span class="sw">${scoreCell}</span>`;
   const errId = isKO ? `kerr-${catId}-${g.ri}-${g.gi}` : `gerr-${catId}-${idx}`;
   const errD  = document.createElement('div');
@@ -1450,6 +1462,18 @@ function renderBracketForCat(catId, container) {
 
   // Helper: build a single match box element
   const mkBox = (g, gi, ri) => {
+    if (g.isBye) {
+      const seed=g.seedA||g.a||'TBD';
+      const res=resolvePoolSeed(catId,seed);
+      const label=dn(res.known?res.label:seed);
+      const box=document.createElement('div'); box.className='bmatch-box bmatch-box--bye';
+      box.innerHTML=`<div class="bmatch bmatch-bye">
+        <div class="bteam ${res.known?'win':'tbd'}">
+          <span class="bname">${label}</span><span class="bye-badge">BYE →</span>
+        </div>
+      </div>`;
+      return box;
+    }
     const sa=parseInt(g.sa), sb=parseInt(g.sb);
     const hs=isValidScore(sa,sb,catId);
     const wa=hs&&sa>sb, wb=hs&&sb>sa;
@@ -1457,7 +1481,7 @@ function renderBracketForCat(catId, container) {
     if (ri===0) {
       const sAk=g.seedA||seedPairs[gi]?.[0]||'TBD', sBk=g.seedB||seedPairs[gi]?.[1]||'TBD';
       const sA=resolvePoolSeed(catId,sAk), sB=resolvePoolSeed(catId,sBk);
-      labelA=sA.known?sA.label:sAk; labelB=sB.known?sB.label:sBk;
+      labelA=dn(sA.known?sA.label:sAk); labelB=dn(sB.known?sB.label:sBk);
       codeA=sA.known?sAk:''; codeB=sB.known?sBk:'';
       knownA=sA.known; knownB=sB.known;
     } else {
@@ -1465,6 +1489,7 @@ function renderBracketForCat(catId, container) {
       knownB=!!(g.b&&!g.b.startsWith('Winner'));
       if (g.directSeedA&&knownA) codeA=g.directSeedA;
       if (g.directSeedB&&knownB) codeB=g.directSeedB;
+      labelA=dn(labelA); labelB=dn(labelB);
     }
     const box=document.createElement('div'); box.className='bmatch-box';
     box.innerHTML=`<div class="bmatch">
