@@ -6,7 +6,7 @@
 <title>Tournaments Admin</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@700;800;900&display=swap" rel="stylesheet"/>
-<link rel="stylesheet" href="styles.css?v=17"/>
+<link rel="stylesheet" href="styles.css?v=18"/>
 <style>
 /* ── Shared overrides ── */
 .h { display: none !important; }
@@ -415,7 +415,7 @@
     </div>
 
     <div class="form-group">
-      <label class="form-label">Copy Design From <span style="font-weight:400;letter-spacing:0;text-transform:none;color:var(--text3)">— reuse colors &amp; logo from an existing tournament</span></label>
+      <label class="form-label">Copy From <span style="font-weight:400;letter-spacing:0;text-transform:none;color:var(--text3)">— copies design (colors, logo, sponsors) + categories config</span></label>
       <select class="modal-input" id="cr-template" style="width:100%">
         <option value="">Default (purple theme)</option>
       </select>
@@ -624,6 +624,9 @@ async function createTournament() {
     logoUrl:        tpl?.meta?.logoUrl        || '',
     primaryColor:   tpl?.meta?.primaryColor   || '#6B21A8',
     secondaryColor: tpl?.meta?.secondaryColor || '#7C3AED',
+    sponsorLogos:   tpl?.meta?.sponsorLogos   || [],
+    bgColor:        tpl?.meta?.bgColor        || '',
+    groupColors:    tpl?.meta?.groupColors    || [],
     paymentLink:    '', paymentLinkLabel:  '',
     paymentLink2:   '', paymentLink2Label: '',
     regNote:        '',
@@ -638,7 +641,7 @@ async function createTournament() {
   try {
     await setDoc(doc(db, 'tournaments', tId), {
       meta:       metaObj,
-      categories: [],
+      categories: tpl?.categories || [],
       state:      {},
       updatedAt:  serverTimestamp()
     });
