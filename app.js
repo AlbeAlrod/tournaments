@@ -653,6 +653,7 @@ function renderBuildPage() {
 
     const div = document.createElement('div');
     div.className = 'build-cat';
+    div.dataset.ci = categories.indexOf(cat);
     div.innerHTML = `
       <div class="build-cat-head">
         <span class="build-cat-name">${cat.name}</span>
@@ -1070,7 +1071,7 @@ function getStandings(catId, gi) {
     .sort((a,b) => b.pts-a.pts||b.w-a.w||b.diff-a.diff||b.scored-a.scored);
 }
 
-function makeStandingsCard(catId, grp, gi) {
+function makeStandingsCard(catId, grp, gi, catIdx) {
   const cs  = state[catId];
   const cfg = categories.find(c=>c.id===catId)?.cfg || DEF_CAT_CFG;
   const adv = cfg.advPerGroup||1;
@@ -1080,6 +1081,7 @@ function makeStandingsCard(catId, grp, gi) {
   const poolDone = played===totalGames && totalGames>0;
   const card = document.createElement('div');
   card.className = 'scard';
+  card.dataset.ci = catIdx ?? 0;
   const rows = st.map((t,i) => {
     const isWinner = i<adv && poolDone;
     const diff = t.diff||0;
@@ -1094,7 +1096,7 @@ function makeStandingsCard(catId, grp, gi) {
       <td><span class="rnk">#${i+1}</span>${t.name}</td>
       <td>${t.w}</td><td>${t.l}</td>
       <td class="${diffClass}">${diff!==0||t.w>0||t.l>0?diffStr:'—'}</td>
-      <td class="pts-val">${t.pts}</td>
+      <td><span class="pts-val">${t.pts}</span></td>
       ${adminCtrls}
     </tr>`;
   }).join('');
@@ -1113,15 +1115,17 @@ function renderStandings() {
   cats.forEach(cat => {
     const cs = state[cat.id];
     if (!cs||!cs.groups.length) return;
+    const catIdx = categories.findIndex(c => c.id === cat.id);
     if (cats.length > 1) {
       const hdr = document.createElement('div');
       hdr.className = 'cat-section-header';
       hdr.textContent = cat.name;
+      hdr.dataset.ci = catIdx;
       grid.appendChild(hdr);
     }
     const sub = document.createElement('div');
     sub.className = 'stnds-subgrid';
-    cs.groups.forEach((grp, gi) => sub.appendChild(makeStandingsCard(cat.id, grp, gi)));
+    cs.groups.forEach((grp, gi) => sub.appendChild(makeStandingsCard(cat.id, grp, gi, catIdx)));
     grid.appendChild(sub);
   });
   if (!grid.children.length) {
