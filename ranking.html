@@ -198,8 +198,8 @@ const BEST_OF = 3; // best N tournaments count toward total
 
 // ── Scoring tables (from "איך מחשבות ניקוד") ────────────────────
 const SCORING = {
-  queen:   { bonus: 10, pts: { 1:300, 2:200, 3:150, 4:120, qf:80, r16:40, pool:20 } },
-  princess:{ bonus: 5,  pts: { 1:85,  2:60,  3:45,  4:36,  qf:24, pool:12 } }
+  queen:   { bonus: 10, pts: { 1:300, 2:200, 3:150, 4:120, qf:80, r16:40, pool:0 } },
+  princess:{ bonus: 5,  pts: { 1:85,  2:60,  3:45,  4:36,  qf:24, r16:12, pool:0 } }
 };
 
 // ── State ────────────────────────────────────────────────────────
@@ -346,7 +346,7 @@ function buildRanking(type) {
       const total  = best.reduce((s,x) => s + x.v.pts, 0);
       return { player, total, byTour, bestIdx };
     })
-    .filter(r => r.total > 0)
+    .filter(r => r.byTour.some(v => v !== null))
     .sort((a,b) => b.total - a.total || a.player.localeCompare(b.player));
 }
 
