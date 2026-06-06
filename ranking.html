@@ -374,7 +374,7 @@ function render() {
     if (r.total !== lastTotal) displayRank = i + 1;
     lastTotal = r.total;
 
-    const medal = displayRank===1 ? '🥇' : displayRank===2 ? '🥈' : displayRank===3 ? '🥉' : displayRank;
+    const medal = displayRank;
     const mc    = displayRank<=3 ? `m${displayRank}` : '';
 
     const tCols = r.byTour.map((info, ti) => {
