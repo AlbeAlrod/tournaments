@@ -310,9 +310,11 @@ function calcForTournament(data, type) {
       const wins = poolWins(cs.sched, team);
       const pos  = getPosition(cs, team);
       const pts  = calcPts(pos, wins, type);
-      if (!result[team] || result[team].pts < pts) {
-        result[team] = { pts, pos, wins, team };
-      }
+      splitPair(team).forEach(player => {
+        if (!result[player] || result[player].pts < pts) {
+          result[player] = { pts, pos, wins, team };
+        }
+      });
     });
   });
   return result;
@@ -386,7 +388,7 @@ function render() {
 
   el.innerHTML = `<table class="rtable">
     <thead><tr>
-      <th>זוג</th>
+      <th>שחקנית</th>
       ${tHead}
       <th class="c">סה"כ</th>
     </tr></thead>
