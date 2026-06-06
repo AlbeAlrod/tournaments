@@ -1743,6 +1743,30 @@ function renderBracketForCat(catId, container) {
     });
     col.appendChild(matchesEl); tree.appendChild(col);
   });
+
+  // 3rd place box — appended to Final column
+  const thirdGame = cs.sched.find(g => g.isThirdPlace);
+  if (thirdGame) {
+    const lastCol = tree.querySelector('.bround:last-child');
+    if (lastCol) {
+      const sa3=parseInt(thirdGame.sa), sb3=parseInt(thirdGame.sb);
+      const hs3=isValidScore(sa3,sb3,catId);
+      const wa3=hs3&&sa3>sb3, wb3=hs3&&sb3>sa3;
+      const isSeed3=s=>!s||s.startsWith('Loser')||/^[A-Z]\d+(\/[A-Z]\d+)?$/.test(s);
+      const lA3=dnH(thirdGame.a||'TBD'), lB3=dnH(thirdGame.b||'TBD');
+      const knownA3=!isSeed3(thirdGame.a), knownB3=!isSeed3(thirdGame.b);
+      const div3=document.createElement('div');
+      div3.style.cssText='border-top:1px solid rgba(255,255,255,0.15);margin-top:16px;padding-top:10px;';
+      const box3=document.createElement('div'); box3.className='bmatch-box';
+      box3.innerHTML=`<div class="bm-label">3rd Place</div><div class="bmatch">
+        <div class="bteam ${wa3?'win':''} ${knownA3?'':'tbd'}"><span class="bname">${lA3}</span>${hs3?`<span class="bsc">${thirdGame.sa}</span>`:''}</div>
+        <div class="bteam ${wb3?'win':''} ${knownB3?'':'tbd'}"><span class="bname">${lB3}</span>${hs3?`<span class="bsc">${thirdGame.sb}</span>`:''}</div>
+      </div>`;
+      div3.appendChild(box3);
+      lastCol.appendChild(div3);
+    }
+  }
+
   container.appendChild(scroll);
   drawBracketLines(scroll, catId);
 
