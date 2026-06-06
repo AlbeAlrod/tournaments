@@ -310,11 +310,9 @@ function calcForTournament(data, type) {
       const wins = poolWins(cs.sched, team);
       const pos  = getPosition(cs, team);
       const pts  = calcPts(pos, wins, type);
-      splitPair(team).forEach(player => {
-        if (!result[player] || result[player].pts < pts) {
-          result[player] = { pts, pos, wins, team };
-        }
-      });
+      if (!result[team] || result[team].pts < pts) {
+        result[team] = { pts, pos, wins, team };
+      }
     });
   });
   return result;
@@ -369,25 +367,17 @@ function render() {
   ).join('');
 
   let rows = '';
-  let lastTotal = -1, displayRank = 0;
   rankings.forEach((r, i) => {
-    if (r.total !== lastTotal) displayRank = i + 1;
-    lastTotal = r.total;
-
-    const medal = displayRank;
-    const mc    = displayRank<=3 ? `m${displayRank}` : '';
-
     const tCols = r.byTour.map((info, ti) => {
       if (info === null)
         return `<td class="tcol" style="text-align:center"><span class="pbadge none">—</span></td>`;
       const isBest = r.bestIdx.has(ti);
       return `<td class="tcol" style="text-align:center">
-        <span class="pbadge${isBest?' best':''}" title="${posLabel(info.pos)} · ${info.wins} ניצחונות בבתים · זוג: ${info.team}">${info.pts}</span>
+        <span class="pbadge${isBest?' best':''}" title="${posLabel(info.pos)} · ${info.wins} ניצחונות בבתים">${info.pts}</span>
       </td>`;
     }).join('');
 
     rows += `<tr>
-      <td class="rnk ${mc}">${medal}</td>
       <td class="pname">${escH(r.player)}</td>
       ${tCols}
       <td class="tot">${r.total}</td>
@@ -396,8 +386,7 @@ function render() {
 
   el.innerHTML = `<table class="rtable">
     <thead><tr>
-      <th class="c">#</th>
-      <th>שחקנית</th>
+      <th>זוג</th>
       ${tHead}
       <th class="c">סה"כ</th>
     </tr></thead>
