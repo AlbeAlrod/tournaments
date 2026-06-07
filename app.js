@@ -464,7 +464,7 @@ function closeLogin() {
 }
 
 function refreshAdmin() {
-  const regManager = superAdmin && meta.phase === 'registration';
+  const regManager = admin && meta.phase === 'registration';
   document.body.classList.toggle('admin-mode', regManager);
   document.body.classList.toggle('master-mode', adminLevel === 2);
 
@@ -482,6 +482,7 @@ function refreshAdmin() {
   if (mtxt) {
     if (!admin) mtxt.textContent = 'View only — tap Admin to manage';
     else if (adminLevel===2 && meta.phase==='registration') mtxt.textContent = 'Master mode — full access';
+    else if (meta.phase==='registration') mtxt.textContent = 'Admin mode — approvals & add players';
     else mtxt.textContent = 'Admin mode — score entry';
   }
   const regTab = document.getElementById('tab-register');
@@ -753,8 +754,8 @@ function renderBuildPage() {
         ${roster.map((name,i) => buildItem(cat.id, name, i)).join('')}
       </div>
       <div class="build-foot">
-        <button class="build-btn" onclick="buildTournament('${cat.id}')">▶ Build Tournament</button>
-        <button class="build-shuffle" onclick="shuffleBuildRoster('${cat.id}')">Shuffle</button>
+        <button class="build-btn master-only" onclick="buildTournament('${cat.id}')">▶ Build Tournament</button>
+        <button class="build-shuffle master-only" onclick="shuffleBuildRoster('${cat.id}')">Shuffle</button>
         <button class="build-add-pair" onclick="openAddPair('${cat.id}')">+ Add Pair</button>
       </div>`;
     el.appendChild(div);
@@ -768,10 +769,10 @@ function buildItem(catId, name, i) {
     ondrop="onDrop(event,'${catId}')" ondragend="onDragEnd(event)">
     <span class="build-rank">${i+1}</span>
     <span class="build-name">${dnH(name)}</span>
-    <button class="gedit-btn" onclick="editBuildItem('${catId}',${i})" title="Edit">Edit</button>
-    <button class="build-arrow" onclick="moveBuildItem('${catId}',${i},-1)" title="Up">↑</button>
-    <button class="build-arrow" onclick="moveBuildItem('${catId}',${i},1)" title="Down">↓</button>
-    <button class="team-del" onclick="deleteBuildItem('${catId}',${i})" title="Remove">✕</button>
+    <button class="gedit-btn master-only" onclick="editBuildItem('${catId}',${i})" title="Edit">Edit</button>
+    <button class="build-arrow master-only" onclick="moveBuildItem('${catId}',${i},-1)" title="Up">↑</button>
+    <button class="build-arrow master-only" onclick="moveBuildItem('${catId}',${i},1)" title="Down">↓</button>
+    <button class="team-del master-only" onclick="deleteBuildItem('${catId}',${i})" title="Remove">✕</button>
   </div>`;
 }
 
@@ -2445,7 +2446,7 @@ function resetAllScores() {
 // ============ NAV ============
 function goPage(p) {
   const regOnly = p==='build'||p==='registrations';
-  if (regOnly && (!superAdmin || meta.phase !== 'registration')) return;
+  if (regOnly && (!admin || meta.phase !== 'registration')) return;
   if (p==='settings' && !superAdmin) return;
   document.querySelectorAll('.pg').forEach(e=>e.classList.remove('on'));
   document.querySelectorAll('.tab').forEach(e=>e.classList.remove('on'));
