@@ -754,13 +754,23 @@ function renderBuildPage() {
         ${roster.map((name,i) => buildItem(cat.id, name, i)).join('')}
       </div>
       <div class="build-foot">
-        <button class="build-btn master-only" onclick="buildTournament('${cat.id}')">▶ Build Tournament</button>
-        <button class="build-shuffle master-only" onclick="shuffleBuildRoster('${cat.id}')">Shuffle</button>
+        <button class="build-btn" onclick="buildTournament('${cat.id}')">▶ Build Tournament</button>
+        <button class="build-shuffle" onclick="shuffleBuildRoster('${cat.id}')">Shuffle</button>
         <button class="build-add-pair" onclick="openAddPair('${cat.id}')">+ Add Pair</button>
       </div>`;
     el.appendChild(div);
     setupDragDrop(cat.id);
   });
+
+  // Start Tournament button — visible to any admin in registration phase
+  const startWrap = document.createElement('div');
+  startWrap.style.cssText = 'margin-top:24px;padding:16px;text-align:center;border-top:1px solid var(--border)';
+  startWrap.innerHTML = `
+    <p style="font-size:13px;color:var(--text3);margin-bottom:12px;line-height:1.5">
+      כשכל הזוגות מוכנים — הפעל את הטורניר.<br>לא ניתן לשנות זוגות לאחר מכן.
+    </p>
+    <button class="gen-btn" onclick="openStartModal()">▶ Start Tournament</button>`;
+  el.appendChild(startWrap);
 }
 
 function buildItem(catId, name, i) {
@@ -769,15 +779,15 @@ function buildItem(catId, name, i) {
     ondrop="onDrop(event,'${catId}')" ondragend="onDragEnd(event)">
     <span class="build-rank">${i+1}</span>
     <span class="build-name">${dnH(name)}</span>
-    <button class="gedit-btn master-only" onclick="editBuildItem('${catId}',${i})" title="Edit">Edit</button>
-    <button class="build-arrow master-only" onclick="moveBuildItem('${catId}',${i},-1)" title="Up">↑</button>
-    <button class="build-arrow master-only" onclick="moveBuildItem('${catId}',${i},1)" title="Down">↓</button>
-    <button class="team-del master-only" onclick="deleteBuildItem('${catId}',${i})" title="Remove">✕</button>
+    <button class="gedit-btn" onclick="editBuildItem('${catId}',${i})" title="Edit">Edit</button>
+    <button class="build-arrow" onclick="moveBuildItem('${catId}',${i},-1)" title="Up">↑</button>
+    <button class="build-arrow" onclick="moveBuildItem('${catId}',${i},1)" title="Down">↓</button>
+    <button class="team-del" onclick="deleteBuildItem('${catId}',${i})" title="Remove">✕</button>
   </div>`;
 }
 
 function editBuildItem(catId, idx) {
-  if (!superAdmin || meta.phase !== 'registration') return;
+  if (!admin || meta.phase !== 'registration') return;
   const name = state[catId]?.roster[idx] || '';
   editTarget = { catId, buildIdx: idx, oldName: name };
   const parts = name.split('/').map(s => s.trim());
@@ -796,7 +806,7 @@ function editBuildItem(catId, idx) {
 }
 
 async function deleteBuildItem(catId, idx) {
-  if (!superAdmin || meta.phase !== 'registration') return;
+  if (!admin || meta.phase !== 'registration') return;
   const name = state[catId]?.roster[idx];
   if (name) {
     const parts = name.split(' / ').map(s => s.trim());
@@ -896,7 +906,7 @@ async function moveBetweenCategories(srcCatId, fromIdx, dstCatId, toIdx) {
 }
 
 function moveBuildItem(catId, idx, dir) {
-  if (!superAdmin || meta.phase !== 'registration') return;
+  if (!admin || meta.phase !== 'registration') return;
   const cs = state[catId];
   if (!cs) return;
   const roster = cs.roster;
@@ -908,7 +918,7 @@ function moveBuildItem(catId, idx, dir) {
 }
 
 function shuffleBuildRoster(catId) {
-  if (!superAdmin || meta.phase !== 'registration') return;
+  if (!admin || meta.phase !== 'registration') return;
   const cs = state[catId];
   if (!cs) return;
   if (!cs.roster.length) {
@@ -953,7 +963,7 @@ async function saveAddPair() {
 }
 
 async function buildTournament(catId) {
-  if (!superAdmin || meta.phase !== 'registration') return;
+  if (!admin || meta.phase !== 'registration') return;
   const cs  = state[catId];
   const cat = categories.find(c => c.id === catId);
   if (!cat || !cs) return;
@@ -1288,7 +1298,7 @@ function closeEdit() {
   editTarget = null;
 }
 function saveEdit() {
-  if (!superAdmin || !editTarget) return;
+  if (!admin || !editTarget) return;
   const p1 = document.getElementById('edit-p1').value.trim();
   const p2 = document.getElementById('edit-p2').value.trim();
   const name = p2?`${p1} / ${p2}`:p1;
@@ -1324,7 +1334,8 @@ function saveEdit() {
     return;
   }
 
-  // Standings group team edit
+  // Standings group team edit — master only
+  if (!superAdmin) return;
   const {catId,gi,ti} = editTarget;
   const old = state[catId].groups[gi].teams[ti];
   state[catId].groups[gi].teams[ti] = name;
