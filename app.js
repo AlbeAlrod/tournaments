@@ -177,6 +177,13 @@ async function loadTournament() {
   } else {
     const data = snap.data();
     if (data.meta) meta = { ...meta, ...data.meta };
+    // Apply tournament primary color to loading screen immediately
+    if (meta.primaryColor || meta.secondaryColor) {
+      const p = meta.primaryColor || '#E91E8C';
+      const s = meta.secondaryColor || meta.primaryColor || '#FF4FA8';
+      document.getElementById('view-loading').style.background =
+        `linear-gradient(135deg, ${p} 0%, ${s} 100%)`;
+    }
     // Expiry check — show expired page and stop loading
     if (meta.expiresAt) {
       const expMs = meta.expiresAt.seconds
