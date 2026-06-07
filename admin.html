@@ -528,8 +528,8 @@ function renderTable() {
   );
   tbody.innerHTML = sorted.map(t => {
     const name     = t.meta?.name      || '(unnamed)';
-    const adminPw  = t.meta?.adminPassword  || '—';
-    const masterPw = t.meta?.masterPassword || '—';
+    const adminPw  = t.meta?.adminPassword  ? '••••' : '—';
+    const masterPw = t.meta?.masterPassword ? '••••' : '—';
     const link     = BASE_URL + '?t=' + t.id;
     return `<tr>
       <td class="t-name">${esc(name)}</td>
@@ -628,8 +628,8 @@ async function createTournament() {
 
   const metaObj = {
     name,
-    adminPassword:  adminPw,
-    masterPassword: masterPw,
+    adminPassword:  await sha256(adminPw),
+    masterPassword: await sha256(masterPw),
     logoUrl:        tpl?.meta?.logoUrl        || '',
     primaryColor:   tpl?.meta?.primaryColor   || '#6B21A8',
     secondaryColor: tpl?.meta?.secondaryColor || '#7C3AED',

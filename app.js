@@ -51,6 +51,12 @@ let playerDB = []; // [{name, phone}]
 // ============ HTML ESCAPE ============
 const escH = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 
+// ============ SHA-256 ============
+async function sha256(str) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join('');
+}
+
 // ============ DISPLAY NAME — removes "ו" connector between partner names ============
 // "תום ומוריאל" → "תום מוריאל"  |  "מרג' ואילי" → "מרג' אילי"
 const dn = s => {
@@ -412,10 +418,27 @@ function updateRoleButtons() {
   document.getElementById('role-btn-master')?.setAttribute('style', loginRole==='master' ? on : off);
 }
 
-function tryLogin() {
+async function tryLogin() {
   const val      = document.getElementById('pw-inp').value.trim();
-  const expected = loginRole === 'master' ? meta.masterPassword : meta.adminPassword;
-  if (val && expected && val === expected) {
+  const field    = loginRole === 'master' ? 'masterPassword' : 'adminPassword';
+  const expected = meta[field];
+  if (!val || !expected) {
+    document.getElementById('pw-err').classList.remove('h');
+    document.getElementById('pw-inp').value = '';
+    document.getElementById('pw-inp').focus();
+    return;
+  }
+  const hashed = await sha256(val);
+  const isHash  = expected.length === 64 && /^[0-9a-f]+$/.test(expected);
+  const match   = isHash ? hashed === expected : val === expected;
+  if (match) {
+    // Auto-migrate plain-text → hash
+    if (!isHash) {
+      try {
+        await updateDoc(doc(db,'tournaments',tId),{[`meta.${field}`]: hashed});
+        meta[field] = hashed;
+      } catch(_) {}
+    }
     adminLevel = loginRole === 'master' ? 2 : 1;
     admin      = true;
     superAdmin = adminLevel === 2;
@@ -505,7 +528,8 @@ async function submitRegistration() {
     document.getElementById('frm-p2').value = '';
     document.getElementById('frm-phone').value = '';
     ok.classList.remove('h');
-    document.querySelectorAll('#frm-cat-wrap .cat-pill').forEach(b => b.classList.remove('on'));
+    if (categories.length !== 1)
+      document.querySelectorAll('#frm-cat-wrap .cat-pill').forEach(b => b.classList.remove('on'));
   } catch(e) {
     err.textContent = 'Submission failed. Please try again.';
     err.classList.remove('h');
@@ -627,7 +651,7 @@ function renderParticipants() {
     const list = byCat[cat.id] || [];
     if (!list.length) return '';
     return `<div class="part-cat">
-      <div class="part-cat-title">${cat.name}</div>
+      <div class="part-cat-title">${escH(cat.name)}</div>
       <div class="part-grid">${list.map((r,i) => `
         <div class="part-card">
           <span class="part-num">${i+1}</span>
@@ -671,9 +695,12 @@ function renderRegisterPage() {
   const catWrap = document.getElementById('frm-cat-wrap');
   if (catWrap) {
     catWrap.innerHTML = categories.map(c =>
-      `<button type="button" class="cat-pill" data-value="${c.id}" onclick="selectRegCat(this)">${c.name}</button>`
+      `<button type="button" class="cat-pill" data-value="${escH(c.id)}" onclick="selectRegCat(this)">${escH(c.name)}</button>`
     ).join('');
     if (categories.length === 1) catWrap.querySelector('.cat-pill')?.classList.add('on');
+    // Hide category row when only one option
+    const catRow = catWrap.closest('.form-row');
+    if (catRow) catRow.style.display = categories.length === 1 ? 'none' : '';
   }
   const noteEl = document.getElementById('reg-note');
   if (noteEl) {
@@ -711,7 +738,7 @@ function renderBuildPage() {
     if (_bOn)    { div.style.setProperty('--cat-on-color', _bOn); }
     div.innerHTML = `
       <div class="build-cat-head">
-        <span class="build-cat-name">${cat.name}</span>
+        <span class="build-cat-name">${escH(cat.name)}</span>
         <span class="build-cat-count">${roster.length} pairs</span>
       </div>
       <div class="build-list" id="blist-${cat.id}" data-cat="${cat.id}"
@@ -753,7 +780,7 @@ function editBuildItem(catId, idx) {
   const catSel = document.getElementById('edit-cat');
   if (catRow && catSel) {
     catSel.innerHTML = categories.map(c =>
-      `<option value="${c.id}"${c.id===catId?' selected':''}>${c.name}</option>`).join('');
+      `<option value="${escH(c.id)}"${c.id===catId?' selected':''}>${escH(c.name)}</option>`).join('');
     catRow.classList.remove('h');
   }
   document.getElementById('edit-modal').classList.remove('h');
@@ -890,7 +917,7 @@ function shuffleBuildRoster(catId) {
 
 function openAddPair(catId) {
   document.getElementById('ap-cat').innerHTML = categories.map(c =>
-    `<option value="${c.id}" ${c.id===catId?'selected':''}>${c.name}</option>`).join('');
+    `<option value="${escH(c.id)}" ${c.id===catId?'selected':''}>${escH(c.name)}</option>`).join('');
   document.getElementById('ap-p1').value = '';
   document.getElementById('ap-p2').value = '';
   document.getElementById('addpair-modal').classList.remove('h');
@@ -1242,7 +1269,7 @@ function openEditTeam(catId, gi, ti) {
   const catRow = document.getElementById('edit-cat-row');
   const catSel = document.getElementById('edit-cat');
   if (catRow && catSel) {
-    catSel.innerHTML = categories.map(c => `<option value="${c.id}"${c.id===catId?' selected':''}>${c.name}</option>`).join('');
+    catSel.innerHTML = categories.map(c => `<option value="${escH(c.id)}"${c.id===catId?' selected':''}>${escH(c.name)}</option>`).join('');
     catRow.classList.remove('h');
   }
   document.getElementById('edit-modal').classList.remove('h');
@@ -1536,7 +1563,7 @@ function renderScheduleContent() {
     ? allGames.filter(g => g.a.toLowerCase().includes(q)||g.b.toLowerCase().includes(q))
     : allGames;
   if (q && !filtered.length) {
-    el.innerHTML=`<div class="empty"><h3>No match for "${q}"</h3></div>`; return;
+    el.innerHTML=`<div class="empty"><h3>No match for "${escH(q)}"</h3></div>`; return;
   }
 
   const byTime = {};
@@ -1898,7 +1925,7 @@ function renderCatFilters() {
   el.classList.remove('h');
   el.innerHTML = `<div class="cat-filter">
     <button class="cat-btn ${!activeCat?'on':''}" onclick="setCat(null)">All</button>
-    ${categories.map(c=>`<button class="cat-btn ${activeCat===c.id?'on':''}" onclick="setCat('${c.id}')">${c.name}</button>`).join('')}
+    ${categories.map(c=>`<button class="cat-btn ${activeCat===c.id?'on':''}" onclick="setCat('${escH(c.id)}')">${escH(c.name)}</button>`).join('')}
   </div>`;
 }
 
@@ -2522,7 +2549,7 @@ async function loadPlayerDB() {
 function updatePlayerDatalist() {
   const dl = document.getElementById('player-datalist');
   if (!dl) return;
-  dl.innerHTML = playerDB.map(p => `<option value="${escH(p.name)}">${escH(p.name)}${p.phone?' ('+p.phone+')':''}</option>`).join('');
+  dl.innerHTML = playerDB.map(p => `<option value="${escH(p.name)}">${escH(p.name)}${p.phone?' ('+escH(p.phone)+')':''}</option>`).join('');
 }
 
 async function savePlayerDB() {
