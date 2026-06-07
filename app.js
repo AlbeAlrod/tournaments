@@ -974,7 +974,7 @@ async function buildTournament(catId) {
 
   if (!roster.length) { alert('No approved pairs in this category.'); return; }
 
-  const cfg = cat.cfg;
+  const cfg = cat.cfg || DEF_CAT_CFG;
   const ng  = cfg.numGroups || 2;
   const sizes = distributeGroups(roster.length, ng);
   const groups = [];
@@ -1042,7 +1042,7 @@ function generateScheduleForCat(catId) {
   const cs  = state[catId];
   const cat = categories.find(c => c.id === catId);
   if (!cs || !cat) return;
-  const cfg = cat.cfg;
+  const cfg = cat.cfg || DEF_CAT_CFG;
   const slotDur = (cfg.gameDur||30) + (cfg.breakDur||0);
   const nc = cfg.courts || 2;
 
