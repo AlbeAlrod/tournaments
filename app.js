@@ -397,7 +397,11 @@ function applyTheme(primary, secondary) {
   document.body.style.backgroundColor = meta.bgColor || '';
 
   const lm = document.getElementById('logo-mark');
-  if (lm) lm.style.background = primary;
+  // With a real logo image, don't tint the chip — a dark logo would vanish on a dark primary.
+  if (lm) {
+    if (meta.logoUrl) { lm.style.background='transparent'; lm.style.boxShadow='none'; lm.style.width='auto'; lm.style.overflow='visible'; }
+    else { lm.style.background=primary; lm.style.boxShadow=''; lm.style.width=''; lm.style.overflow=''; }
+  }
 }
 
 // ============ AUTH ============
@@ -2525,10 +2529,14 @@ function updateMeta(key, val) {
 function applyLogo(url) {
   const img=document.getElementById('logo-img');
   const letter=document.getElementById('logo-letter');
+  const lm=document.getElementById('logo-mark');
   if (url) {
     img.src=url; img.style.display=''; if(letter)letter.style.display='none';
+    // Show the logo as-is (no colored chip behind it, natural width)
+    if(lm){ lm.style.background='transparent'; lm.style.boxShadow='none'; lm.style.width='auto'; lm.style.overflow='visible'; }
   } else {
     img.style.display='none'; if(letter)letter.style.display='';
+    if(lm){ lm.style.background=meta.primaryColor||''; lm.style.boxShadow=''; lm.style.width=''; lm.style.overflow=''; }
   }
 }
 
