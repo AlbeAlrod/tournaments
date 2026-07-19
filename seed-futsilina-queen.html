@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8"/>
+<title>Seed — Futsilina QUEEN template</title>
+<style>
+  body{font-family:monospace;background:#0B0B16;color:#eee;padding:30px;max-width:820px;margin:0 auto}
+  h1{color:#EC0F8C;margin-bottom:6px}
+  p{color:#aaa;margin-bottom:18px;font-size:13px;line-height:1.7}
+  label{display:block;color:#ccc;font-size:13px;margin:10px 0 4px}
+  input{background:#15151f;border:1px solid #333;border-radius:6px;color:#eee;padding:10px 12px;font-size:14px;width:100%;font-family:monospace}
+  .row{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+  .row>div{flex:1;min-width:200px}
+  button{padding:13px 28px;background:#EC0F8C;color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer;margin:14px 10px 0 0}
+  button:hover{opacity:.9}
+  button.del{background:#c62828}
+  .swatch{display:inline-block;width:14px;height:14px;border-radius:3px;vertical-align:middle;margin-left:6px}
+  #log{margin-top:22px;background:#111;border-radius:8px;padding:16px;white-space:pre-wrap;font-size:12px;line-height:1.7;max-height:380px;overflow-y:auto;color:#0f0}
+</style>
+</head>
+<body>
+<h1>Seed — פוצ'ילינה QUEEN (תבנית)</h1>
+<p>
+  יוצר טורניר QUEEN בפורמט טורניר דירוג: 4 בתים · 16 זוגות · חלוקת סנייק לפי דירוג · נוקאאוט מיוחד
+  (#1 עולה ישר לרבע, #2/#3 לשמינית, מקום שלישי + גמר).<br>
+  צבעים לפי הפלייר:
+  <span class="swatch" style="background:#EC0F8C"></span>א
+  <span class="swatch" style="background:#17A6E0"></span>ב
+  <span class="swatch" style="background:#C8DA1E"></span>ג
+  <span class="swatch" style="background:#33B24A"></span>ד
+  <br>
+  נכתבים 16 סלוטים גנריים (זוג 1..16, לפי דירוג) — <b>ללא שמות אמיתיים</b>. אחרי הזריעה:
+  פותחים כ-Master → <b>Build</b> → המנוע מחלק בסנייק ובונה את הבראקט. ואז אפשר לערוך שמות ולהזין ניקוד.
+</p>
+
+<div class="row">
+  <div>
+    <label>Tournament ID</label>
+    <input id="tid" value="queen-template" placeholder="e.g. futsilina-2"/>
+  </div>
+  <div>
+    <label>שם הטורניר</label>
+    <input id="tname" value="פוצ'ילינה QUEEN"/>
+  </div>
+</div>
+<div class="row">
+  <div>
+    <label>Admin password</label>
+    <input id="adminpw" value="level1"/>
+  </div>
+  <div>
+    <label>Master password</label>
+    <input id="masterpw" value="level2"/>
+  </div>
+  <div>
+    <label>שעת התחלה</label>
+    <input id="start" value="17:00"/>
+  </div>
+</div>
+
+<button onclick="seedAll()">▶ Seed QUEEN tournament</button>
+<button class="del" onclick="deleteTournament()">✕ Delete</button>
+
+<div id="log">Waiting…</div>
+
+<script type="module">
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js';
+import { getFirestore, doc, getDoc, setDoc, deleteDoc, serverTimestamp } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js';
+
+const app = initializeApp({
+  apiKey: "AIzaSyA-rPlg0Oau16QcTjD20hDfkyveRSrD8I0",
+  authDomain: "tournaments-33619.firebaseapp.com",
+  projectId: "tournaments-33619",
+  storageBucket: "tournaments-33619.firebasestorage.app",
+  messagingSenderId: "409384565600",
+  appId: "1:409384565600:web:61bd55676343d6035abc05"
+});
+const db = getFirestore(app);
+
+const log = msg => { const el=document.getElementById('log'); el.textContent += msg+'\n'; el.scrollTop=el.scrollHeight; };
+const tidVal = () => document.getElementById('tid').value.trim();
+
+async function sha256(str){
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+  return [...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+
+// 16 generic ranking slots (best-first). Replace with real pairs per tournament.
+const ROSTER = Array.from({length:16}, (_,i)=>`זוג ${i+1}`);
+
+async function seedAll() {
+  document.getElementById('log').textContent = '';
+  const T_ID = tidVal();
+  if (!/^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/.test(T_ID)) { log('✗ ID לא תקין (אותיות קטנות/מספרים/מקף בלבד).'); return; }
+  log('▶ Seeding "'+T_ID+'"…');
+
+  const meta = {
+    name: document.getElementById('tname').value.trim() || "פוצ'ילינה QUEEN",
+    logoUrl: '',
+    primaryColor:   '#EC0F8C',
+    secondaryColor: '#F84FB0',
+    bgColor:        '#0B0B16',
+    groupColors:    ['#EC0F8C','#17A6E0','#C8DA1E','#33B24A'],
+    adminPassword:  await sha256(document.getElementById('adminpw').value),
+    masterPassword: await sha256(document.getElementById('masterpw').value),
+    sponsorLogos: [],
+    phase: 'registration',
+    regOpen: false,
+    showRegistered: false,
+    paymentLink:'', paymentLinkLabel:'', paymentLink2:'', paymentLink2Label:'',
+    regNote:'',
+  };
+
+  const categories = [{
+    id: 'queen', name: 'QUEEN', color: '#EC0F8C',
+    cfg: {
+      courts: 4, gameDur: 15, breakDur: 0, numGroups: 4, advPerGroup: 3,
+      pointsToWin: 21, sets: 1, pointsThirdSet: 21,
+      startTime: document.getElementById('start').value.trim() || '17:00',
+      seeding: 'snake',       // pools by past ranking (serpentine)
+      koFormat: 'queen',      // #1 bye→QF, #2/#3→R16, cross pairings, 3rd place
+      koRules: {
+        pool:  { pts:15, change:5 },
+        r16:   { pts:18, change:6 },
+        qf:    { pts:18, change:6 },
+        sf:    { pts:18, change:6 },
+        third: { pts:15, change:5 },
+        final: { pts:21, change:7 },
+      }
+    }
+  }];
+
+  // Roster only — groups/sched/ko stay empty; Master runs Build.
+  const state = { queen: { roster: ROSTER, groups: [], sched: [], ko: [] } };
+
+  try {
+    const snap = await getDoc(doc(db,'tournaments',T_ID));
+    if (snap.exists() && !confirm(`Tournament "${T_ID}" already exists. Overwrite it?`)) { log('✗ Aborted.'); return; }
+    await setDoc(doc(db,'tournaments',T_ID), { meta, categories, state, updatedAt: serverTimestamp() });
+    log('✓ Done!');
+    log('  URL:   https://albealrod.github.io/tournaments/?t='+T_ID);
+    log('  Admin:  '+document.getElementById('adminpw').value+'   Master: '+document.getElementById('masterpw').value);
+    log('  Next: open as Master → Build → the engine snake-seeds the pools and builds the QUEEN bracket.');
+  } catch(e){ log('✗ ERROR: '+e.message); console.error(e); }
+}
+
+async function deleteTournament() {
+  const T_ID = tidVal();
+  if (!confirm(`Delete tournament "${T_ID}"?`)) return;
+  try { await deleteDoc(doc(db,'tournaments',T_ID)); log('✓ Deleted "'+T_ID+'".'); }
+  catch(e){ log('✗ ERROR: '+e.message); }
+}
+
+Object.assign(window, { seedAll, deleteTournament });
+</script>
+</body>
+</html>

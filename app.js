@@ -464,8 +464,9 @@ function closeLogin() {
 }
 
 function refreshAdmin() {
-  const regManager = admin && meta.phase === 'registration';
-  document.body.classList.toggle('admin-mode', regManager);
+  const regManager   = admin && meta.phase === 'registration';
+  const builtManager = admin && meta.phase === 'built';
+  document.body.classList.toggle('admin-mode', regManager || builtManager);
   document.body.classList.toggle('master-mode', adminLevel === 2);
 
   const txt  = document.getElementById('adm-txt');
@@ -481,14 +482,24 @@ function refreshAdmin() {
   if (adminBar) adminBar.classList.toggle('mode-admin', admin);
   if (mtxt) {
     if (!admin) mtxt.textContent = 'View only — tap Admin to manage';
-    else if (adminLevel===2 && meta.phase==='registration') mtxt.textContent = 'Master mode — full access';
-    else if (meta.phase==='registration') mtxt.textContent = 'Admin mode — approvals & add players';
+    else if (meta.phase==='registration') mtxt.textContent = adminLevel===2 ? 'Master mode — full access' : 'Admin mode — approvals & add players';
+    else if (meta.phase==='built') mtxt.textContent = adminLevel===2 ? 'Master mode — tournament built' : 'Admin mode — edit roster';
     else mtxt.textContent = 'Admin mode — score entry';
   }
+  // Hide Register tab when admin is logged in (registration phase)
   const regTab = document.getElementById('tab-register');
   if (regTab) regTab.classList.toggle('h', regManager);
+  // Hide Settings tab in tournament phase (even from master)
+  const settingsTab = document.getElementById('tab-settings');
+  if (settingsTab) settingsTab.classList.toggle('h', !superAdmin || meta.phase === 'tournament');
+  // Auto-navigate away from pages that don't belong in current phase
   if (regManager && document.getElementById('page-register')?.classList.contains('on')) {
     goPage('registrations');
+  }
+  if (builtManager) {
+    const onRegOnlyPage = ['register','registrations'].some(p =>
+      document.getElementById('page-'+p)?.classList.contains('on'));
+    if (onRegOnlyPage) goPage('standings');
   }
   if (admin && meta.phase === 'tournament') {
     const onRegPage = ['registrations','build'].some(p =>
@@ -726,6 +737,15 @@ function renderBuildPage() {
   const el = document.getElementById('build-cats');
   if (!el) return;
   el.innerHTML = '';
+
+  // In 'built' phase show a status banner
+  if (meta.phase === 'built') {
+    const banner = document.createElement('div');
+    banner.style.cssText = 'margin-bottom:16px;padding:12px 16px;background:rgba(34,197,94,.12);border:1px solid rgba(34,197,94,.3);border-radius:var(--rs);font-size:13px;color:var(--text)';
+    banner.textContent = '✓ הטורניר בנוי — ניתן עדיין לערוך זוגות ולבנות מחדש';
+    el.appendChild(banner);
+  }
+
   categories.forEach(cat => {
     if (!state[cat.id]) state[cat.id] = { roster:[], groups:[], sched:[], ko:[] };
     const cs = state[cat.id];
@@ -754,7 +774,7 @@ function renderBuildPage() {
         ${roster.map((name,i) => buildItem(cat.id, name, i)).join('')}
       </div>
       <div class="build-foot">
-        <button class="build-btn" onclick="buildTournament('${cat.id}')">▶ Build Tournament</button>
+        <button class="build-btn" onclick="buildTournament('${cat.id}')">${meta.phase === 'built' ? '↺ Rebuild' : '▶ Build Tournament'}</button>
         <button class="build-shuffle" onclick="shuffleBuildRoster('${cat.id}')">Shuffle</button>
         <button class="build-add-pair" onclick="openAddPair('${cat.id}')">+ Add Pair</button>
       </div>`;
@@ -762,14 +782,15 @@ function renderBuildPage() {
     setupDragDrop(cat.id);
   });
 
-  // Start Tournament button — visible to any admin in registration phase
+  // Start Tournament button — visible to any admin in registration / built phase
   const startWrap = document.createElement('div');
   startWrap.style.cssText = 'margin-top:24px;padding:16px;text-align:center;border-top:1px solid var(--border)';
+  const startNote = meta.phase === 'built'
+    ? 'הטורניר בנוי ומוכן. לחצי Start בתחילת התחרות.<br>לאחר מכן לא ניתן לשנות הגדרות.'
+    : 'בני תחילה את כל הקטגוריות, ולאחר מכן הפעילי את הטורניר.';
   startWrap.innerHTML = `
-    <p style="font-size:13px;color:var(--text3);margin-bottom:12px;line-height:1.5">
-      כשכל הזוגות מוכנים — הפעל את הטורניר.<br>לא ניתן לשנות זוגות לאחר מכן.
-    </p>
-    <button class="gen-btn" onclick="openStartModal()">▶ Start Tournament</button>`;
+    <p style="font-size:13px;color:var(--text3);margin-bottom:12px;line-height:1.5">${startNote}</p>
+    <button class="gen-btn" onclick="openStartModal()" ${meta.phase !== 'built' ? 'disabled style="opacity:.45;cursor:not-allowed"' : ''}>▶ Start Tournament</button>`;
   el.appendChild(startWrap);
 }
 
@@ -787,7 +808,7 @@ function buildItem(catId, name, i) {
 }
 
 function editBuildItem(catId, idx) {
-  if (!admin || meta.phase !== 'registration') return;
+  if (!admin || (meta.phase !== 'registration' && meta.phase !== 'built')) return;
   const name = state[catId]?.roster[idx] || '';
   editTarget = { catId, buildIdx: idx, oldName: name };
   const parts = name.split('/').map(s => s.trim());
@@ -806,7 +827,7 @@ function editBuildItem(catId, idx) {
 }
 
 async function deleteBuildItem(catId, idx) {
-  if (!admin || meta.phase !== 'registration') return;
+  if (!admin || (meta.phase !== 'registration' && meta.phase !== 'built')) return;
   const name = state[catId]?.roster[idx];
   if (name) {
     const parts = name.split(' / ').map(s => s.trim());
@@ -906,7 +927,7 @@ async function moveBetweenCategories(srcCatId, fromIdx, dstCatId, toIdx) {
 }
 
 function moveBuildItem(catId, idx, dir) {
-  if (!admin || meta.phase !== 'registration') return;
+  if (!admin || (meta.phase !== 'registration' && meta.phase !== 'built')) return;
   const cs = state[catId];
   if (!cs) return;
   const roster = cs.roster;
@@ -918,7 +939,7 @@ function moveBuildItem(catId, idx, dir) {
 }
 
 function shuffleBuildRoster(catId) {
-  if (!admin || meta.phase !== 'registration') return;
+  if (!admin || (meta.phase !== 'registration' && meta.phase !== 'built')) return;
   const cs = state[catId];
   if (!cs) return;
   if (!cs.roster.length) {
@@ -963,7 +984,7 @@ async function saveAddPair() {
 }
 
 async function buildTournament(catId) {
-  if (!admin || meta.phase !== 'registration') return;
+  if (!admin || (meta.phase !== 'registration' && meta.phase !== 'built')) return;
   const cs  = state[catId];
   const cat = categories.find(c => c.id === catId);
   if (!cat || !cs) return;
@@ -976,12 +997,18 @@ async function buildTournament(catId) {
 
   const cfg = cat.cfg || DEF_CAT_CFG;
   const ng  = cfg.numGroups || 2;
-  const sizes = distributeGroups(roster.length, ng);
-  const groups = [];
-  let idx = 0;
-  for (let g = 0; g < ng; g++) {
-    groups.push({ name: String.fromCharCode(65+g), teams: roster.slice(idx, idx+sizes[g]) });
-    idx += sizes[g];
+  let groups;
+  if (cfg.seeding === 'snake') {
+    // Ranking tournament: pools by past ranking, serpentine (roster is ranked best-first).
+    groups = snakeDistribute(roster, ng);
+  } else {
+    const sizes = distributeGroups(roster.length, ng);
+    groups = [];
+    let idx = 0;
+    for (let g = 0; g < ng; g++) {
+      groups.push({ name: String.fromCharCode(65+g), teams: roster.slice(idx, idx+sizes[g]) });
+      idx += sizes[g];
+    }
   }
   cs.roster = roster;
   cs.groups = groups;
@@ -990,7 +1017,17 @@ async function buildTournament(catId) {
   generateScheduleForCat(catId);
 
   await pushToCloud();
-  renderBuildPage(); // Stay in build page; admin uses Settings → Start Tournament when ready
+
+  // First build → advance to 'built' phase so tournament tabs become visible
+  if (meta.phase === 'registration') {
+    meta.phase = 'built';
+    await pushMetaOnly();
+    renderAll();
+    goPage('standings');
+  } else {
+    // Already in built phase → just refresh build page
+    renderBuildPage();
+  }
 }
 
 // ============ SCHEDULE GENERATION ============
@@ -1016,6 +1053,26 @@ function rr(teams) {
 function distributeGroups(nc, ng) {
   const base = Math.floor(nc/ng), extra = nc % ng;
   return Array.from({length:ng}, (_,i) => base + (i<extra?1:0));
+}
+
+// Serpentine ("snake") seeding for ranking tournaments: the roster is assumed
+// sorted best-first, and is dealt into pools A→…→last, then back, so each pool
+// gets one team from every ranking tier and pools stay balanced.
+function snakeDistribute(roster, ng) {
+  const groups = Array.from({length:ng}, (_,i) => ({ name:String.fromCharCode(65+i), teams:[] }));
+  let g = 0, dir = 1;
+  for (let i = 0; i < roster.length; i++) {
+    groups[g].teams.push(roster[i]);
+    if (dir === 1) { if (g === ng-1) dir = -1; else g++; }
+    else           { if (g === 0)    dir = 1;  else g--; }
+  }
+  return groups;
+}
+
+// Lexicographic tuple compare (higher is better). Returns >0 if a beats b.
+function cmpScore(a, b) {
+  for (let i = 0; i < a.length; i++) { if (a[i] !== b[i]) return a[i] - b[i]; }
+  return 0;
 }
 
 function roundName(count) {
@@ -1046,33 +1103,65 @@ function generateScheduleForCat(catId) {
   const slotDur = (cfg.gameDur||30) + (cfg.breakDur||0);
   const nc = cfg.courts || 2;
 
-  const courtQueues = {};
+  // ---- Smart pool-stage schedule ----
+  // Keep each pool on its home court; when a court would sit idle, fill it with a
+  // game from a pool that still has matches (finishes uneven draws faster); never
+  // double-book a couple in one slot; spread each couple's games to even out waiting.
+  const courtList = [];
+  for (let c = 0; c < nc; c++) courtList.push(c + 1);
+
+  const remaining = [];
   cs.groups.forEach((grp, gi) => {
-    const court = (gi % nc) + 1;
-    if (!courtQueues[court]) courtQueues[court] = [];
+    const homeCourt = (gi % nc) + 1;
     rr(grp.teams).forEach(([a,b]) => {
-      courtQueues[court].push({ catId, gi, gn:grp.name, a, b, sa:'', sb:'', court });
+      remaining.push({ catId, gi, gn:grp.name, a, b, sa:'', sb:'', homeCourt, court:homeCourt });
     });
   });
 
-  const courts = Object.keys(courtQueues).map(Number).sort((a,b)=>a-b);
-  const maxGames = Math.max(...courts.map(c => courtQueues[c].length));
+  const poolRem = {};
+  remaining.forEach(g => { poolRem[g.gi] = (poolRem[g.gi]||0) + 1; });
+
+  const lastSlot = {};
   const scheduled = [];
-  for (let si=0; si<maxGames; si++) {
-    courts.forEach(court => {
-      if (si < courtQueues[court].length) {
-        const g = courtQueues[court][si];
-        g.si   = si;
-        g.time = addM(cfg.startTime||'08:00', si*slotDur);
-        scheduled.push(g);
+  let psi = 0;
+  while (remaining.length && psi < 1000) {
+    const used = new Set();
+    courtList.forEach(court => {
+      let best = null, bestScore = null, bestIdx = -1;
+      for (let i = 0; i < remaining.length; i++) {
+        const g = remaining[i];
+        if (used.has(g.a) || used.has(g.b)) continue;
+        const home    = g.homeCourt === court ? 1 : 0;
+        const restA   = psi - (g.a in lastSlot ? lastSlot[g.a] : psi - 3);
+        const restB   = psi - (g.b in lastSlot ? lastSlot[g.b] : psi - 3);
+        const minRest = Math.min(restA, restB, 2);
+        const score   = [home, minRest, poolRem[g.gi] || 0];
+        if (bestScore === null || cmpScore(score, bestScore) > 0) { best = g; bestScore = score; bestIdx = i; }
       }
+      if (!best) return;
+      best.si = psi; best.court = court;
+      best.time = addM(cfg.startTime||'08:00', psi*slotDur);
+      used.add(best.a); used.add(best.b);
+      lastSlot[best.a] = psi; lastSlot[best.b] = psi;
+      poolRem[best.gi]--;
+      scheduled.push(best);
+      remaining.splice(bestIdx, 1);
     });
+    psi++;
   }
   cs.sched = scheduled;
 
   const adv = cfg.advPerGroup || 0;
   const ng  = cs.groups.length;
   if (adv < 1) { cs.ko = []; return; }
+
+  // Custom QUEEN knockout (ranking format): #1 gets a bye to the QF, #2/#3 play the
+  // Round of 16 with the poster's cross pairings, then QF/SF/3rd/Final.
+  if (cfg.koFormat === 'queen' && ng === 4) {
+    const lastSiQ = scheduled.length ? Math.max(...scheduled.map(g=>g.si)) : 0;
+    buildQueenKO(catId, cfg, nc, slotDur, cfg.startTime||'08:00', lastSiQ + 1);
+    return;
+  }
 
   const koSeeds = [];
   for (let rank=1; rank<=adv; rank++)
@@ -1118,6 +1207,45 @@ function generateScheduleForCat(catId) {
     cs.ko.push(round);
     matches = Math.floor(matches/2);
   }
+}
+
+// QUEEN ranking knockout: 4 pools, top-3 advance (#4 out).
+//   r0 = Round of 16 with byes:  [BYE A1, B2vA3, BYE B1, A2vB3, BYE C1, D2vC3, BYE D1, C2vD3]
+//   r1 = QF (#1 seeds join),  r2 = SF (cross),  r3 = Final;  3rd-place lives in sched.
+// Labels for QF/SF/Final are filled by updateKOForCat (byes resolve, SF crosses).
+function buildQueenKO(catId, cfg, nc, slotDur, startTime, rs) {
+  const cs  = state[catId];
+  const bye = s        => ({ isBye:true, a:s, b:'', seedA:s, seedB:'', sa:'', sb:'', catId });
+  const r16 = (sa, sb) => ({ a:sa, b:sb, seedA:sa, seedB:sb, sa:'', sb:'', catId });
+  const gp  = ()       => ({ a:'', b:'', sa:'', sb:'', catId });
+  const r0  = [ bye('A1'), r16('B2','A3'), bye('B1'), r16('A2','B3'),
+                bye('C1'), r16('D2','C3'), bye('D1'), r16('C2','D3') ];
+  const qf  = [gp(), gp(), gp(), gp()];
+  const sf  = [gp(), gp()];
+  const fin = [gp()];
+  cs.ko = [r0, qf, sf, fin];
+
+  // Schedule only the real (non-bye) games, round by round across the courts.
+  const schedRound = games => {
+    const real = games.filter(g => !g.isBye);
+    real.forEach((g, i) => {
+      g.court = (i % nc) + 1;
+      g.si    = rs + Math.floor(i / nc);
+      g.time  = addM(startTime, g.si * slotDur);
+    });
+    rs += Math.max(1, Math.ceil(real.length / nc));
+  };
+  schedRound(r0); schedRound(qf); schedRound(sf); schedRound(fin);
+
+  // 3rd-place game — parallel with the final on the next court (own slot if 1 court).
+  const finGame  = fin[0];
+  const parallel = nc >= 2;
+  cs.sched.push({
+    catId, gi:-1, isThirdPlace:true, a:'Loser of SF1', b:'Loser of SF2', sa:'', sb:'',
+    court: parallel ? finGame.court + 1 : finGame.court,
+    si:    parallel ? finGame.si       : finGame.si + 1,
+    time:  parallel ? finGame.time     : addM(startTime, (finGame.si + 1) * slotDur)
+  });
 }
 
 // ============ SCORE VALIDATION ============
@@ -1220,7 +1348,7 @@ function makeStandingsCard(catId, grp, gi, catIdx) {
     const diffClass = diff>0?'diff-pos':diff<0?'diff-neg':'diff-zero';
     const ti = cs.groups[gi].teams.indexOf(t.name);
     const canEdit = superAdmin;
-    const canDelete = superAdmin && meta.phase === 'registration';
+    const canDelete = superAdmin && (meta.phase === 'registration' || meta.phase === 'built');
     const adminCtrls = canEdit
       ? `<td><button class="gedit-btn" onclick="openEditTeam('${catId}',${gi},${ti})">✎</button>${
           canDelete?`<button class="team-del" onclick="deleteTeam('${catId}',${gi},${ti})">✕</button>`:''}</td>` : '';
@@ -1347,7 +1475,7 @@ function saveEdit() {
   closeEdit(); pushToCloud(); renderStandings(); renderScheduleContent(); renderBracket();
 }
 function deleteTeam(catId, gi, ti) {
-  if (!superAdmin || meta.phase !== 'registration') return;
+  if (!superAdmin || (meta.phase !== 'registration' && meta.phase !== 'built')) return;
   const grp = state[catId].groups[gi];
   if (grp.teams.length<=1) { alert('Group needs at least 1 team'); return; }
   grp.teams.splice(ti,1);
@@ -1510,9 +1638,11 @@ function renderStats() {
   cats.forEach(cat => {
     const cs = state[cat.id];
     if (!cs) return;
-    totalPool += cs.sched.length;
-    donePool  += cs.sched.filter(g=>isValidScore(parseInt(g.sa),parseInt(g.sb),cat.id)).length;
-    totalKO   += cs.ko.reduce((s,r)=>s+r.filter(g=>!g.isBye).length, 0);
+    const poolG = cs.sched.filter(g=>g.gi>=0);          // real pool games
+    const thirdG = cs.sched.filter(g=>g.gi===-1);       // 3rd-place game lives in sched
+    totalPool += poolG.length;
+    donePool  += poolG.filter(g=>isValidScore(parseInt(g.sa),parseInt(g.sb),cat.id)).length;
+    totalKO   += cs.ko.reduce((s,r)=>s+r.filter(g=>!g.isBye).length, 0) + thirdG.length;
     const last = cs.ko.length ? cs.ko[cs.ko.length-1][0] : cs.sched[cs.sched.length-1];
     if (last?.time && t2m(last.time)>t2m(lastTime)) { lastTime=last.time; lastDur=cat.cfg?.gameDur||30; }
   });
@@ -1658,8 +1788,9 @@ function renderBracketForCat(catId, container) {
 
   updateKOForCat(catId);
 
-  const done  = cs.sched.filter(g=>isValidScore(parseInt(g.sa),parseInt(g.sb),catId)).length;
-  const total = cs.sched.length;
+  const poolGames = cs.sched.filter(g=>g.gi>=0);   // exclude the 3rd-place game (gi=-1)
+  const done  = poolGames.filter(g=>isValidScore(parseInt(g.sa),parseInt(g.sb),catId)).length;
+  const total = poolGames.length;
   const info  = document.createElement('div');
   info.className='binfo';
   info.innerHTML = !total ? 'No pool stage scheduled yet.'
@@ -2117,7 +2248,7 @@ function renderSettings() {
     container.appendChild(gsec);
   }
 
-  if (meta.phase !== 'registration') return;
+  if (meta.phase === 'tournament') return;
 
   // ── REGISTRATION ────────────────────────────────────────────────
   const regSection = document.createElement('div');
@@ -2379,7 +2510,8 @@ function updateMeta(key, val) {
   if (key==='logoUrl') applyLogo(val);
   if (key==='phase') {
     document.body.classList.toggle('phase-registration', val==='registration');
-    document.body.classList.toggle('phase-tournament', val==='tournament');
+    document.body.classList.toggle('phase-built',        val==='built');
+    document.body.classList.toggle('phase-tournament',   val==='tournament');
   }
   if (key==='regOpen') renderRegisterPage();
   if (key==='showRegistered') renderParticipants();
@@ -2456,9 +2588,9 @@ function resetAllScores() {
 
 // ============ NAV ============
 function goPage(p) {
-  const regOnly = p==='build'||p==='registrations';
-  if (regOnly && (!admin || meta.phase !== 'registration')) return;
-  if (p==='settings' && !superAdmin) return;
+  if (p==='registrations' && (!admin || meta.phase !== 'registration')) return;
+  if (p==='build' && (!admin || (meta.phase !== 'registration' && meta.phase !== 'built'))) return;
+  if (p==='settings' && (!superAdmin || meta.phase === 'tournament')) return;
   document.querySelectorAll('.pg').forEach(e=>e.classList.remove('on'));
   document.querySelectorAll('.tab').forEach(e=>e.classList.remove('on'));
   const pageEl=document.getElementById('page-'+p);
@@ -2516,9 +2648,9 @@ function renderAll() {
   const ll=document.getElementById('logo-letter');
   if (ll) ll.textContent=(meta.name||'T')[0].toUpperCase();
 
-  const isReg = meta.phase==='registration';
-  document.body.classList.toggle('phase-registration', isReg);
-  document.body.classList.toggle('phase-tournament', !isReg);
+  document.body.classList.toggle('phase-registration', meta.phase === 'registration');
+  document.body.classList.toggle('phase-built',        meta.phase === 'built');
+  document.body.classList.toggle('phase-tournament',   meta.phase === 'tournament');
 
   renderSponsorBar();
   renderCatFilters();
@@ -2680,6 +2812,5 @@ window.addEventListener('load', async () => {
 
   renderAll();
 
-  const isReg = meta.phase === 'registration';
-  goPage(isReg ? 'register' : 'standings');
+  goPage(meta.phase === 'registration' ? 'register' : 'standings');
 });

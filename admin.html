@@ -565,6 +565,7 @@ function openCreateModal() {
   // Populate "Copy Design From" dropdown with existing tournaments
   const sel = document.getElementById('cr-template');
   sel.innerHTML = '<option value="">Default (purple theme)</option>' +
+    '<option value="__queen__">⭐ QUEEN — Futsilina ranking format</option>' +
     [...tournaments]
       .sort((a, b) => (a.meta?.name || a.id).localeCompare(b.meta?.name || b.id))
       .map(t => `<option value="${esc(t.id)}">${esc(t.meta?.name || t.id)}</option>`)
@@ -624,18 +625,19 @@ async function createTournament() {
   }
 
   const templateId = document.getElementById('cr-template').value;
-  const tpl = templateId ? tournaments.find(t => t.id === templateId) : null;
+  const isQueen = templateId === '__queen__';
+  const tpl = (templateId && !isQueen) ? tournaments.find(t => t.id === templateId) : null;
 
   const metaObj = {
     name,
     adminPassword:  await sha256(adminPw),
     masterPassword: await sha256(masterPw),
     logoUrl:        tpl?.meta?.logoUrl        || '',
-    primaryColor:   tpl?.meta?.primaryColor   || '#6B21A8',
-    secondaryColor: tpl?.meta?.secondaryColor || '#7C3AED',
+    primaryColor:   isQueen ? '#EC0F8C' : (tpl?.meta?.primaryColor   || '#6B21A8'),
+    secondaryColor: isQueen ? '#F84FB0' : (tpl?.meta?.secondaryColor || '#7C3AED'),
     sponsorLogos:   tpl?.meta?.sponsorLogos   || [],
-    bgColor:        tpl?.meta?.bgColor        || '',
-    groupColors:    tpl?.meta?.groupColors    || [],
+    bgColor:        isQueen ? '#0B0B16' : (tpl?.meta?.bgColor        || ''),
+    groupColors:    isQueen ? ['#EC0F8C','#17A6E0','#C8DA1E','#33B24A'] : (tpl?.meta?.groupColors || []),
     paymentLink:    '', paymentLinkLabel:  '',
     paymentLink2:   '', paymentLink2Label: '',
     regNote:        '',
@@ -647,10 +649,20 @@ async function createTournament() {
     metaObj.expiresAt = Timestamp.fromDate(new Date(expiryVal));
   }
 
+  // QUEEN ranking preset: single category, snake seeding, custom KO, poster points.
+  const queenCats = [{
+    id:'queen', name:'QUEEN', color:'#EC0F8C',
+    cfg:{ courts:4, gameDur:15, breakDur:0, numGroups:4, advPerGroup:3,
+          pointsToWin:21, sets:1, pointsThirdSet:21, startTime:'17:00',
+          seeding:'snake', koFormat:'queen',
+          koRules:{ pool:{pts:15,change:5}, r16:{pts:18,change:6}, qf:{pts:18,change:6},
+                    sf:{pts:18,change:6}, third:{pts:15,change:5}, final:{pts:21,change:7} } }
+  }];
+
   try {
     await setDoc(doc(db, 'tournaments', tId), {
       meta:       metaObj,
-      categories: tpl?.categories || [],
+      categories: isQueen ? queenCats : (tpl?.categories || []),
       state:      {},
       updatedAt:  serverTimestamp()
     });
@@ -664,6 +676,24 @@ async function createTournament() {
 function showErr(el, msg) {
   el.textContent = msg;
   el.classList.remove('h');
+}
+
+// ── Revert to Built ─────────────────────────────────────────
+async function revertPhase(tId) {
+  const t = tournaments.find(x => x.id === tId);
+  const name = t?.meta?.name || tId;
+  const currentPhase = t?.meta?.phase || 'registration';
+  if (currentPhase !== 'tournament') {
+    alert(`"${name}" is not in active tournament phase (current: ${currentPhase}).`);
+    return;
+  }
+  if (!confirm(`Revert "${name}" back to built phase?\n\nThis re-enables settings and roster editing. Scores already entered will remain.`)) return;
+  try {
+    await updateDoc(doc(db, 'tournaments', tId), { 'meta.phase': 'built', updatedAt: serverTimestamp() });
+    await loadTournaments();
+  } catch(e) {
+    alert('Error reverting: ' + e.message);
+  }
 }
 
 // ── Delete ──────────────────────────────────────────────────
