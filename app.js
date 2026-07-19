@@ -177,13 +177,7 @@ async function loadTournament() {
   } else {
     const data = snap.data();
     if (data.meta) meta = { ...meta, ...data.meta };
-    // Apply tournament primary color to loading screen immediately
-    if (meta.primaryColor || meta.secondaryColor) {
-      const p = meta.primaryColor || '#E91E8C';
-      const s = meta.secondaryColor || meta.primaryColor || '#FF4FA8';
-      document.getElementById('view-loading').style.background =
-        `linear-gradient(135deg, ${p} 0%, ${s} 100%)`;
-    }
+    // Loading screen stays neutral white (styled in styles.css #view-loading)
     // Expiry check — show expired page and stop loading
     if (meta.expiresAt) {
       const expMs = meta.expiresAt.seconds
@@ -1310,7 +1304,7 @@ function getStandings(catId, gi) {
   const resolve = s => normMap[normName(s)] || s;
   cs.sched.filter(g=>g.gi===gi).forEach(g => {
     const sa=parseInt(g.sa), sb=parseInt(g.sb);
-    if (!isValidScore(sa, sb, catId)) return;
+    if (!isValidScore(sa, sb, catId, getRuleForGame(catId, g, false).pts)) return;
     const a=resolve(g.a), b=resolve(g.b);
     if (rec[a]) { rec[a].scored+=sa; rec[a].against+=sb; }
     if (rec[b]) { rec[b].scored+=sb; rec[b].against+=sa; }
@@ -1332,7 +1326,7 @@ function makeStandingsCard(catId, grp, gi, catIdx) {
   const adv = cfg.advPerGroup||1;
   const st  = getStandings(catId, gi);
   const totalGames = (grp.teams.length*(grp.teams.length-1))/2;
-  const played = cs.sched.filter(g=>g.gi===gi && isValidScore(parseInt(g.sa),parseInt(g.sb),catId)).length;
+  const played = cs.sched.filter(g=>g.gi===gi && isValidScore(parseInt(g.sa),parseInt(g.sb),catId,getRuleForGame(catId,g,false).pts)).length;
   const poolDone = played===totalGames && totalGames>0;
   const card = document.createElement('div');
   card.className = 'scard';
@@ -1501,6 +1495,7 @@ function setKS(catId, ri, gi, k, v) {
   if (!admin || meta.phase !== 'tournament') return;
   state[catId].ko[ri][gi][k] = v;
   const g = state[catId].ko[ri][gi];
+  g.ri = ri;
   const rule = getRuleForGame(catId, g, true);
   const err = scoreError(g.sa, g.sb, catId, rule.pts);
   const errEl = document.getElementById(`kerr-${catId}-${ri}-${gi}`);
@@ -1518,7 +1513,7 @@ function resolvePoolSeed(catId, seed) {
   if (gi<0||gi>=cs.groups.length) return { label:seed, known:false };
   const grp = cs.groups[gi];
   const totalGames = (grp.teams.length*(grp.teams.length-1))/2;
-  const done = cs.sched.filter(g=>g.gi===gi&&isValidScore(parseInt(g.sa),parseInt(g.sb),catId)).length;
+  const done = cs.sched.filter(g=>g.gi===gi&&isValidScore(parseInt(g.sa),parseInt(g.sb),catId,getRuleForGame(catId,g,false).pts)).length;
   if (done!==totalGames) return { label:seed, known:false };
   const st = getStandings(catId, gi);
   if (!st[rank-1]) return { label:seed, known:false };
@@ -1528,7 +1523,7 @@ function resolvePoolSeed(catId, seed) {
 function getKOLoser(game, catId) {
   if (!game || game.isBye) return null;
   const sa=parseInt(game.sa), sb=parseInt(game.sb);
-  if (isValidScore(sa,sb,catId)) return sa>sb ? game.b : game.a;
+  if (isValidScore(sa,sb,catId,getRuleForGame(catId,game,true).pts)) return sa>sb ? game.b : game.a;
   return null;
 }
 
@@ -1542,13 +1537,16 @@ function getKOWinner(game, catId) {
     return seed;
   }
   const sa=parseInt(game.sa), sb=parseInt(game.sb);
-  if (isValidScore(sa,sb,catId)) return sa>sb?game.a:game.b;
+  if (isValidScore(sa,sb,catId,getRuleForGame(catId,game,true).pts)) return sa>sb?game.a:game.b;
   return null;
 }
 
 function updateKOForCat(catId) {
   const cs = state[catId];
   if (!cs||!cs.ko.length) return;
+
+  // Stamp each KO game with its round index so per-stage scoring rules resolve correctly
+  cs.ko.forEach((round, ri) => round.forEach(g => { if (g) g.ri = ri; }));
 
   // r0: resolve pool seeds; byes just resolve their single seed
   if (cs.ko[0]) {
@@ -1645,7 +1643,7 @@ function renderStats() {
     const poolG = cs.sched.filter(g=>g.gi>=0);          // real pool games
     const thirdG = cs.sched.filter(g=>g.gi===-1);       // 3rd-place game lives in sched
     totalPool += poolG.length;
-    donePool  += poolG.filter(g=>isValidScore(parseInt(g.sa),parseInt(g.sb),cat.id)).length;
+    donePool  += poolG.filter(g=>isValidScore(parseInt(g.sa),parseInt(g.sb),cat.id,getRuleForGame(cat.id,g,false).pts)).length;
     totalKO   += cs.ko.reduce((s,r)=>s+r.filter(g=>!g.isBye).length, 0) + thirdG.length;
     const last = cs.ko.length ? cs.ko[cs.ko.length-1][0] : cs.sched[cs.sched.length-1];
     if (last?.time && t2m(last.time)>t2m(lastTime)) { lastTime=last.time; lastDur=cat.cfg?.gameDur||30; }
@@ -1793,7 +1791,7 @@ function renderBracketForCat(catId, container) {
   updateKOForCat(catId);
 
   const poolGames = cs.sched.filter(g=>g.gi>=0);   // exclude the 3rd-place game (gi=-1)
-  const done  = poolGames.filter(g=>isValidScore(parseInt(g.sa),parseInt(g.sb),catId)).length;
+  const done  = poolGames.filter(g=>isValidScore(parseInt(g.sa),parseInt(g.sb),catId,getRuleForGame(catId,g,false).pts)).length;
   const total = poolGames.length;
   const info  = document.createElement('div');
   info.className='binfo';
@@ -1830,7 +1828,7 @@ function renderBracketForCat(catId, container) {
       return box;
     }
     const sa=parseInt(g.sa), sb=parseInt(g.sb);
-    const hs=isValidScore(sa,sb,catId);
+    const hs=isValidScore(sa,sb,catId,getRuleForGame(catId,g,true).pts);
     const wa=hs&&sa>sb, wb=hs&&sb>sa;
     let labelA=g.a||'TBD', labelB=g.b||'TBD', codeA='', codeB='', knownA=false, knownB=false;
     if (ri===0) {
@@ -1931,7 +1929,7 @@ function renderBracketForCat(catId, container) {
     const lastCol = tree.querySelector('.bround:last-child');
     if (lastCol) {
       const sa3=parseInt(thirdGame.sa), sb3=parseInt(thirdGame.sb);
-      const hs3=isValidScore(sa3,sb3,catId);
+      const hs3=isValidScore(sa3,sb3,catId,getRuleForGame(catId,thirdGame,false).pts);
       const wa3=hs3&&sa3>sb3, wb3=hs3&&sb3>sa3;
       const isSeed3=s=>!s||s.startsWith('Loser')||/^[A-Z]\d+(\/[A-Z]\d+)?$/.test(s);
       const lA3=dnH(thirdGame.a||'TBD'), lB3=dnH(thirdGame.b||'TBD');
@@ -1954,7 +1952,7 @@ function renderBracketForCat(catId, container) {
   const fin=cs.ko[cs.ko.length-1][0];
   if (fin) {
     const fsa=parseInt(fin.sa),fsb=parseInt(fin.sb);
-    if (isValidScore(fsa,fsb,catId)) {
+    if (isValidScore(fsa,fsb,catId,getRuleForGame(catId,fin,true).pts)) {
       const w=fsa>fsb?fin.a:fin.b;
       const champEl=document.createElement('div');
       champEl.innerHTML=`<div class="champ-wrap"><div class="ci">CHAMPION</div><div class="champ-name">${dnH(w)}</div></div>`;
@@ -2437,7 +2435,6 @@ function renderCatItem(cat, ci) {
       ${catNumField('Adv/Group', ci, 'advPerGroup', cfg.advPerGroup, 1, 8)}
       ${catNumField('Game min', ci, 'gameDur', cfg.gameDur, 5, 120)}
       ${catNumField('Break min', ci, 'breakDur', cfg.breakDur, 0, 60)}
-      ${catNumField('Pts to win', ci, 'pointsToWin', cfg.pointsToWin, 11, 99)}
       <div class="cat-sett-field">
         <span class="cat-sett-label">Sets</span>
         <div class="cat-sett-ctrl">

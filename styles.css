@@ -49,12 +49,12 @@ body {
 .no-t-wrap h1 { font-family: 'Barlow Condensed', sans-serif; font-size: 32px; font-weight: 900; color: var(--text); }
 .no-t-wrap p { font-size: 15px; color: var(--text3); }
 .no-t-wrap code { background: var(--bg3); padding: 2px 7px; border-radius: 4px; font-size: 13px; }
-/* Loading — pink brand */
-#view-loading { background: linear-gradient(135deg, #E91E8C 0%, #FF4FA8 100%); }
+/* Loading — neutral white */
+#view-loading { background: #ffffff; }
 #view-loading .no-t-wrap h1,
-#view-loading p { color: rgba(255,255,255,0.9); }
+#view-loading p { color: #333333; }
 .loader { width: 36px; height: 36px;
-  border: 3px solid rgba(255,255,255,0.3); border-top-color: #fff;
+  border: 3px solid rgba(0,0,0,0.12); border-top-color: #111111;
   border-radius: 50%; animation: spin .8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
@@ -134,8 +134,12 @@ nav::-webkit-scrollbar { display: none; }
 /* Phase visibility */
 .phase-reg { display: none; }
 .phase-trn { display: none; }
+.phase-blt { display: none; }
 body.phase-registration .phase-reg { display: inline-block; }
 body.phase-tournament .phase-trn { display: inline-block; }
+body.phase-registration .phase-blt { display: inline-block; }
+body.phase-built .phase-blt { display: inline-block; }
+body.phase-built .phase-trn { display: inline-block; }
 
 main { position: relative; z-index: 5; max-width: 980px; margin: 0 auto; padding: 24px 16px 100px; }
 .pg { display: none; }
