@@ -1,0 +1,39 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Tournaments are PUBLIC to view (anyone with the ?t=<id> link can read).
+    //
+    // Writes are open because the app authenticates with tournament passwords
+    // that are checked IN THE BROWSER — there is no Firebase Auth, so these
+    // rules cannot tell an admin from an ordinary visitor. Access control today
+    // is effectively "you need to know the tournament id + password". To truly
+    // lock down writes, add Firebase Auth and gate on request.auth. See SECURITY.md.
+    match /tournaments/{tId} {
+      allow read:  if true;
+      allow write: if true;
+
+      // Contains participant name + phone (PII). World-readable under the current model.
+      match /registrations/{rId} {
+        allow read, write: if true;
+      }
+    }
+
+    // Global player directory (name + phone) used for autocomplete.
+    match /players/{doc} {
+      allow read, write: if true;
+    }
+
+    // Super-admin credential hash. Readable so admin.html can compare it
+    // client-side; NEVER writable from the client — set it in the Firebase console.
+    match /config/{doc} {
+      allow read:  if true;
+      allow write: if false;
+    }
+
+    // Deny everything else (prevents writing to arbitrary new collections).
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

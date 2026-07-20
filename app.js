@@ -557,6 +557,7 @@ async function setRegStatus(id, status) {
   if (!admin) return;
   try {
     if (status === 'rejected') {
+      if (!confirm('Reject and permanently remove this registration?')) return;
       // Hard delete — also remove from build roster if present
       const reg = registrations.find(r => r.id === id);
       if (reg) {
@@ -685,7 +686,7 @@ function renderPayLink(wrapId) {
   const links = [
     { url: meta.paymentLink,  label: meta.paymentLinkLabel  || 'Payment Link'   },
     { url: meta.paymentLink2, label: meta.paymentLink2Label || 'Payment Link 2' },
-  ].filter(l => l.url);
+  ].filter(l => /^https?:\/\//i.test(l.url || ''));   // only real http(s) links (blocks javascript: etc.)
 
   if (!links.length) { wrap.className = 'pay-section h'; wrap.innerHTML = ''; return; }
 
@@ -827,6 +828,7 @@ function editBuildItem(catId, idx) {
 async function deleteBuildItem(catId, idx) {
   if (!admin || (meta.phase !== 'registration' && meta.phase !== 'built')) return;
   const name = state[catId]?.roster[idx];
+  if (!confirm(name ? `Remove "${name}" from the tournament?` : 'Remove this pair?')) return;
   if (name) {
     const parts = name.split(' / ').map(s => s.trim());
     const p1 = parts[0], p2 = parts[1] || '';
@@ -1476,6 +1478,7 @@ function deleteTeam(catId, gi, ti) {
   if (!superAdmin || (meta.phase !== 'registration' && meta.phase !== 'built')) return;
   const grp = state[catId].groups[gi];
   if (grp.teams.length<=1) { alert('Group needs at least 1 team'); return; }
+  if (!confirm(`Remove "${grp.teams[ti]}" from group ${grp.name}?`)) return;
   grp.teams.splice(ti,1);
   pushToCloud(); renderStandings();
 }
@@ -1605,32 +1608,6 @@ function koGameLabel(catId, ri, gi) {
 }
 
 // ============ ONE-TIME BRACKET FIX ============
-async function fixBracketPairings() {
-  if (!superAdmin) { alert('Requires superAdmin'); return; }
-
-  // QUEEN r0 fix:
-  // Current: [BYE(C1), A2vsB3, BYE(D1), B2vsA3, BYE(A1), C2vsD3, BYE(B1), D2vsC3]
-  // Desired: [BYE(A1), B2vsA3, BYE(B1), A2vsB3, BYE(C1), D2vsC3, BYE(D1), C2vsD3]
-  const q = state['queen'];
-  if (q?.ko?.[0]?.length === 8) {
-    const r = q.ko[0];
-    q.ko[0] = [r[4], r[3], r[6], r[1], r[0], r[7], r[2], r[5]];
-  }
-
-  // PRINCESS r0 fix:
-  // Current: [A1vsB4, A2vsB3, A3vsB2, A4vsB1]
-  // Desired: [A1vsB4, B1vsA4, A2vsB3, B2vsA3]
-  const p = state['princess'];
-  if (p?.ko?.[0]?.length === 4) {
-    const r = p.ko[0];
-    p.ko[0] = [r[0], r[3], r[1], r[2]];
-  }
-
-  await pushToCloud();
-  renderAll();
-  alert('Bracket pairings fixed and saved!');
-}
-
 // ============ SCHEDULE PAGE ============
 function renderStats() {
   const el = document.getElementById('sbar');
@@ -2688,8 +2665,7 @@ Object.assign(window, {
   updateCatColor, renameGroup, moveTeam,
   updateGroupColor, updateBgColor,
   updateKORuleField,
-  addPlayerToDB, removePlayerFromDB, importPlayersFromTournament,
-  fixBracketPairings
+  addPlayerToDB, removePlayerFromDB, importPlayersFromTournament
 });
 
 // ============ PLAYER DATABASE ============
