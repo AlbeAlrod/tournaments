@@ -1095,6 +1095,62 @@ function getKORoundName(catId, ri) {
   return `Round of ${Math.pow(2,fromEnd+1)}`;
 }
 
+// Pool schedule built in PHASES of `nc` groups (e.g. 2 groups on 2 courts):
+// all games of a phase are pooled across every court — minimal idle time, balanced
+// rest, never double-booking a couple — and the next phase starts only after the
+// current one finishes. Keeps "first 2 groups, then next 2 groups, then knockout",
+// and auto-compacts when a group is smaller (e.g. after a withdrawal).
+function genPoolSched(catId) {
+  const cs  = state[catId];
+  const cat = categories.find(c => c.id === catId);
+  if (!cs || !cat) return [];
+  const cfg = cat.cfg || DEF_CAT_CFG;
+  const slotDur = (cfg.gameDur||30) + (cfg.breakDur||0);
+  const nc = cfg.courts || 2;
+  const courtList = []; for (let c = 0; c < nc; c++) courtList.push(c + 1);
+
+  const scheduled = [];
+  let psi = 0;
+  for (let p = 0; p < cs.groups.length; p += nc) {          // one phase per `nc` groups
+    const remaining = [];
+    for (let gi = p; gi < Math.min(p + nc, cs.groups.length); gi++) {
+      const grp = cs.groups[gi];
+      const homeCourt = ((gi - p) % nc) + 1;
+      rr(grp.teams).forEach(([a,b]) =>
+        remaining.push({ catId, gi, gn:grp.name, a, b, sa:'', sb:'', homeCourt, court:homeCourt }));
+    }
+    const poolRem = {};
+    remaining.forEach(g => { poolRem[g.gi] = (poolRem[g.gi]||0) + 1; });
+    const lastSlot = {};
+    while (remaining.length && psi < 1000) {
+      const used = new Set();
+      courtList.forEach(court => {
+        let best = null, bestScore = null, bestIdx = -1;
+        for (let i = 0; i < remaining.length; i++) {
+          const g = remaining[i];
+          if (used.has(g.a) || used.has(g.b)) continue;
+          const home    = g.homeCourt === court ? 1 : 0;
+          const restA   = psi - (g.a in lastSlot ? lastSlot[g.a] : psi - 3);
+          const restB   = psi - (g.b in lastSlot ? lastSlot[g.b] : psi - 3);
+          const minRest = Math.min(restA, restB, 2);
+          const score   = [home, minRest, poolRem[g.gi] || 0];
+          if (bestScore === null || cmpScore(score, bestScore) > 0) { best = g; bestScore = score; bestIdx = i; }
+        }
+        if (!best) return;
+        best.si = psi; best.court = court;
+        best.time = addM(cfg.startTime||'08:00', psi*slotDur);
+        used.add(best.a); used.add(best.b);
+        lastSlot[best.a] = psi; lastSlot[best.b] = psi;
+        poolRem[best.gi]--;
+        scheduled.push(best);
+        remaining.splice(bestIdx, 1);
+      });
+      psi++;
+    }
+  }
+  return scheduled;
+}
+
 function generateScheduleForCat(catId) {
   const cs  = state[catId];
   const cat = categories.find(c => c.id === catId);
@@ -1103,52 +1159,8 @@ function generateScheduleForCat(catId) {
   const slotDur = (cfg.gameDur||30) + (cfg.breakDur||0);
   const nc = cfg.courts || 2;
 
-  // ---- Smart pool-stage schedule ----
-  // Keep each pool on its home court; when a court would sit idle, fill it with a
-  // game from a pool that still has matches (finishes uneven draws faster); never
-  // double-book a couple in one slot; spread each couple's games to even out waiting.
-  const courtList = [];
-  for (let c = 0; c < nc; c++) courtList.push(c + 1);
-
-  const remaining = [];
-  cs.groups.forEach((grp, gi) => {
-    const homeCourt = (gi % nc) + 1;
-    rr(grp.teams).forEach(([a,b]) => {
-      remaining.push({ catId, gi, gn:grp.name, a, b, sa:'', sb:'', homeCourt, court:homeCourt });
-    });
-  });
-
-  const poolRem = {};
-  remaining.forEach(g => { poolRem[g.gi] = (poolRem[g.gi]||0) + 1; });
-
-  const lastSlot = {};
-  const scheduled = [];
-  let psi = 0;
-  while (remaining.length && psi < 1000) {
-    const used = new Set();
-    courtList.forEach(court => {
-      let best = null, bestScore = null, bestIdx = -1;
-      for (let i = 0; i < remaining.length; i++) {
-        const g = remaining[i];
-        if (used.has(g.a) || used.has(g.b)) continue;
-        const home    = g.homeCourt === court ? 1 : 0;
-        const restA   = psi - (g.a in lastSlot ? lastSlot[g.a] : psi - 3);
-        const restB   = psi - (g.b in lastSlot ? lastSlot[g.b] : psi - 3);
-        const minRest = Math.min(restA, restB, 2);
-        const score   = [home, minRest, poolRem[g.gi] || 0];
-        if (bestScore === null || cmpScore(score, bestScore) > 0) { best = g; bestScore = score; bestIdx = i; }
-      }
-      if (!best) return;
-      best.si = psi; best.court = court;
-      best.time = addM(cfg.startTime||'08:00', psi*slotDur);
-      used.add(best.a); used.add(best.b);
-      lastSlot[best.a] = psi; lastSlot[best.b] = psi;
-      poolRem[best.gi]--;
-      scheduled.push(best);
-      remaining.splice(bestIdx, 1);
-    });
-    psi++;
-  }
+  // ---- Pool-stage schedule (phased across groups; see genPoolSched) ----
+  const scheduled = genPoolSched(catId);
   cs.sched = scheduled;
 
   const adv = cfg.advPerGroup || 0;
@@ -1476,11 +1488,18 @@ function saveEdit() {
 }
 function deleteTeam(catId, gi, ti) {
   if (!superAdmin || (meta.phase !== 'registration' && meta.phase !== 'built')) return;
-  const grp = state[catId].groups[gi];
+  const cs  = state[catId];
+  const grp = cs.groups[gi];
   if (grp.teams.length<=1) { alert('Group needs at least 1 team'); return; }
   if (!confirm(`Remove "${grp.teams[ti]}" from group ${grp.name}?`)) return;
   grp.teams.splice(ti,1);
-  pushToCloud(); renderStandings();
+  // Withdrawal before start: re-optimize the pool schedule (no idle court) — keep the bracket
+  if (cs.sched?.some(g => g.gi >= 0)) {
+    const third = cs.sched.find(g => g.isThirdPlace);
+    cs.sched = genPoolSched(catId);
+    if (third) cs.sched.push(third);
+  }
+  pushToCloud(); renderAll();
 }
 
 // ============ SCORES ============
