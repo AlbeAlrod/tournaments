@@ -1100,6 +1100,39 @@ function getKORoundName(catId, ri) {
 // rest, never double-booking a couple — and the next phase starts only after the
 // current one finishes. Keeps "first 2 groups, then next 2 groups, then knockout",
 // and auto-compacts when a group is smaller (e.g. after a withdrawal).
+// Slot times are CUMULATIVE: each slot lasts as long as the stage played in it,
+// using the per-stage `dur` from koRules (falling back to the category's Game min).
+// This lets e.g. pool/R16 run 15 min while QF onward run 20 min.
+function assignSlotTimes(catId) {
+  const cs  = state[catId];
+  const cat = categories.find(c => c.id === catId);
+  if (!cs || !cat) return;
+  const cfg   = cat.cfg || DEF_CAT_CFG;
+  const rules = { ...DEF_KO_RULES, ...(cfg.koRules||{}) };
+  const durOf = s => (rules[s] && rules[s].dur) || cfg.gameDur || 30;
+  const brk   = cfg.breakDur || 0;
+
+  const slotDur = {};
+  const note = (si, d) => { if (si >= 0) slotDur[si] = Math.max(slotDur[si]||0, d); };
+  (cs.sched||[]).forEach(g => note(g.si, g.isThirdPlace ? durOf('third') : durOf('pool')));
+  (cs.ko||[]).forEach((round, ri) => round.forEach(g => {
+    if (g.isBye) return;
+    const fromEnd = cs.ko.length - 1 - ri;
+    note(g.si, durOf(fromEnd===0 ? 'final' : fromEnd===1 ? 'sf' : fromEnd===2 ? 'qf' : 'r16'));
+  }));
+
+  const timeOf = {};
+  let clock = t2m(cfg.startTime || '08:00');
+  Object.keys(slotDur).map(Number).sort((a,b)=>a-b).forEach(si => {
+    timeOf[si] = m2t(clock);
+    clock += slotDur[si] + brk;
+  });
+  (cs.sched||[]).forEach(g => { if (timeOf[g.si] !== undefined) g.time = timeOf[g.si]; });
+  (cs.ko||[]).forEach(round => round.forEach(g => {
+    if (!g.isBye && timeOf[g.si] !== undefined) g.time = timeOf[g.si];
+  }));
+}
+
 function genPoolSched(catId) {
   const cs  = state[catId];
   const cat = categories.find(c => c.id === catId);
@@ -1165,13 +1198,14 @@ function generateScheduleForCat(catId) {
 
   const adv = cfg.advPerGroup || 0;
   const ng  = cs.groups.length;
-  if (adv < 1) { cs.ko = []; return; }
+  if (adv < 1) { cs.ko = []; assignSlotTimes(catId); return; }
 
   // Custom QUEEN knockout (ranking format): #1 gets a bye to the QF, #2/#3 play the
   // Round of 16 with the poster's cross pairings, then QF/SF/3rd/Final.
   if (cfg.koFormat === 'queen' && ng === 4) {
     const lastSiQ = scheduled.length ? Math.max(...scheduled.map(g=>g.si)) : 0;
     buildQueenKO(catId, cfg, nc, slotDur, cfg.startTime||'08:00', lastSiQ + 1);
+    assignSlotTimes(catId);
     return;
   }
 
@@ -1219,6 +1253,7 @@ function generateScheduleForCat(catId) {
     cs.ko.push(round);
     matches = Math.floor(matches/2);
   }
+  assignSlotTimes(catId);
 }
 
 // QUEEN ranking knockout: 4 pools, top-3 advance (#4 out).
@@ -1498,6 +1533,7 @@ function deleteTeam(catId, gi, ti) {
     const third = cs.sched.find(g => g.isThirdPlace);
     cs.sched = genPoolSched(catId);
     if (third) cs.sched.push(third);
+    assignSlotTimes(catId);
   }
   pushToCloud(); renderAll();
 }
@@ -2451,7 +2487,7 @@ function renderCatItem(cat, ci) {
     <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
       <div class="cat-sett-label" style="margin-bottom:8px;font-size:10px;letter-spacing:2px">SCORING RULES</div>
       <table class="scoring-rules-tbl">
-        <thead><tr><th>Stage</th><th>Pts to win</th><th>Switch @</th></tr></thead>
+        <thead><tr><th>Stage</th><th>Pts to win</th><th>Switch @</th><th>Min</th></tr></thead>
         <tbody>
           ${[
             ['pool',  'Pool'],
@@ -2473,6 +2509,11 @@ function renderCatItem(cat, ci) {
                 <button class="s-num-btn" onclick="updateKORuleField(${ci},'${key}','change',${r.change?r.change-1:null})">−</button>
                 <span class="s-num-val">${r.change||'—'}</span>
                 <button class="s-num-btn" onclick="updateKORuleField(${ci},'${key}','change',${r.change?r.change+1:5})">+</button>
+              </div></td>
+              <td><div class="cat-sett-ctrl">
+                <button class="s-num-btn" onclick="updateKORuleField(${ci},'${key}','dur',Math.max(5,(${r.dur||cfg.gameDur||15})-5))">−</button>
+                <span class="s-num-val">${r.dur||cfg.gameDur||15}</span>
+                <button class="s-num-btn" onclick="updateKORuleField(${ci},'${key}','dur',Math.min(60,(${r.dur||cfg.gameDur||15})+5))">+</button>
               </div></td>
             </tr>`;
           }).join('')}
@@ -2539,7 +2580,10 @@ function updateKORuleField(ci, roundKey, field, val) {
   if (!categories[ci].cfg.koRules) categories[ci].cfg.koRules = {};
   if (!categories[ci].cfg.koRules[roundKey]) categories[ci].cfg.koRules[roundKey] = {...DEF_KO_RULES[roundKey]};
   categories[ci].cfg.koRules[roundKey][field] = val === '' || val === null ? null : Number(val);
+  // Changing a stage's length shifts every slot after it — recompute the clock.
+  if (field === 'dur') assignSlotTimes(categories[ci].id);
   pushToCloud();
+  renderSettings();
 }
 
 function updateCatName(ci, val) {
