@@ -10,8 +10,9 @@ service cloud.firestore {
     // is effectively "you need to know the tournament id + password". To truly
     // lock down writes, add Firebase Auth and gate on request.auth. See SECURITY.md.
     match /tournaments/{tId} {
-      allow read:  if true;
-      allow write: if true;
+      allow read:           if true;
+      allow create, update: if true;
+      allow delete:         if false;  // no client can WIPE a tournament — delete from the Firebase console
 
       // Contains participant name + phone (PII). World-readable under the current model.
       match /registrations/{rId} {
