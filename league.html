@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
+<title>ליגת קיץ פוצ׳ילינה 2026</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<!-- Rubik ולא Barlow: Barlow הוא לטיני בלבד וכל העברית נופלת לפונט מערכת (מלכודת 4) -->
+<link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700;800;900&display=swap" rel="stylesheet"/>
+<!-- מערכת העיצוב המשותפת. חייבת לבוא ראשונה — league.css מתקן מעליה RTL ועברית. -->
+<link rel="stylesheet" href="styles.css?v=63"/>
+<link rel="stylesheet" href="league.css?v=5"/>
+</head>
+<body>
+
+<!-- טעינה — הרקע הוורוד נצבע מ-meta.loadingColor ב-league.js (החלטה 14) -->
+<div id="view-loading" class="view">
+  <div class="no-t-wrap">
+    <div class="loader"></div>
+    <p>טוען…</p>
+  </div>
+</div>
+
+     <!-- הליגה עוד לא נוצרה. צפייה אינה יצירה: הדוק נוצר רק ב-?init=1 מפורש,
+     כדי שטעינה מקרית של הדף לא תייצר ליגה ציבורית בשקט. -->
+<div id="view-missing" class="view h">
+  <div class="no-t-wrap">
+    <h1>הליגה עוד לא נוצרה</h1>
+    <p>אין מסמך בשם <code id="missing-id"></code>.</p>
+    <p><a id="missing-link" href="#">ליצור אותה עכשיו עם הגדרות ברירת המחדל</a></p>
+  </div>
+</div>
+
+<!-- שגיאת טעינה -->
+<div id="view-error" class="view h">
+  <div class="no-t-wrap">
+    <h1>לא הצלחנו לטעון את הליגה</h1>
+    <p id="error-detail"></p>
+    <p>נסי לרענן. אם זה חוזר — יש בעיית חיבור למסד הנתונים.</p>
+  </div>
+</div>
+
+<!-- האתר -->
+<div id="view-app" class="view h">
+
+  <div id="sponsor-bar" class="sponsor-bar h"></div>
+
+  <div class="sticky-block">
+    <header>
+      <div class="logo">
+        <div class="lmark" id="logo-mark">
+          <img id="logo-img" src="" alt="" style="display:none;height:42px;width:auto;object-fit:contain"/>
+          <span id="logo-letter">פ</span>
+        </div>
+        <span class="lname" id="header-name">ליגה</span>
+      </div>
+      <div class="sync">
+        <span id="sync-dot" class="sync-dot sync-ok"></span>
+        <span id="sync-text" class="sync-text"></span>
+      </div>
+    </header>
+    <nav id="main-nav"></nav>
+  </div>
+
+  <main id="page-body"></main>
+
+  <footer>שלבים 1–2 מתוך 9 — מודל נתונים, סנכרון חי, רוסטר, רשתות, ימים והגדרות</footer>
+</div>
+
+<script type="module" src="league.js?v=8"></script>
+</body>
+</html>

@@ -1,0 +1,190 @@
+/* ============================================================================
+   league.css — שכבת הליגה מעל styles.css
+   ליגת קיץ פוצ׳ילינה 2026
+
+   ⚠️ הקובץ הזה אינו design system. styles.css הוא ה-design system:
+   המשתנים, ה-reset, הכרטיסים (.sett-section), הטבלאות (.stbl), הניווט (.tab),
+   הגלולות (.pill / .filter-btn), השדות (.text-inp), המודאלים, סרגל הספונסרים,
+   נקודת הסנכרון וכל תיקוני הטלפון — כולם שם וממשיכים לשמש כאן.
+
+   כאן יושב אך ורק מה שייחודי לליגה:
+     1. היפוכי RTL — styles.css נכתב לפריסת LTR
+     2. ביטול letter-spacing — באתר הזה כל טקסט הוא עברי (מלכודת 5)
+     3. מסך טעינה ורוד (החלטה 14) במקום הלבן של styles.css
+     4. מצב סנכרון שלישי: "שומר…"
+     5. ארבעה רכיבים שאין להם מקבילה: צ׳יפ רשת, רצועת סלוטים,
+        רשימת מפתח-ערך, ובידוד דו-כיווני לתאים מספריים
+
+   ❗ לא לגעת ב-styles.css. הוא משרת גם את index.html; כל תיקון RTL שם
+   ישבור את האפליקציה הקיימת. כל ההתאמות עוברות דרך הקובץ הזה.
+   ========================================================================= */
+
+/* ── 1. RTL ─────────────────────────────────────────────────────────────
+   styles.css מיישר שמאלה ומשתמש ב-border-left כמדד צד. בעברית שני אלה
+   מתהפכים. מטופלים כאן רק הרכיבים שהליגה משתמשת בהם בפועל; רכיב נוסף
+   שייכנס בשלב הבא יצטרך את ההיפוך שלו כאן. */
+
+.stbl th { text-align: right; }
+.stbl th:not(:first-child),
+.stbl td:not(:first-child) { text-align: center; }
+.stbl tr.winner td:first-child { border-left: 0; border-right: 3px solid var(--cat-color, var(--primary)); }
+
+.frm-err, .frm-ok, .score-err { border-left: 0; border-right-width: 2px; border-right-style: solid; }
+.frm-err  { border-right-color: var(--red); }
+.frm-ok   { border-right-color: var(--green); }
+.score-err{ border-right-color: var(--red); }
+
+.reg-row.status-approved { border-left: 0; border-right: 3px solid var(--green); }
+.reg-row.status-rejected { border-left: 0; border-right: 3px solid var(--red); }
+.reg-row.status-pending  { border-left: 0; border-right: 3px solid var(--amber); }
+
+.gtag { margin-left: 0; margin-right: 4px; }
+
+/* מתג הפרסום (שלב 6) — הידית נעה מימין לשמאל */
+.toggle-slider::before { left: auto; right: 3px; }
+input:checked + .toggle-slider::before { transform: translateX(-20px); }
+
+/* ── 2. ללא letter-spacing ──────────────────────────────────────────────
+   text-transform:uppercase הוא no-op בעברית, אבל letter-spacing שובר את
+   חיבור האותיות. באפליקציה הקיימת זה תוקן נקודתית לכל כותרת שיכולה להכיל
+   שם קטגוריה. כאן הכל עברית, ולכן זה גורף. */
+body, .lname, .tab, .pill, .admin-toggle, .filter-btn, .cat-btn, .cf-btn,
+.sett-section-title, .sett-card-title, .scard-name, .cat-section-header,
+.page-header h2, .modal h3, .mbtn, .status-badge, .sponsor-text,
+.brnd-title, .bm-label, .ko-lbl, .rtag, .ci {
+  letter-spacing: 0;
+  text-transform: none;
+}
+/* הכותרת הזאת מעוצבת ב-styles.css כתווית לטינית זעירה ומרווחת. בעברית
+   היא צריכה להיות כותרת רגילה. */
+.sett-section-title { font-size: 15px; font-weight: 800; }
+
+/* ── 3. מסך הטעינה ─────────────────────────────────────────────────────
+   styles.css קובע #view-loading לבן. החלטה 14: ורוד. הצבע עצמו מוזרק
+   מ-meta.loadingColor ב-league.js, כך שהחלפתו בשלב 8 היא שינוי נתון. */
+#view-loading .no-t-wrap h1,
+#view-loading .no-t-wrap p { color: inherit; }
+#view-loading .loader { border-color: currentColor; border-top-color: transparent; opacity: .7; }
+
+/* ── 4. מצב סנכרון שלישי ───────────────────────────────────────────────
+   styles.css מכיר ok ו-err בלבד. כתיבה עם debounce מוסיפה מצב ביניים. */
+.sync-wait { background: var(--amber); }
+.sync { display: flex; align-items: center; gap: 7px; flex-shrink: 0; }
+.sync-text { font-size: 12px; color: var(--text3); }
+
+/* ── 5. רכיבים ייחודיים לליגה ──────────────────────────────────────────*/
+
+/* צ׳יפ רשת — הצבע מגיע מ-meta.nets[].color, וצבע הטקסט מחושב ב-onColor()
+   כדי שכל ארבעת הקודים יהיו קריאים בלי לבדוק ידנית. */
+.net-chips { display: flex; flex-wrap: wrap; gap: 7px; }
+.net-chip { padding: 5px 14px; border-radius: 999px; font-size: 13px; font-weight: 700; }
+
+/* רצועת הסלוטים — 16 הסלוטים של היום עם השעה של כל אחד.
+   זה הבסיס הוויזואלי למונה אורך היום (§4.6). */
+.slot-strip { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 12px; }
+.slot { display: flex; flex-direction: column; align-items: center;
+  min-width: 56px; padding: 5px 6px; background: var(--bg3);
+  border-radius: var(--rs); font-size: 10.5px; color: var(--text3); }
+.slot b { font-size: 12.5px; color: var(--text2); font-variant-numeric: tabular-nums; }
+
+/* רשימת מפתח-ערך — אין מקבילה ב-styles.css (.sett-row הוא שורת פקד, לא נתון) */
+.kv { display: grid; grid-template-columns: auto 1fr; gap: 8px 16px; font-size: 14px; }
+.kv dt { color: var(--text3); font-weight: 600; }
+.kv dd { color: var(--text); }
+
+/* ביטוי מספרי בתוך טקסט עברי מתהפך ויזואלית: "17:00–22:20" נקרא
+   "22:20–17:00". בידוד ל-LTR מחזיר את הסדר בלי לשנות את יישור הטבלה. */
+.num { direction: ltr; unicode-bidi: isolate; font-variant-numeric: tabular-nums; }
+.stbl td.num { text-align: center; }
+
+/* אותה בעיה בתוך שדות קלט: hex נראה "F3C6D8#" וכתובת נראית "…//:https".
+   כל שדה שתוכנו לטיני מעצם טיבו — צבע, כתובת, תאריך, שעה, מספר — הוא LTR. */
+.text-mono,
+input[type="url"], input[type="date"], input[type="time"], input[type="number"] {
+  direction: ltr; text-align: left;
+}
+
+/* גלילה אופקית לטבלה, כדי שהדף עצמו לא יגלול לרוחב */
+.tscroll { overflow-x: auto; }
+
+/* אקורדיון ההגדרות (§12: "שישה מקטעים מתקפלים"). ל-styles.css אין רכיב כזה,
+   ו-<details> נותן את ההתנהגות מהדפדפן בלי שורת JS. */
+.acc { padding: 0; }
+.acc > summary {
+  cursor: pointer; list-style: none; user-select: none;
+  padding: 16px 24px; margin: 0; border-bottom: 0;
+  display: flex; align-items: center; gap: 8px;
+}
+.acc > summary::-webkit-details-marker { display: none; }
+.acc > summary::after {
+  content: '⌄'; margin-inline-start: auto; font-size: 18px; line-height: 1;
+  color: var(--text3); transition: transform .18s;
+}
+.acc[open] > summary::after { transform: rotate(180deg); }
+.acc[open] > summary { border-bottom: 2px solid var(--primary); }
+.acc-body { padding: 6px 24px 20px; }
+
+/* שורת קבוצה ברוסטר */
+.team-row { display: flex; align-items: center; gap: 8px;
+  padding: 7px 0; border-bottom: 1px solid var(--border); }
+.team-row:last-of-type { border-bottom: 0; }
+.team-row.inactive { opacity: .55; }
+.team-num { min-width: 22px; height: 22px; border-radius: 50%; flex-shrink: 0;
+  background: var(--primary); color: var(--on-primary);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 800; }
+.team-name-inp { flex: 1; min-width: 0; }
+.team-size-sel { width: 108px; flex-shrink: 0; }
+.team-id { flex-shrink: 0; font-size: 11px; opacity: .75; }
+
+/* פורמט משחק — שדות מספר צרים בשורה אחת */
+.fmt-ctrl { flex-wrap: wrap; gap: 6px; }
+.fmt-lbl { display: flex; align-items: center; gap: 4px;
+  font-size: 11px; color: var(--text3); }
+.fmt-num { width: 62px; padding: 5px 7px; font-size: 13px; }
+
+/* בחירת רשתות פעילות ליום */
+.net-toggles { display: flex; flex-wrap: wrap; gap: 10px; }
+.net-toggle { display: flex; align-items: center; gap: 5px; cursor: pointer; }
+.net-toggle input { cursor: pointer; }
+.net-toggle .net-chip { font-size: 11.5px; padding: 3px 10px; }
+
+/* סיכום חי לכל יום — הבסיס למונה אורך המחזור (§4.6) */
+.day-readout { display: flex; flex-wrap: wrap; gap: 6px 18px;
+  margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border);
+  font-size: 12px; color: var(--text3); }
+.day-readout b { color: var(--text2); font-weight: 700; }
+
+.cat-item-name-inp { flex: 1; min-width: 0; font-weight: 600; }
+.scaffold-note { border-style: dashed; }
+
+/* ב-styles.css קיים .sett-desc אבל הוא display:block. להערת אגב בתוך שורה
+   אין מקבילה, וכך גם ל-code מחוץ ל-.no-t-wrap — שניהם מאמצים את אותם ערכים. */
+.muted { font-size: 12.5px; color: var(--text3); }
+code { background: var(--bg3); padding: 2px 7px; border-radius: 4px; font-size: 13px; }
+
+footer { padding: 20px; text-align: center; font-size: 12px;
+  color: var(--text3); border-top: 1px solid var(--border); }
+
+/* כרטיס שקיים רק בשלב 1 ונעלם בשלב 2 — מסומן ויזואלית ככזה */
+.sett-section.scaffold { border-style: dashed; border-color: var(--border2); }
+
+@media (max-width: 640px) {
+  .kv { grid-template-columns: 1fr; gap: 2px 0; }
+  .kv dd { margin-bottom: 8px; }
+
+  /* שש פקדים בשורה אחת מוחצים את שדה השם ל-40 פיקסלים — והשם הוא בדיוק
+     מה שצריך לראות. אותה בעיה שכבר תוקנה פעם לשמות זוגות בלוז: בטלפון
+     השם מקבל שורה משלו והפקדים יורדים מתחתיו. */
+  .team-row { display: grid; grid-template-columns: auto 1fr auto auto;
+    align-items: center; column-gap: 8px; row-gap: 7px; padding: 11px 0; }
+  .team-num                          { grid-column: 1;     grid-row: 1; }
+  .team-name-inp                     { grid-column: 2/-1;  grid-row: 1; }
+  .team-size-sel                     { grid-column: 1/3;   grid-row: 2; width: 100%; }
+  .team-row [data-act="team.active"] { grid-column: 3;     grid-row: 2; }
+  .team-row .team-del                { grid-column: 4;     grid-row: 2; }
+  .team-id                           { grid-column: 1/-1;  grid-row: 3; justify-self: start; }
+
+  .acc > summary { padding: 14px 16px; }
+  .acc-body { padding: 6px 16px 18px; }
+}
