@@ -2258,7 +2258,7 @@ function renderSettings() {
       <div class="sett-label"><span class="sett-name">Tournament Name</span></div>
       <div class="sett-ctrl">
         <input class="text-inp" style="width:220px" value="${escH(meta.name)}"
-          oninput="updateMeta('name',this.value)" placeholder="Tournament name"/>
+          onchange="updateMeta('name',this.value)" placeholder="Tournament name"/>
       </div>
     </div>
     <div class="sett-row">
@@ -2270,7 +2270,7 @@ function renderSettings() {
         <input type="color" class="color-inp" id="cp-primary" value="${pc}"
           oninput="document.getElementById('ct-primary').value=this.value;updateMeta('primaryColor',this.value)"/>
         <input class="text-inp text-mono" id="ct-primary" style="width:100px" value="${pc}"
-          oninput="if(/^#[0-9A-Fa-f]{6}$/.test(this.value)){document.getElementById('cp-primary').value=this.value;updateMeta('primaryColor',this.value)}"/>
+          onchange="if(/^#[0-9A-Fa-f]{6}$/.test(this.value)){document.getElementById('cp-primary').value=this.value;updateMeta('primaryColor',this.value)}"/>
       </div>
     </div>
     <div class="sett-row">
@@ -2282,7 +2282,7 @@ function renderSettings() {
         <input type="color" class="color-inp" id="cp-secondary" value="${sc}"
           oninput="document.getElementById('ct-secondary').value=this.value;updateMeta('secondaryColor',this.value)"/>
         <input class="text-inp text-mono" id="ct-secondary" style="width:100px" value="${sc}"
-          oninput="if(/^#[0-9A-Fa-f]{6}$/.test(this.value)){document.getElementById('cp-secondary').value=this.value;updateMeta('secondaryColor',this.value)}"/>
+          onchange="if(/^#[0-9A-Fa-f]{6}$/.test(this.value)){document.getElementById('cp-secondary').value=this.value;updateMeta('secondaryColor',this.value)}"/>
       </div>
     </div>
     <div class="sett-row">
@@ -2300,7 +2300,7 @@ function renderSettings() {
         <input type="color" class="color-inp" id="cp-bg" value="${meta.bgColor||'#ffffff'}"
           oninput="document.getElementById('ct-bg').value=this.value;updateBgColor(this.value)"/>
         <input class="text-inp text-mono" id="ct-bg" style="width:100px" value="${meta.bgColor||'#ffffff'}"
-          oninput="if(/^#[0-9A-Fa-f]{6}$/.test(this.value)){document.getElementById('cp-bg').value=this.value;updateBgColor(this.value)}"/>
+          onchange="if(/^#[0-9A-Fa-f]{6}$/.test(this.value)){document.getElementById('cp-bg').value=this.value;updateBgColor(this.value)}"/>
         <button class="add-cat-btn" style="font-size:11px;padding:5px 10px" onclick="updateBgColor('')">Reset</button>
       </div>
     </div>`;
@@ -2318,7 +2318,7 @@ function renderSettings() {
       </div>
       <div class="sett-ctrl" style="flex-direction:column;align-items:flex-end;gap:10px">
         <input class="text-inp" style="width:260px" value="${escH(meta.logoUrl)}"
-          oninput="updateMeta('logoUrl',this.value)" placeholder="https://…"/>
+          onchange="updateMeta('logoUrl',this.value)" placeholder="https://…"/>
         ${meta.logoUrl ? `<img src="${escH(meta.logoUrl)}" class="logo-prev-img" alt="" onerror="this.style.display='none'"/>` : ''}
       </div>
     </div>`;
@@ -2338,7 +2338,7 @@ function renderSettings() {
           <input type="color" class="color-inp" id="gcp-${i}" value="${cur}"
             oninput="document.getElementById('gct-${i}').value=this.value;updateGroupColor(${i},this.value)"/>
           <input class="text-inp text-mono" id="gct-${i}" style="width:100px" value="${cur}"
-            oninput="if(/^#[0-9A-Fa-f]{6}$/.test(this.value)){document.getElementById('gcp-${i}').value=this.value;updateGroupColor(${i},this.value)}"/>
+            onchange="if(/^#[0-9A-Fa-f]{6}$/.test(this.value)){document.getElementById('gcp-${i}').value=this.value;updateGroupColor(${i},this.value)}"/>
           <button class="add-cat-btn" style="font-size:11px;padding:5px 10px"
             onclick="updateGroupColor(${i},'${grpDefaults[i]}');renderSettings()">Reset</button>
         </div>
@@ -2359,9 +2359,9 @@ function renderSettings() {
             ? `<img src="${escH(l.url)}" alt="" onerror="this.style.display='none'" style="max-width:52px;max-height:32px;object-fit:contain"/>`
             : `<span style="color:var(--text3);font-size:20px;line-height:1">+</span>`}</div>
           <input class="text-inp" style="flex:1;min-width:0" value="${escH(l.url)}"
-            placeholder="Image URL…" oninput="updateSponsorLogo(${i},'url',this.value)"/>
+            placeholder="Image URL…" onchange="updateSponsorLogo(${i},'url',this.value)"/>
           <input class="text-inp" style="width:100px;flex-shrink:0" value="${escH(l.alt)}"
-            placeholder="Name…" oninput="updateSponsorLogo(${i},'alt',this.value)"/>
+            placeholder="Name…" onchange="updateSponsorLogo(${i},'alt',this.value)"/>
           <button class="team-del" onclick="removeSponsorLogo(${i})" title="Remove">✕</button>
         </div>`).join('')
       : `<p class="sett-empty-note">No sponsors yet — add one below.</p>`}
@@ -2447,7 +2447,7 @@ function renderSettings() {
       </div>
       <div class="sett-ctrl">
         <textarea class="text-inp" style="width:240px;height:76px;resize:vertical;line-height:1.5"
-          oninput="updateMeta('regNote',this.value)"
+          onchange="updateMeta('regNote',this.value)"
           placeholder="e.g. Payment deadline is Friday…">${escH(meta.regNote)}</textarea>
       </div>
     </div>
@@ -2459,15 +2459,15 @@ function renderSettings() {
       <div class="sett-ctrl" style="flex-direction:column;align-items:flex-end;gap:8px">
         <div style="display:flex;gap:6px;align-items:center">
           <input class="text-inp" value="${escH(meta.paymentLinkLabel)}" style="width:100px" placeholder="Label…"
-            oninput="updateMeta('paymentLinkLabel',this.value)"/>
+            onchange="updateMeta('paymentLinkLabel',this.value)"/>
           <input class="text-inp" value="${escH(meta.paymentLink)}" style="width:190px" placeholder="https://…"
-            oninput="updateMeta('paymentLink',this.value)"/>
+            onchange="updateMeta('paymentLink',this.value)"/>
         </div>
         <div style="display:flex;gap:6px;align-items:center">
           <input class="text-inp" value="${escH(meta.paymentLink2Label)}" style="width:100px" placeholder="Label…"
-            oninput="updateMeta('paymentLink2Label',this.value)"/>
+            onchange="updateMeta('paymentLink2Label',this.value)"/>
           <input class="text-inp" value="${escH(meta.paymentLink2)}" style="width:190px" placeholder="https://… (optional)"
-            oninput="updateMeta('paymentLink2',this.value)"/>
+            onchange="updateMeta('paymentLink2',this.value)"/>
         </div>
       </div>
     </div>`;
@@ -2601,7 +2601,7 @@ function renderCatItem(cat, ci) {
         <input type="color" class="color-inp" id="ccp-${ci}" style="width:36px;height:32px" value="${catColor}"
           oninput="document.getElementById('cct-${ci}').value=this.value;updateCatColor(${ci},this.value)"/>
         <input class="text-inp text-mono" id="cct-${ci}" style="width:84px;padding:5px 8px;font-size:12px" value="${catColor}"
-          oninput="if(/^#[0-9A-Fa-f]{6}$/.test(this.value)){document.getElementById('ccp-${ci}').value=this.value;updateCatColor(${ci},this.value)}"/>
+          onchange="if(/^#[0-9A-Fa-f]{6}$/.test(this.value)){document.getElementById('ccp-${ci}').value=this.value;updateCatColor(${ci},this.value)}"/>
       </div>
       <button class="team-del" onclick="deleteCategory(${ci})" title="Delete">✕</button>
     </div>
