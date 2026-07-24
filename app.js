@@ -2829,7 +2829,36 @@ function renderSponsorBar() {
   ).join('');
 }
 
+// Firestore echoes our own writes back (local echo + server ack), each of which
+// re-renders and rebuilds inputs — dropping focus mid-typing. Preserve the
+// focused field + caret across every re-render so typing is never interrupted.
+function _focusSnapshot() {
+  const ae = document.activeElement;
+  if (!ae || !/^(INPUT|TEXTAREA)$/.test(ae.tagName)) return null;
+  let sel = null;
+  if (ae.id) sel = '#' + ((window.CSS && CSS.escape) ? CSS.escape(ae.id) : ae.id);
+  else if (ae.placeholder) sel = ae.tagName.toLowerCase() + '[placeholder="' + ae.placeholder.replace(/"/g,'\\"') + '"]';
+  if (!sel) return null;
+  let s = null, e = null;
+  try { s = ae.selectionStart; e = ae.selectionEnd; } catch(_) {}
+  return { sel, s, e };
+}
+function _focusRestore(f) {
+  if (!f) return;
+  let el = null;
+  try { el = document.querySelector(f.sel); } catch(_) {}
+  if (!el || el === document.activeElement) return;
+  try {
+    el.focus({ preventScroll: true });
+    if (f.s != null && el.setSelectionRange) el.setSelectionRange(f.s, f.e);
+  } catch(_) {}
+}
 function renderAll() {
+  const _f = _focusSnapshot();
+  renderAllInner();
+  _focusRestore(_f);
+}
+function renderAllInner() {
   applyTheme(meta.primaryColor, meta.secondaryColor);
   applyGroupColors();
   applyLogo(meta.logoUrl);
