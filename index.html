@@ -6,7 +6,7 @@
 <title>Tournaments</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700;800;900&display=swap" rel="stylesheet"/>
-<link rel="stylesheet" href="styles.css?v=62"/>
+<link rel="stylesheet" href="styles.css?v=63"/>
 </head>
 <body>
 
@@ -149,12 +149,14 @@
 
     <!-- SCHEDULE (tournament) -->
     <div class="pg" id="page-schedule">
-      <div id="sbar" class="sbar"></div>
       <div class="sched-search-box">
         <input class="team-search-input" id="sched-search" placeholder="Search team…" oninput="filterSchedule()"/>
       </div>
       <div id="court-filter" class="court-filter"></div>
       <div id="schedule-content"></div>
+      <!-- Summary belongs after the games, not above them: on a phone the tiles
+           pushed the first game off the first screen. -->
+      <div id="sbar" class="sbar"></div>
     </div>
 
     <!-- BRACKET (tournament) -->
@@ -250,6 +252,6 @@
   </div>
 </div>
 
-<script type="module" src="app.js?v=62"></script>
+<script type="module" src="app.js?v=63"></script>
 </body>
 </html>

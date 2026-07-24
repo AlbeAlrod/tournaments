@@ -329,11 +329,14 @@ main { position: relative; z-index: 5; max-width: 980px; margin: 0 auto; padding
   font-size: 13px; cursor: pointer; font-family: 'Rubik', sans-serif; }
 
 /* Schedule */
-.sbar { display: grid; grid-template-columns: repeat(auto-fit, minmax(90px,1fr)); gap: 10px; margin-bottom: 20px; }
-.sc { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--rs);
-  padding: 12px 10px; text-align: center; }
-.sl { font-size: 11px; color: var(--text3); text-transform: uppercase; letter-spacing: .08em; margin-bottom: 4px; }
-.sv { font-family: 'Rubik', sans-serif; font-size: 26px; font-weight: 800; color: var(--text); }
+/* Schedule summary — a footnote under the games, not three headline tiles.
+   As big cards at the top it ate half the first screen on a phone. */
+.sbar { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 18px;
+  margin: 26px 0 6px; padding-top: 16px; border-top: 1px solid var(--border); }
+.sbar:empty { display: none; }
+.sc { display: flex; align-items: baseline; gap: 6px; }
+.sl { font-size: 12.5px; color: var(--text3); }
+.sv { font-family: 'Rubik', sans-serif; font-size: 13px; font-weight: 700; color: var(--text2); }
 .sv.a { color: var(--primary-text); }
 .sched-search-box { margin-bottom: 12px; }
 .team-search-input { width: 100%; background: var(--bg2); border: 1.5px solid var(--border2);

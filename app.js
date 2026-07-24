@@ -1809,17 +1809,23 @@ function renderStats() {
     if (last?.time && t2m(last.time)>t2m(lastTime)) { lastTime=last.time; lastDur=cat.cfg?.gameDur||30; }
   });
   if (!totalPool) { el.innerHTML=''; return; }
+  // "Scheduled end", not "Est. End": this is the last game's planned slot, so it
+  // does NOT move when the evening runs late. Calling it an estimate would lie
+  // exactly when people care most.
   el.innerHTML = `
-    <div class="sc"><div class="sl">Pool Games</div><div class="sv">${donePool}/${totalPool}</div></div>
-    <div class="sc"><div class="sl">KO Games</div><div class="sv">${totalKO}</div></div>
-    <div class="sc"><div class="sl">Est. End</div><div class="sv a">${addM(lastTime,lastDur)}</div></div>`;
+    <div class="sc"><div class="sl">Pool games played</div><div class="sv">${donePool}/${totalPool}</div></div>
+    <div class="sc"><div class="sl">Knockout games</div><div class="sv">${totalKO}</div></div>
+    <div class="sc"><div class="sl">Scheduled end</div><div class="sv a">${addM(lastTime,lastDur)}</div></div>`;
 }
 
 function buildGameRow(catId, g, idx, isKO) {
   const rule = getRuleForGame(catId, g, isKO);
   const done = isValidScore(parseInt(g.sa), parseInt(g.sb), catId, rule.pts);
-  // Color pill by group index for pool; by court→group for KO (dynamic group colors)
-  const pc = `gi${isKO ? (g.court-1)%4 : (g.gi ?? 0) % 4}`;
+  // Color pill by group index for pool; by court→group for KO (dynamic group colors).
+  // The 3rd-place game lives in sched with gi === -1, which produced the
+  // non-existent class "gi-1" and left its court pill unpainted — colour it by
+  // court like the other knockout games.
+  const pc = `gi${(isKO || (g.gi ?? 0) < 0) ? (g.court-1)%4 : g.gi % 4}`;
   const wrap = document.createElement('div');
   const row  = document.createElement('div');
   const koLbl = isKO ? koGameLabel(catId, g.ri, g.gi) : '';
