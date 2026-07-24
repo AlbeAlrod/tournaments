@@ -725,11 +725,11 @@ function renderSched() {
     ${hardList(sel)}
     ${st.pack ? grid(sel) : '<div class="info-box">השלב ג׳ עוד לא רץ — אין סלוטים ורשתות.</div>'}
     ${lengthCounter(sel)}
-    <details class="tech">
-      <summary>פרטים טכניים — פונקציית העלות (§6.2) ואבחון</summary>
+    ${DEV ? `<details class="tech">
+      <summary>פרטים טכניים — פונקציית העלות (§6.2) ואבחון (dev)</summary>
       ${costChips(sel.cost)}
       ${violationList(sel)}
-    </details>
+    </details>` : ''}
   </div>` : `<div class="sett-section">${picker}<div class="empty">אין משחקים ביום הזה.</div></div>`;
 
   return intro + controls + messages + season + detail + rrTable();
