@@ -59,15 +59,26 @@ export const gameKey = (cat, a, b, leg) =>
 //
 // "∞" מיוצג כמספר סופי גדול, במכוון. אינסוף אמיתי היה הופך כל מצב לא־חוקי
 // לשווה־ערך לכל מצב לא־חוקי אחר, והחיפוש המקומי לא היה יכול לרדת מ-3 הפרות
-// ל-2. hard=1e6 גדול בסדר גודל מכל סכום רך אפשרי (60 משחקים × 1000 = 60,000)
-// ולכן שומר על הסדר: כל הפרה קשיחה גוברת על כל צירוף של הפרות רכות.
+// ל-2. hard=1e6 גדול בסדר גודל מכל סכום רך אפשרי ולכן שומר על הסדר: כל הפרה
+// קשיחה גוברת על כל צירוף של הפרות רכות.
+//
+// סדר העדיפויות הרך (בקשת המשתמשת): קודם כול **לעולם לא לשחק פעמיים ברצף**,
+// ואז **להמתין כמה שפחות**. לכן backToBack=50000 — נמוך מ-hard אבל גבוה מכל
+// קנס המתנה אפשרי, כך שהמתזמן לעולם לא "יקנה" צמצום המתנה במחיר רצף. קנס
+// ההמתנה ריבועי (ראו evalDay): המתנה של סלוט אחד = אידיאל (0), ומעבר לזה
+// הקנס גדל ריבועית כדי לשבור קודם את הזנבות הארוכים. span ירד ל-2 כי המשתמשת
+// אמרה שלא חייבות להגיע ביחד — עדיף מקצב צמוד לכל קבוצה על פני חלון משותף קצר.
 export const WEIGHTS = {
   hard:       1_000_000,   // חמשת האילוצים הקשיחים של §6.2 + רשת קבועה (החלטה 4)
-  backToBack: 1000,        // קבוצה בשני סלוטים רצופים — רך חזק
+  backToBack: 50_000,      // קבוצה בשני סלוטים רצופים — היעד הקשיח של החלטה 3
   gamesOver:  200,         // יותר מהמכסה העליונה ביום
   gamesUnder: 200,         // פחות מהמכסה התחתונה ביום
-  longWait:   50,          // המתנה של יותר מסלוט אחד
-  span:       10,          // טווח הנוכחות של הקבוצה ביום
+  longWait:   120,         // מקדם ההמתנה — מוכפל ריבועית ב-(עודף הסלוטים)²
+  // מעבר בין ליגות בתוך אותה רשת (החלטת המשתמשת: בלי קפיצות). 400 עם 10 הרצות
+  // (ראו packDay) נותן גם רשתות נקיות (אף רשת לא קופצת יותר מפעמיים) וגם המתנה
+  // נמוכה (w3 ≈ הבסיס) — יותר הרצות מוצאות סידור טוב בשני הצירים בלי להעדיף אחד.
+  netJump:    400,
+  span:       2,           // טווח הנוכחות של הקבוצה ביום — נמוך במכוון
   emptyCell:  5            // תא ריק
 };
 
@@ -388,21 +399,25 @@ function scratch(ctx) {
   const gA = new Int32Array(G), gB = new Int32Array(G);
   const gFixedNet = new Int32Array(G);          // 0 = ללא רשת קבועה
   const gLocked = new Uint8Array(G);
+  const gCat = new Int32Array(G);               // אינדקס הליגה (1-based) — לקוהרנטיות רשת
+  const catIdx = new Map(ctx.cats.map((c, i) => [c.id, i + 1]));
   const fixedOf = new Map(ctx.cats.map(c => [c.id, c.fixedNet || 0]));
   const teamGames = Array.from({ length: T }, () => []);
   for (let i = 0; i < G; i++) {
     const g = ctx.games[i];
     gA[i] = ti.get(g.a); gB[i] = ti.get(g.b);
     gFixedNet[i] = fixedOf.get(g.cat) || 0;
+    gCat[i] = catIdx.get(g.cat) || 0;
     gLocked[i] = g.locked ? 1 : 0;
     teamGames[gA[i]].push(i); teamGames[gB[i]].push(i);
   }
 
   return ctx._s = {
     teams, ti, T, S, nets, N, netPos, blocked, availFrom, availTo, lo, hi,
-    G, gA, gB, gFixedNet, gLocked, teamGames,
-    tc: new Int32Array(T * (S + 2)),      // קבוצה × סלוט
-    cc: new Int32Array((S + 2) * N)       // סלוט × רשת
+    G, gA, gB, gFixedNet, gCat, gLocked, teamGames,
+    tc:      new Int32Array(T * (S + 2)),      // קבוצה × סלוט
+    cc:      new Int32Array((S + 2) * N),      // סלוט × רשת — כמה משחקים
+    cellCat: new Int32Array((S + 2) * N)       // סלוט × רשת — איזו ליגה (לקוהרנטיות)
   };
 }
 
@@ -419,9 +434,9 @@ export function emptyPlacement(ctx) {
 // collect=true מוסיף את רשימת ההפרות, וזו הצורה שמזינה את סרגל האזהרות (§9).
 function evalDay(pl, ctx, collect) {
   const s = scratch(ctx), W = WEIGHTS;
-  const { T, S, N, tc, cc, blocked, availFrom, availTo, lo, hi, gA, gB, gFixedNet } = s;
+  const { T, S, N, tc, cc, cellCat, blocked, availFrom, availTo, lo, hi, gA, gB, gFixedNet, gCat } = s;
 
-  tc.fill(0); cc.fill(0);
+  tc.fill(0); cc.fill(0); cellCat.fill(0);
   let lastSlot = 0, placed = 0;
 
   for (let i = 0; i < s.G; i++) {
@@ -429,12 +444,12 @@ function evalDay(pl, ctx, collect) {
     placed++;
     if (slot > lastSlot) lastSlot = slot;
     const np = s.netPos.get(pl.net[i]);
-    if (np != null) cc[slot * N + np]++;
+    if (np != null) { cc[slot * N + np]++; cellCat[slot * N + np] = gCat[i]; }
     tc[gA[i] * (S + 2) + slot]++;
     tc[gB[i] * (S + 2) + slot]++;
   }
 
-  let hard = 0, backToBack = 0, gamesOver = 0, gamesUnder = 0, longWait = 0, span = 0;
+  let hard = 0, backToBack = 0, gamesOver = 0, gamesUnder = 0, longWait = 0, span = 0, netJump = 0;
   const V = collect ? [] : null;
 
   // ── לפי קבוצה: הקשיח "פעמיים באותו סלוט" והרך כולו, במעבר אחד ──
@@ -463,7 +478,11 @@ function evalDay(pl, ctx, collect) {
           if (V) V.push({ kind:'backToBack', cost:W.backToBack, slot:prev, team:s.teams[t],
                           text:`${s.teams[t]} משחקת פעמיים ברצף` });
         } else if (gap - 1 > 1) {
-          const c2 = W.longWait * (gap - 2);
+          // המתנה של סלוט אחד (gap=2) היא האידיאל — אפס קנס. מעבר לזה הקנס
+          // **ריבועי** ב"עודף" (gap-2): המתנה של 9 סלוטים כואבת פי 49 מהמתנה
+          // של 2, כך שהמתזמן שובר קודם את הזנבות הארוכים ולא מפזר קנס אחיד.
+          const excess = gap - 2;
+          const c2 = W.longWait * excess * excess;
           longWait += c2;
           if (V) V.push({ kind:'longWait', cost:c2, slot:prev, team:s.teams[t],
                           text:`${s.teams[t]} ממתינה ${gap - 1} סלוטים` });
@@ -528,9 +547,27 @@ function evalDay(pl, ctx, collect) {
     }
   }
 
+  // ── קוהרנטיות רשת (החלטת המשתמשת): כל רשת מארחת ליגה ברצף, בלי לקפוץ בין
+  // ליגות מסלוט לסלוט. עוברים על כל עמודת רשת וסופרים מעבר בין ליגות שונות
+  // בתאים תפוסים עוקבים. מעבר אחד (למשל שואו→ליגה, או א׳→ב׳) טבעי; הלוך-ושוב
+  // הוא מה שנענש. המשקל מתחת להמתנה — קוהרנטיות לא באה על חשבון המתנה.
+  for (let k = 0; k < N; k++) {
+    let prevCat = 0;
+    for (let sl = 1; sl <= S; sl++) {
+      const cat = cellCat[sl * N + k];
+      if (!cat) continue;
+      if (prevCat && cat !== prevCat) {
+        netJump += W.netJump;
+        if (V) V.push({ kind:'netJump', cost:W.netJump, slot:sl, net:s.nets[k],
+                        text:`רשת ${s.nets[k]} קופצת בין ליגות בסלוט ${sl}` });
+      }
+      prevCat = cat;
+    }
+  }
+
   const emptyCell = W.emptyCell * empties;
-  const breakdown = { hard, backToBack, gamesOver, gamesUnder, longWait, span, emptyCell };
-  const total = hard + backToBack + gamesOver + gamesUnder + longWait + span + emptyCell;
+  const breakdown = { hard, backToBack, gamesOver, gamesUnder, longWait, netJump, span, emptyCell };
+  const total = hard + backToBack + gamesOver + gamesUnder + longWait + netJump + span + emptyCell;
   return collect
     ? { total, breakdown, violations: V, lastSlot, empties, placed, hard }
     : total;
@@ -734,8 +771,14 @@ function placeLeftovers(ctx, pl, leftovers) {
 // מעבר ל-8 העלות הכוללת כמעט לא משתנה והזנב דווקא מחמיר.
 function repair(ctx, pl, opts = {}) {
   const s = scratch(ctx);
-  const maxMoves = opts.maxMoves ?? 250;
-  const radius   = opts.radius ?? 8;
+  const maxMoves = opts.maxMoves ?? 400;
+  const radius   = opts.radius ?? 12;
+  // תקציב זמן קשיח לכל יום. הרוב המכריע של הימים מתכנס הרבה לפני זה (הלולאה
+  // נשברת כשאין שיפור); התקציב קיים כדי שקונפיגורציה פתולוגית — למשל 5 רשתות
+  // על 13 סלוטים עם גלישה, שבה החיפוש מוצא אינסוף שיפורי-מיקרו — לא תקפיא את
+  // הדפדפן. בלי זה נמדד מקרה של 88 שניות.
+  const maxMillis = opts.maxMillis ?? 400;
+  const t0 = Date.now();
   const S = ctx.slots, N = s.N;
 
   let cur = evalDay(pl, ctx, false);
@@ -743,6 +786,7 @@ function repair(ctx, pl, opts = {}) {
   let moves = 0;
 
   for (; moves < maxMoves; moves++) {
+    if ((moves & 7) === 0 && Date.now() - t0 > maxMillis) break;
     occ.fill(0);
     for (let i = 0; i < s.G; i++) if (pl.slot[i]) occ[pl.slot[i] * N + s.netPos.get(pl.net[i])] = i + 1;
 
@@ -819,6 +863,22 @@ function candidates(ctx, pl, s, occ) {
     if (sl === lastSlot) out.add(i);
   }
 
+  // קפיצות-ליגה בתוך רשת: מחושב מ-occ (המצב הנוכחי) ולא מ-cellCat (שעלול להיות
+  // בתוקף של מהלך שנדחה). כשתא שייך לליגה שונה מהתא התפוס הקודם באותה רשת —
+  // שני המשחקים מועמדים להזזה כדי לאחד את הבלוקים.
+  for (let k = 0; k < N; k++) {
+    let prevGame = -1, prevCat = 0;
+    for (let sl = 1; sl <= S; sl++) {
+      const g = occ[sl * N + k]; if (!g) continue;
+      const i = g - 1, cat = s.gCat[i];
+      if (prevCat && cat !== prevCat) {
+        if (!s.gLocked[i]) out.add(i);
+        if (prevGame >= 0 && !s.gLocked[prevGame]) out.add(prevGame);
+      }
+      prevGame = i; prevCat = cat;
+    }
+  }
+
   return [...out];
 }
 
@@ -826,7 +886,13 @@ function candidates(ctx, pl, s, occ) {
 // כמה הרצות עם זרעים שונים, והטובה מנצחת. הזרעים קבועים, ולכן שתי הרצות של
 // אותו קלט נותנות אותו לוז בדיוק.
 export function packDay(ctx, opts = {}) {
-  const restarts = opts.restarts ?? 5;
+  const restarts = opts.restarts ?? 10;
+  // תקציב זמן ליום: 10 הרצות משפרות את המקרה האמיתי (15/15/6, ~6.5ש לעונה)
+  // אבל תופחות במקרים כבדים (3 מחזורים, 16 קבוצות, 5 רשתות) ל-13ש. התקציב
+  // עוצר הרצות נוספות אחרי ~2.2ש ליום ברגע שיש לפחות 3 — כך היום הכבד נחסם
+  // ל-~8ש לעונה, והמקרה האמיתי עדיין מספיק להריץ את כל ה-10.
+  const dayBudgetMs = opts.dayBudgetMs ?? 2200;
+  const t0 = Date.now();
   const { plan, overflow } = planSlotCounts(ctx);
   let best = null;
 
@@ -837,6 +903,7 @@ export function packDay(ctx, opts = {}) {
     const score = r.cost + unplaced.length * WEIGHTS.hard;
     if (!best || score < best.score)
       best = { score, pl: r.pl, unplaced, moves: r.moves, seed: i };
+    if (i >= 2 && Date.now() - t0 > dayBudgetMs) break;
   }
 
   const cost = evalDay(best.pl, ctx, true);

@@ -16,7 +16,7 @@ import {
 // והוא מקבל תמונת מצב ומחזיר משחקים ודוח. ראו league-sched.js.
 import {
   generateSeason, buildDayContext, dayCost, dayLength, slotLabel
-} from './league-sched.js?v=1';
+} from './league-sched.js?v=3';
 
 // ============ זהות הליגה ============
 // ⚠️ המזהה הזה מופיע בכתובת הציבורית שכל 72 השחקניות מקבלות. הוא לא זמני.
@@ -671,14 +671,15 @@ function renderSched() {
 
   const A = analyze();
 
-  // ── סיכום העונה ──
+  // ── סיכום העונה: תוצאות אנושיות, לא ערכי פונקציית עלות ──
   const seasonRows = days.map(d => {
     const r = A.days[d.id];
     if (!r || !r.games.length) return `<tr><td>${escH(d.label)}</td>
-      <td class="num">0</td><td colspan="5"><em>אין משחקים</em></td></tr>`;
-    const wins = r.ctx ? Object.entries(r.cost ? windowsFrom(r) : {}) : [];
-    const v = r.cost?.violations || [];
-    const hard = v.filter(x => x.cost >= 1_000_000).length;
+      <td class="num">0</td><td colspan="4"><em>אין משחקים</em></td></tr>`;
+    const wins = Object.entries(windowsFrom(r));
+    const q = dayQuality(r);
+    const waitTxt = q.maxWait <= 1 ? 'סלוט אחד' : `${q.maxWait} סלוטים`;
+    const ok = q.hard.length === 0 && q.b2b === 0;
     return `<tr>
       <td>${escH(d.label)}</td>
       <td class="num">${r.games.length}</td>
@@ -686,10 +687,10 @@ function renderSched() {
         ? `<span class="win-pill">${escH(CAT_NAME(c))} <b class="num">${slotLabel(d, w.from)}–${slotLabel(d, w.to + 1)}</b></span>`
         : '').join('')}</td>
       <td class="num">${escH(r.length.endTime)}</td>
-      <td class="num">${r.length.used}/${r.length.capacity}</td>
-      <td class="num">${r.cost.total.toLocaleString('en')}</td>
-      <td>${hard ? `<span class="status-badge badge-rejected">${hard} קשיחות</span>`
-                 : `<span class="status-badge badge-approved">תקין</span>`}</td>
+      <td class="num">${escH(waitTxt)}</td>
+      <td>${q.hard.length ? `<span class="status-badge badge-rejected">${q.hard.length} בעיות</span>`
+           : q.b2b ? `<span class="status-badge badge-pending">${q.b2b} רצפים</span>`
+           : `<span class="status-badge badge-approved">תקין</span>`}</td>
     </tr>`;
   }).join('');
 
@@ -697,13 +698,13 @@ function renderSched() {
   <div class="sett-section">
     <div class="sett-section-title">העונה</div>
     <div class="tscroll"><table class="stbl">
-      <thead><tr><th>מחזור</th><th>משחקים</th><th>חלונות הגעה</th><th>סיום</th>
-        <th>תאים</th><th>עלות</th><th>אילוצים קשיחים</th></tr></thead>
+      <thead><tr><th>מחזור</th><th>משחקים</th><th>מתי כל ליגה משחקת</th><th>סיום</th>
+        <th>המתנה מקס׳</th><th>מצב</th></tr></thead>
       <tbody>${seasonRows}</tbody>
     </table></div>
-    <span class="sett-desc" style="margin-top:10px">"חלונות הגעה" הם תוצאה של
-      האריזה, לא קלט לה — הסלוט הראשון והאחרון שבו כל ליגה משחקת בפועל.
-      העלות היא פונקציית §6.2; אילוץ קשיח שקול ל-1,000,000 בה.</span>
+    <span class="sett-desc" style="margin-top:10px">"מתי כל ליגה משחקת" = הסלוט
+      הראשון והאחרון שבו כל ליגה על המגרש — כך יודעים מתי להגיע. "המתנה מקס׳" =
+      זמן ההמתנה הארוך ביותר של קבוצה בין שני משחקים; סלוט אחד (≈20 דק׳) הוא האידיאל.</span>
   </div>`;
 
   if (!st.days) return intro + controls + messages + season + rrTable();
@@ -720,10 +721,15 @@ function renderSched() {
   <div class="sett-section">
     <div class="sett-section-title">${escH(sel.day.label)}</div>
     ${picker}
-    ${costChips(sel.cost)}
-    ${violationList(sel)}
+    ${qualityChips(sel)}
+    ${hardList(sel)}
     ${st.pack ? grid(sel) : '<div class="info-box">השלב ג׳ עוד לא רץ — אין סלוטים ורשתות.</div>'}
     ${lengthCounter(sel)}
+    <details class="tech">
+      <summary>פרטים טכניים — פונקציית העלות (§6.2) ואבחון</summary>
+      ${costChips(sel.cost)}
+      ${violationList(sel)}
+    </details>
   </div>` : `<div class="sett-section">${picker}<div class="empty">אין משחקים ביום הזה.</div></div>`;
 
   return intro + controls + messages + season + detail + rrTable();
@@ -745,6 +751,64 @@ function windowsFrom(r) {
     out[c.id] = n ? { from: lo, to: hi, games: n } : null;
   }
   return out;
+}
+
+// ── תוצאות אנושיות ליום ──
+// המנהלת לא צריכה לדעת ש"העלות 3,740"; היא צריכה לדעת אם מישהי משחקת פעמיים
+// ברצף, כמה מחכים, ומתי היום נגמר. זה גוזר בדיוק את זה מהשיבוץ.
+function dayQuality(r) {
+  const perTeam = {};
+  for (const g of r.games) if (g.slot) for (const t of [g.a, g.b]) (perTeam[t] ??= []).push(g.slot);
+  let b2b = 0, maxWait = 0;
+  for (const slots of Object.values(perTeam)) {
+    slots.sort((a, b) => a - b);
+    for (let i = 0; i + 1 < slots.length; i++) {
+      const w = slots[i + 1] - slots[i] - 1;   // סלוטים ריקים בין שני משחקים
+      if (w === 0) b2b++;
+      else if (w > maxWait) maxWait = w;
+    }
+  }
+  // קוהרנטיות רשת (החלטת המשתמשת): רשת שמארחת שתי ליגות **חייבת** מעבר אחד —
+  // זה נקי. הבעיה היא רשת ש**קופצת הלוך-ושוב** (2+ מעברים). סופרים רק את אלה.
+  const perNet = {};
+  for (const g of r.games) if (g.slot && g.net) (perNet[g.net] ??= []).push(g);
+  let flipNets = 0;
+  for (const list of Object.values(perNet)) {
+    list.sort((a, b) => a.slot - b.slot);
+    let jumps = 0;
+    for (let i = 1; i < list.length; i++) if (list[i].cat !== list[i - 1].cat) jumps++;
+    if (jumps >= 2) flipNets++;
+  }
+  const hard = (r.cost?.violations || []).filter(x => x.cost >= 1_000_000);
+  return { b2b, maxWait, flipNets, hard };
+}
+
+function qualityChips(r) {
+  const q = dayQuality(r);
+  const sm = r.day.slotMin;
+  const c = [];
+  c.push(q.b2b === 0
+    ? `<span class="q-chip good">✓ אף קבוצה לא משחקת פעמיים ברצף</span>`
+    : `<span class="q-chip bad">⚠ ${q.b2b} ${q.b2b === 1 ? 'קבוצה משחקת' : 'קבוצות משחקות'} פעמיים ברצף</span>`);
+  c.push(q.maxWait <= 1
+    ? `<span class="q-chip good">✓ המתנה של סלוט אחד לכל היותר (≈${sm} דק׳)</span>`
+    : `<span class="q-chip">המתנה מקסימלית ${q.maxWait} סלוטים (≈${q.maxWait * sm} דק׳) — רובן סלוט אחד</span>`);
+  // קוהרנטיות רשת (החלטת המשתמשת): אזהרה רק על רשתות שקופצות הלוך-ושוב
+  c.push(q.flipNets === 0
+    ? `<span class="q-chip good">✓ כל רשת מארחת ליגה ברצף</span>`
+    : `<span class="q-chip bad">⚠ ${q.flipNets} ${q.flipNets === 1 ? 'רשת קופצת' : 'רשתות קופצות'} בין ליגות</span>`);
+  c.push(`<span class="q-chip">היום נגמר ב-<b class="num">${escH(r.length.endTime)}</b></span>`);
+  return `<div class="q-chips">${c.join('')}</div>`;
+}
+
+// בעיות קשיחות בלבד — נדיר, אבל חייב לקפוץ לעין בלי לפתוח "פרטים טכניים".
+function hardList(r) {
+  const hard = (r.cost?.violations || []).filter(x => x.cost >= 1_000_000);
+  if (!hard.length) return '';
+  const groups = {};
+  for (const x of hard) (groups[x.kind] ??= []).push(x);
+  return `<div class="hard-list">${Object.entries(groups).map(([k, list]) =>
+    `<div class="sched-msg err">⚠ ${escH(VIOL_LABELS[k] || k)} — ${list.length}</div>`).join('')}</div>`;
 }
 
 const COST_LABELS = {
@@ -852,36 +916,33 @@ function lengthCounter(r) {
   </div>`;
 }
 
-// שלב א׳ — מה שיטת המעגל הוציאה
+// שלב א׳ — כמה משחקים כל ליגה מייצרת (כל אחת נגד כל אחת)
 function rrTable() {
   const rows = L.categories.map(c => {
     const n = (L.roster[c.id] || []).filter(t => t.active !== false).length;
     if (n < 2) return `<tr><td>${escH(c.name)}</td><td class="num">${n}</td>
-      <td colspan="4"><em>פחות משתי קבוצות</em></td></tr>`;
+      <td colspan="3"><em>פחות משתי קבוצות</em></td></tr>`;
     const rr = c.rr || 1;
-    const rounds = (n % 2 ? n : n - 1) * rr;
     return `<tr>
       <td>${escH(c.name)}</td>
       <td class="num">${n}</td>
-      <td class="num">${rr === 2 ? 'כפול' : 'יחיד'}</td>
+      <td class="num">${rr === 2 ? 'פעמיים' : 'פעם אחת'}</td>
       <td class="num">${n * (n - 1) / 2 * rr}</td>
       <td class="num">${(n - 1) * rr}</td>
-      <td class="num">${rounds}${n % 2 ? ` <span class="muted">+ bye מתחלף</span>` : ''}</td>
     </tr>`;
   }).join('');
 
   return `
   <div class="sett-section">
-    <div class="sett-section-title">שלב א׳ — מחזורי RR</div>
+    <div class="sett-section-title">שלב א׳ — כמה משחקים בכל ליגה</div>
     <div class="tscroll"><table class="stbl">
-      <thead><tr><th>ליגה</th><th>קבוצות</th><th>סיבובים</th><th>משחקים</th>
-        <th>לקבוצה</th><th>מחזורי RR</th></tr></thead>
+      <thead><tr><th>ליגה</th><th>קבוצות</th><th>נפגשות</th><th>סה״כ משחקים</th>
+        <th>לכל קבוצה</th></tr></thead>
       <tbody>${rows}</tbody>
     </table></div>
-    <span class="sett-desc" style="margin-top:10px">N אי־זוגי → N מחזורים וכל
-      קבוצה יושבת פעם אחת בעונה (זה ה-bye של §6.3). N זוגי → N-1 מחזורים בלי bye.
-      מחזורי RR מפוצלים בין ימים בשלב ב׳, כי 3.6 מתיר 1–5 משחקים לקבוצה במחזור —
-      וזה מה שמאפשר ימים שווים.</span>
+    <span class="sett-desc" style="margin-top:10px">כל קבוצה פוגשת כל קבוצה אחרת
+      בליגה שלה (3.4). המשחקים האלה מתחלקים על פני הימים בשלב ב׳, כך שכל יום יוצא
+      מאוזן — 3.6 מתיר 1–5 משחקים לקבוצה במחזור.</span>
   </div>`;
 }
 
