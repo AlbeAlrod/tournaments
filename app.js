@@ -1900,7 +1900,7 @@ function renderScheduleContent() {
         sh.className = 'tsub-hdr';
         const firstG = sg[0];
         const r = getRuleForGame(firstG._catId, firstG, firstG._isKO);
-        const ruleStr = r.change ? ` (to ${r.pts} switch ${r.change})` : ` (to ${r.pts})`;
+        const ruleStr = (meta.sport === 'volleyball') ? '' : (r.change ? ` (to ${r.pts} switch ${r.change})` : ` (to ${r.pts})`);
         sh.textContent = label + ruleStr;
         block.appendChild(sh);
       }
@@ -2408,6 +2408,22 @@ function renderSettings() {
 
   if (meta.phase === 'tournament') return;
 
+  // ── SPORT ───────────────────────────────────────────────────────
+  const sportSection = document.createElement('div');
+  sportSection.className = 'sett-section';
+  sportSection.innerHTML = `<div class="sett-section-title">Sport</div>
+    <div class="sett-row" style="border-bottom:none;align-items:flex-start">
+      <div class="sett-label"><span class="sett-name">Sport</span>
+        <span class="sett-desc">Volleyball hides the per-stage "(to 21 switch 7)" note — scoring is always to 21. Footvolley shows custom per-stage points.</span></div>
+      <div class="sett-ctrl">
+        <select class="text-inp" onchange="updateMeta('sport',this.value)">
+          <option value="footvolley" ${meta.sport!=='volleyball'?'selected':''}>Footvolley / custom</option>
+          <option value="volleyball" ${meta.sport==='volleyball'?'selected':''}>Volleyball (עד 21)</option>
+        </select>
+      </div>
+    </div>`;
+  container.appendChild(sportSection);
+
   // ── REGISTRATION ────────────────────────────────────────────────
   const regSection = document.createElement('div');
   regSection.className = 'sett-section';
@@ -2681,6 +2697,7 @@ function updateMeta(key, val) {
     renderRegisterPage(); renderParticipants();
   }
   if (key === 'regNote') renderRegisterPage();
+  if (key === 'sport') renderAll();
   pushMetaOnly();
 }
 
