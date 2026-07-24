@@ -1534,7 +1534,7 @@ function makeStandingsCard(catId, grp, gi, catIdx) {
     </tr>`;
   }).join('');
   const adminTh = superAdmin ? '<th></th>' : '';
-  card.innerHTML = `<div class="scard-head"><span class="scard-name">GROUP ${escH(grp.name)}</span></div>
+  card.innerHTML = `<div class="scard-head"><span class="scard-name">Group ${escH(grp.name)}</span></div>
     <table class="stbl"><thead><tr><th>Team</th><th>W</th><th>L</th><th>+/−</th><th>Pts</th>${adminTh}</tr></thead>
     <tbody>${rows}</tbody></table>`;
   return card;

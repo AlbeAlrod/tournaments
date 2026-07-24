@@ -110,8 +110,8 @@ button.admin-only { display: none !important; }
 body.admin-mode button.admin-only { display: inline-block !important; }
 
 /* Mode bar — now lives inside .admin-bar */
-.mode-bar { padding: 6px 0; font-size: 11px; font-weight: 600; letter-spacing: .4px;
-  text-transform: uppercase; transition: all .3s;
+.mode-bar { padding: 6px 0; font-size: 11px; font-weight: 600; letter-spacing: .2px;
+  transition: all .3s;
   display: flex; flex: 1; align-items: center; justify-content: flex-start; gap: 8px; }
 .mode-bar.mode-view { background: transparent; color: var(--text3); }
 .mode-bar.mode-admin { background: transparent;
@@ -125,7 +125,7 @@ nav::-webkit-scrollbar { display: none; }
 .tab { font-family: 'Rubik', sans-serif; font-weight: 700; font-size: 13px;
   letter-spacing: .8px; padding: 14px 16px; border: none; background: none;
   color: var(--primary3); cursor: pointer; border-bottom: 2px solid transparent;
-  transition: all .2s; white-space: nowrap; text-transform: uppercase; }
+  transition: all .2s; white-space: nowrap; }
 .tab:hover { color: var(--primary-text); background: rgba(0,0,0,0.03); }
 .tab.on { color: var(--primary-text); border-bottom-color: var(--primary);
   background: rgba(0,0,0,0.02); }
@@ -148,7 +148,7 @@ main { position: relative; z-index: 5; max-width: 980px; margin: 0 auto; padding
 /* Page header */
 .page-header { margin-bottom: 20px; }
 .page-header h2 { font-family: 'Rubik', sans-serif; font-weight: 800; font-size: 28px;
-  text-transform: uppercase; letter-spacing: .5px; color: var(--text); }
+  letter-spacing: -.2px; color: var(--text); }
 .page-header p { font-size: 14px; color: var(--text3); margin-top: 4px; }
 
 /* Info box */
@@ -174,7 +174,7 @@ main { position: relative; z-index: 5; max-width: 980px; margin: 0 auto; padding
   background: rgba(5,150,105,.06); border-radius: var(--rs); border-left: 2px solid var(--green); }
 .submit-btn { width: 100%; padding: 15px; background: var(--primary);
   color: var(--on-primary); border: none; border-radius: var(--rs); font-family: 'Rubik', sans-serif;
-  font-size: 17px; font-weight: 800; letter-spacing: 1.5px; text-transform: uppercase;
+  font-size: 17px; font-weight: 800; letter-spacing: .2px;
   cursor: pointer; margin-top: 10px; transition: all .2s;
   box-shadow: 0 4px 14px rgba(0,0,0,0.15); }
 .submit-btn:hover { opacity: .88; transform: translateY(-1px); }
@@ -182,8 +182,8 @@ main { position: relative; z-index: 5; max-width: 980px; margin: 0 auto; padding
 
 /* Participants list */
 .part-cat { margin-bottom: 24px; }
-.part-cat-title { font-family: 'Rubik', sans-serif; font-size: 13px; font-weight: 700;
-  letter-spacing: 3px; color: var(--text2); text-transform: uppercase;
+.part-cat-title { font-family: 'Rubik', sans-serif; font-size: 14px; font-weight: 700;
+  letter-spacing: 0; color: var(--text2);
   border-bottom: 2px solid var(--primary); padding-bottom: 4px; margin-bottom: 12px; }
 .part-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; }
 .part-card { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--r);
@@ -255,7 +255,7 @@ main { position: relative; z-index: 5; max-width: 980px; margin: 0 auto; padding
   gap: 10px; flex-wrap: wrap; align-items: center; }
 .build-btn { padding: 13px 24px; background: var(--primary);
   color: var(--on-primary); border: none; border-radius: var(--rs); font-family: 'Rubik', sans-serif;
-  font-size: 17px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase;
+  font-size: 17px; font-weight: 800; letter-spacing: .2px;
   cursor: pointer; transition: all .2s; box-shadow: 0 3px 12px rgba(0,0,0,0.15); }
 .build-btn:hover { opacity: .88; transform: translateY(-1px); }
 .build-shuffle { padding: 10px 18px; background: var(--primary2); border: none;
@@ -286,8 +286,10 @@ main { position: relative; z-index: 5; max-width: 980px; margin: 0 auto; padding
 /* Standings */
 .stnds-subgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   gap: 14px; margin-bottom: 24px; }
-.cat-section-header { font-family: 'Rubik', sans-serif; font-weight: 900; font-size: 13px;
-  letter-spacing: 4px; text-transform: uppercase; color: var(--primary-text); padding: 6px 0 6px;
+/* Holds the category name, which is Hebrew — no letter-spacing (it breaks
+   Hebrew glyph joining) and no uppercase (Hebrew has no case anyway). */
+.cat-section-header { font-family: 'Rubik', sans-serif; font-weight: 900; font-size: 15px;
+  letter-spacing: 0; color: var(--primary-text); padding: 6px 0 6px;
   border-bottom: 2px solid var(--primary); margin: 18px 0 12px; }
 .scard { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--r); overflow: hidden; box-shadow: var(--shadow-sm); }
 .scard-head { padding: 11px 16px; background: var(--cat-color, var(--primary));
@@ -346,8 +348,8 @@ main { position: relative; z-index: 5; max-width: 980px; margin: 0 auto; padding
 .cf-btn.on { background: var(--primary); color: var(--on-primary); border-color: var(--primary); }
 .tblock { margin-bottom: 16px; }
 .thdr { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
-.tsub-hdr { font-family: 'Rubik', sans-serif; font-size: 10px; font-weight: 700;
-  letter-spacing: 2px; text-transform: uppercase; color: var(--primary-text);
+.tsub-hdr { font-family: 'Rubik', sans-serif; font-size: 11px; font-weight: 700;
+  letter-spacing: 0; color: var(--primary-text);
   padding: 4px 0 2px; margin-top: 6px; border-bottom: 1px solid var(--border); margin-bottom: 4px; }
 .tlbl { font-family: 'Rubik', sans-serif; font-size: 22px; font-weight: 800; color: var(--primary-text); }
 .tline { flex: 1; height: 1px; background: var(--border); }
@@ -413,8 +415,8 @@ main { position: relative; z-index: 5; max-width: 980px; margin: 0 auto; padding
 .bsvg { position: absolute; top: 0; left: 0; pointer-events: none; z-index: 0; }
 .bmatch-box { position: relative; z-index: 1; }
 .bround { display: flex; flex-direction: column; }
-.brnd-title { font-family: 'Rubik', sans-serif; font-size: 12px; font-weight: 700;
-  color: var(--primary-text); text-transform: uppercase; letter-spacing: .12em;
+.brnd-title { font-family: 'Rubik', sans-serif; font-size: 13px; font-weight: 700;
+  color: var(--primary-text); letter-spacing: .01em;
   margin-bottom: 16px; text-align: center; padding: 0 8px; }
 .brnd-matches { display: flex; flex-direction: column; }
 .bmatch-wrap { display: flex; align-items: center; }
@@ -445,7 +447,7 @@ main { position: relative; z-index: 5; max-width: 980px; margin: 0 auto; padding
 .sett-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px,1fr)); gap: 14px; margin-bottom: 20px; }
 .sett-card { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--r); padding: 20px; }
 .sett-card-title { font-family: 'Rubik', sans-serif; font-weight: 700; font-size: 16px;
-  letter-spacing: .5px; text-transform: uppercase; color: var(--primary-text); margin-bottom: 16px; }
+  letter-spacing: .2px; color: var(--primary-text); margin-bottom: 16px; }
 .sett-row { display: flex; align-items: center; justify-content: space-between; gap: 16px;
   padding: 12px 0; border-bottom: 1px solid var(--border); }
 .sett-row:last-child { border-bottom: none; padding-bottom: 0; }
@@ -554,7 +556,7 @@ input:checked + .toggle-slider::before { transform: translateX(20px); }
   padding: 28px 26px; width: 90%; max-width: 380px;
   box-shadow: 0 20px 60px rgba(0,0,0,0.2), 0 0 0 1px rgba(0,0,0,0.06); }
 .modal h3 { font-family: 'Rubik', sans-serif; font-size: 20px; font-weight: 800;
-  color: var(--text); margin-bottom: 16px; text-transform: uppercase; }
+  color: var(--text); margin-bottom: 16px; }
 .modal-row { display: flex; gap: 8px; margin-bottom: 10px; }
 .modal-input { flex: 1; background: var(--bg3); border: 1px solid var(--border); border-radius: var(--rs);
   color: var(--text); padding: 10px; font-size: 14px; font-family: 'Rubik', sans-serif; }
@@ -562,7 +564,7 @@ input:checked + .toggle-slider::before { transform: translateX(20px); }
 .modal-btns { display: flex; gap: 8px; margin-top: 14px; }
 .mbtn { flex: 1; padding: 11px; border: none; border-radius: var(--rs);
   font-family: 'Rubik', sans-serif; font-size: 16px; font-weight: 700;
-  cursor: pointer; text-transform: uppercase; letter-spacing: .5px; }
+  cursor: pointer; letter-spacing: .2px; }
 .mbtn-ok { background: var(--primary); color: var(--on-primary); }
 .mbtn-cancel { background: transparent; border: 1px solid var(--border); color: var(--text2); }
 #role-btn-admin, #role-btn-master { flex: 1; padding: 10px 6px; border-radius: var(--rs);
@@ -616,7 +618,7 @@ input:checked + .toggle-slider::before { transform: translateX(20px); }
   flex: 1; min-width: 120px; padding: 12px 22px;
   border: 1.5px solid var(--primary-text); color: var(--primary-text); background: transparent;
   border-radius: var(--rs); font-family: 'Rubik', sans-serif;
-  font-size: 16px; font-weight: 800; letter-spacing: .8px; text-transform: uppercase;
+  font-size: 16px; font-weight: 800; letter-spacing: .2px;
   text-decoration: none; transition: all .18s; white-space: nowrap; }
 .pay-link-btn:hover { background: var(--primary-text); color: var(--bg2); }
 
@@ -661,8 +663,8 @@ body.master-mode button.master-only { display: inline-block !important; }
 .sett-add-row { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border); }
 
 /* ===== PARTICIPANT LIST ===== */
-.part-cat-title { font-family: 'Rubik', sans-serif; font-size: 12px; font-weight: 700;
-  letter-spacing: 4px; color: var(--primary-text); text-transform: uppercase;
+.part-cat-title { font-family: 'Rubik', sans-serif; font-size: 14px; font-weight: 700;
+  letter-spacing: 0; color: var(--primary-text);
   border-bottom: 2px solid var(--primary); padding-bottom: 4px; margin-bottom: 12px; }
 .part-card { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--r);
   padding: 12px 16px; display: flex; align-items: center; gap: 10px;
@@ -718,8 +720,8 @@ body.master-mode button.master-only { display: inline-block !important; }
 
 /* ===== GROUP MANAGEMENT ===== */
 .grp-cat-block { margin-bottom: 20px; }
-.grp-cat-name { font-family: 'Rubik', sans-serif; font-size: 12px; font-weight: 700;
-  letter-spacing: 4px; text-transform: uppercase; color: var(--primary-text);
+.grp-cat-name { font-family: 'Rubik', sans-serif; font-size: 14px; font-weight: 700;
+  letter-spacing: 0; color: var(--primary-text);
   border-bottom: 2px solid var(--primary); padding-bottom: 4px; margin-bottom: 10px; }
 .grp-row { background: var(--bg3); border-radius: var(--rs); padding: 10px 12px; margin-bottom: 8px; }
 .grp-row-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
@@ -743,9 +745,20 @@ input, textarea, select { max-width: 100%; }
   /* Admin bar: tighter */
   .admin-bar { padding: 0 14px 10px; }
 
-  /* Game rows */
-  .gc { grid-template-columns: auto 1fr 18px 1fr auto; gap: 4px; }
-  .gc.ko-game { grid-template-columns: auto auto 1fr 18px 1fr auto; }
+  /* Game rows — stack the two pair names so each gets the full card width.
+     Side by side they only get ~110px each, which truncated ~28% of the
+     Hebrew pair names on a 375px phone. */
+  .gc { grid-template-columns: auto 1fr auto; column-gap: 8px; row-gap: 2px; }
+  .gc > .pill   { grid-column: 1; grid-row: 1 / span 2; }
+  .gc > .gt     { grid-column: 2; grid-row: 1; text-align: left; }
+  .gc > .gt.r   { grid-column: 2; grid-row: 2; text-align: left; }
+  .gc > .gvs    { display: none; }
+  .gc > .sw     { grid-column: 3; grid-row: 1 / span 2; }
+  .gc.ko-game   { grid-template-columns: auto auto 1fr auto; }
+  .gc.ko-game > .ko-lbl { grid-column: 2; grid-row: 1 / span 2; }
+  .gc.ko-game > .gt     { grid-column: 3; grid-row: 1; }
+  .gc.ko-game > .gt.r   { grid-column: 3; grid-row: 2; }
+  .gc.ko-game > .sw     { grid-column: 4; grid-row: 1 / span 2; }
   /* 16px on score inputs prevents iOS auto-zoom on focus */
   .si { width: 32px; font-size: 16px; }
 
