@@ -12,6 +12,12 @@ import {
   escH, sha256, applyTheme, onColor, focusSnapshot, focusRestore
 } from './common.js?v=2';
 
+// המתזמן — שלב 3. מודול טהור: הוא לא מכיר את L, את ה-DOM או את Firestore,
+// והוא מקבל תמונת מצב ומחזיר משחקים ודוח. ראו league-sched.js.
+import {
+  generateSeason, buildDayContext, dayCost, dayLength, slotLabel
+} from './league-sched.js?v=1';
+
 // ============ זהות הליגה ============
 // ⚠️ המזהה הזה מופיע בכתובת הציבורית שכל 72 השחקניות מקבלות. הוא לא זמני.
 // הפרמטר הוא ?l= ולא ?t= — ?t= שייך לאפליקציית הטורנירים, וערבוב בין השניים
@@ -26,12 +32,20 @@ const INIT      = params.get('init') === '1';   // יצירת דוק חדש — 
 // מודל הנתונים — §5.1
 // ============================================================================
 
-// ⚠️ צבעים זמניים. §15.1: ארבעת קודי הצבע לרשתות והקוד הוורוד למסך הטעינה
-// טרם נשלחו. כל ערך שמסומן PLACEHOLDER מוחלף בשלב 8.
-const PLACEHOLDER_NET_COLORS = ['#C0392B', '#1D6FB8', '#158A5B', '#D18B1F'];
-const PLACEHOLDER_PINK       = '#F3C6D8';
-const PLACEHOLDER_PRIMARY    = '#652d92';
-const PLACEHOLDER_SECONDARY  = '#7a3fb0';
+// פלטת המותג של פוצ׳ילינה — קודי Pantone שהתקבלו 24.7.2026 (§15.1 שוחרר).
+// חמישה צבעים; לבן הוא רקע הדף (--bg2 ב-styles.css), ולכן ארבעת הצבעים
+// שאינם לבן הם ארבע הרשתות (החלטה 1). המגנטה משמשת גם כמסך הטעינה הוורוד
+// (החלטה 14, Pantone 807 C) וגם כצבע הראשי של המותג.
+//
+// ⚠️ אלה נתונים, לא קוד: הם נכתבים למסמך דרך defaultDoc וניתנים לשינוי
+// בעמוד ההגדרות. מסמך קיים שומר את הצבעים שכבר נכתבו לו (mergeDefaults
+// מעדיף את המסמך), ולכן החלפה במסמך חי עוברת דרך ההגדרות, לא דרך הקוד.
+const NET_COLORS = ['#EE2BC1', '#DAFF00', '#0775ED', '#000B19'];   // 807C · 809C · 2173C · כהה
+// שמות לפי מספר מגרש (החלטת המשתמשת) — הצבע הוא הזיהוי הוויזואלי, המספר הוא השם.
+const NET_NAMES  = ['מגרש 1', 'מגרש 2', 'מגרש 3', 'מגרש 4'];
+const BRAND_PINK      = '#EE2BC1';   // מסך טעינה — החלטה 14 (Pantone 807 C)
+const BRAND_PRIMARY   = '#EE2BC1';   // הצבע המוביל של פוצ׳ילינה
+const BRAND_SECONDARY = '#0775ED';   // Pantone 2173 C
 
 const BEACH = 'חוף בוגרשוב, תל אביב';
 
@@ -63,9 +77,9 @@ function defaultDoc() {
       mode: 'league',                 // כך admin.html ממשיך להציג את הליגה ברשימה
       name: 'ליגת קיץ פוצ׳ילינה 2026',
       logoUrl: '',
-      primaryColor:   PLACEHOLDER_PRIMARY,    // PLACEHOLDER §15.1
-      secondaryColor: PLACEHOLDER_SECONDARY,  // PLACEHOLDER §15.1
-      loadingColor:   PLACEHOLDER_PINK,       // PLACEHOLDER §15.1 — החלטה 14
+      primaryColor:   BRAND_PRIMARY,
+      secondaryColor: BRAND_SECONDARY,
+      loadingColor:   BRAND_PINK,             // החלטה 14
       font: 'Rubik',                          // מלכודת 4: Barlow לטיני בלבד
       sponsorLogos: [],
 
@@ -74,8 +88,8 @@ function defaultDoc() {
       adminPasswordHash: '',
       managerPasswordHash: '',
 
-      nets: PLACEHOLDER_NET_COLORS.map((color, i) => ({
-        id: i + 1, name: `רשת ${i + 1}`, color   // PLACEHOLDER §15.1
+      nets: NET_COLORS.map((color, i) => ({
+        id: i + 1, name: NET_NAMES[i], color
       })),
 
       days: defaultDays(),
@@ -160,14 +174,27 @@ function nextTeamId(catId) {
   return `${prefix}t${String(n).padStart(2, '0')}`;
 }
 
-function newTeam(catId, name) {
+// שלושה שדות שם, לא בורר גודל (החלטת המשתמשת 24.7): ממלאים 2 → זוג, 3 →
+// שלישייה, והמערכת מסיקה. זה גם מתיישר עם טופס ההרשמה החיצוני שאוסף שחקניות
+// בנפרד. `name` נגזר מהשמות המלאים ומוצג כיחידה אחת (החלטה 8 נשמרת בתצוגה);
+// `players` נשמר כדי שאפשר יהיה לערוך כל שם בנפרד. `size` נגזר, לא נשמר.
+function newTeam(catId) {
   return {
     id: nextTeamId(catId),
-    name: name || '',      // מחרוזת אחת, מוצגת כיחידה (החלטה 8)
-    size: 2,               // 2 או 3 (2.1)
+    players: ['', '', ''],   // עד 3 (2.1); מספר המלאים קובע זוג/שלישייה
+    name: '',                // = players.filter(Boolean).join(' ')
+    // active/withdrewAfterDay נשארים במודל לטובת 6.1 בשלב 4 (הזנת תוצאות),
+    // בלי פקד ברוסטר: פרישה נדירה, ומטופלת במחיקה או בסימון "טכני" למשחק (§10.3).
     active: true,
-    withdrewAfterDay: null // 6.1.1 מול 6.1.2
+    withdrewAfterDay: null
   };
+}
+
+// עד 3 שמות. תומך גם בקבוצות ישנות שנשמרו עם name בלבד (לפני השינוי).
+// זוג/שלישייה נגזר ממספר השמות המלאים ולא נשמר בנפרד.
+function teamPlayers(t) {
+  if (Array.isArray(t.players)) return [t.players[0] || '', t.players[1] || '', t.players[2] || ''];
+  return [t.name || '', '', ''];
 }
 
 // כל הקבוצות בכל הליגות, לחיפוש לפי מזהה
@@ -348,6 +375,7 @@ const PAGES = [
   { id:'schedule',  label:'לוז',              stage:5 },
   { id:'ko',        label:'פיינל פור והצלבה', stage:7 },
   { id:'teams',     label:'קבוצות',           stage:null },
+  { id:'sched',     label:'מתזמן',            stage:null },
   { id:'settings',  label:'הגדרות',           stage:null },
   { id:'status',    label:'מצב המערכת',       stage:null }
 ];
@@ -375,6 +403,7 @@ function paint() {
   const target = PAGES.find(p => p.id === page);
   document.getElementById('page-body').innerHTML =
       page === 'teams'    ? renderTeams()
+    : page === 'sched'    ? renderSched()
     : page === 'settings' ? renderSettings()
     : page === 'status'   ? renderStatus()
     : renderPlaceholder(target);
@@ -429,8 +458,8 @@ function renderSponsorBar() {
 function renderPlaceholder(p) {
   return `<div class="sett-section empty">
     <h3>${escH(p.label)}</h3>
-    <p>העמוד הזה נבנה בשלב ${p.stage} מתוך §14 במפרט. כרגע בנויים שלבים 1–2:
-       מודל הנתונים, סנכרון חי, רוסטר, רשתות, ימים והגדרות.</p>
+    <p>העמוד הזה נבנה בשלב ${p.stage} מתוך §14 במפרט. כרגע בנויים שלבים 1–3:
+       מודל הנתונים, סנכרון חי, רוסטר, רשתות, ימים, הגדרות והמתזמן.</p>
   </div>`;
 }
 
@@ -439,22 +468,24 @@ function renderPlaceholder(p) {
 // ============================================================================
 
 function renderTeams() {
+  // שלושה שדות שם במקום בורר גודל (החלטת המשתמשת 24.7): 2 מלאים = זוג,
+  // 3 = שלישייה. אין כפתור פעילה/פרשה (פרישה נדירה — מחיקה או "טכני" פר משחק,
+  // §10.3), ואין קוד מזהה גלוי (פנימי — המנהלת לא צריכה אותו).
   const cards = L.categories.map(c => {
     const list = L.roster[c.id] || [];
-    const rows = list.map((t, i) => `
-      <div class="team-row${t.active ? '' : ' inactive'}">
+    const PH = ['שחקנית ראשונה', 'שחקנית שנייה', 'שחקנית שלישית (רשות)'];
+    const rows = list.map((t, i) => {
+      const p = teamPlayers(t);
+      const fields = [0, 1, 2].map(s => `
+        <input class="text-inp team-player-inp" value="${escH(p[s])}" placeholder="${PH[s]}"
+               data-act="team.player" data-id="${escH(t.id)}" data-slot="${s}"/>`).join('');
+      return `
+      <div class="team-row">
         <span class="team-num">${i + 1}</span>
-        <input class="text-inp team-name-inp" id="tn-${escH(t.id)}" value="${escH(t.name)}"
-               placeholder="שם הקבוצה" data-act="team.name" data-id="${escH(t.id)}"/>
-        <select class="text-inp team-size-sel" data-act="team.size" data-id="${escH(t.id)}">
-          <option value="2"${t.size === 2 ? ' selected' : ''}>זוג</option>
-          <option value="3"${t.size === 3 ? ' selected' : ''}>שלישייה</option>
-        </select>
-        <button class="reg-btn" data-act="team.active" data-id="${escH(t.id)}"
-                title="${t.active ? 'להוציא מהתחרות' : 'להחזיר לתחרות'}">${t.active ? 'פעילה' : 'פרשה'}</button>
+        <div class="team-players">${fields}</div>
         <button class="team-del" data-act="team.del" data-id="${escH(t.id)}" title="מחיקה">×</button>
-        <code class="team-id num">${escH(t.id)}</code>
-      </div>`).join('');
+      </div>`;
+    }).join('');
 
     return `
     <div class="sett-section">
@@ -475,6 +506,383 @@ function renderTeams() {
     כי המשחקים מצביעים על המזהה ולא על השם.
   </div>
   ${cards}`;
+}
+
+// ============================================================================
+// עמוד המתזמן — §14 שלב 3
+// ============================================================================
+//
+// שלושת השלבים של §6.1 מופיעים כשלושה כפתורים נפרדים, כי המפרט דורש שכל אחד
+// יהיה ניתן להרצה בנפרד. הדוח לא נשמר ב-Firestore אלא נגזר מחדש מ-L.games בכל
+// רינדור (analyze) — כך העמוד מראה את אותם מספרים בין אם הלוז נוצר עכשיו ובין
+// אם הוא נטען מהמסמך, ואותה פונקציה תזין את סרגל האזהרות של §9 בשלב 5.
+
+// ימי הליגה הסדירה. הפיינל פור והצלבה נבנים בשלב 7 ואינם חלק מה-RR; מזהי
+// הימים נקבעים ב-defaultDays() ואינם ניתנים לעריכה בהגדרות, ולכן זיהוי לפי
+// מזהה בטוח כאן.
+const KO_DAY_IDS = new Set(['ff', 'cross']);
+const regularDays = () => (L.meta.days || []).filter(d => !KO_DAY_IDS.has(d.id));
+
+let schedBusy = false;
+let schedDay  = null;     // איזה יום מוצג בגריד
+let schedLast = null;     // הדוח של ההרצה האחרונה (זמן ריצה, אזהרות מהגנרטור)
+
+// תמונת המצב שהמתזמן מקבל. רק קבוצות פעילות נכנסות ל-RR — קבוצה שפרשה
+// לא אמורה לקבל משחקים חדשים (6.1).
+function schedInput() {
+  return {
+    categories: L.categories.map(c => ({
+      id: c.id, name: c.name, rr: c.rr, order: c.order, fixedNet: c.fixedNet,
+      teams: (L.roster[c.id] || []).filter(t => t.active !== false).map(t => t.id)
+    })),
+    days: regularDays().map(d => ({
+      id: d.id, label: d.label, startTime: d.startTime,
+      slotMin: d.slotMin, slots: d.slots, netIds: d.netIds || []
+    })),
+    blocks: L.blocks || [],
+    availability: L.availability || {},
+    existing: L.games || []
+  };
+}
+
+// מה בנוי כרגע — שלושת השלבים הם שלוש שאלות נפרדות על אותו מערך משחקים
+function schedState() {
+  const g = L.games || [];
+  return {
+    games: g.length,
+    rr:    g.length > 0,
+    days:  g.length > 0 && g.every(x => x.day),
+    pack:  g.length > 0 && g.every(x => x.slot && x.net)
+  };
+}
+
+// דוח חי מתוך L.games: אותה פונקציית עלות של §6.2, על השיבוץ השמור.
+function analyze() {
+  const input = schedInput();
+  const games = L.games || [];
+
+  const total = {};
+  for (const g of games) {
+    total[g.a] = (total[g.a] || 0) + 1;
+    total[g.b] = (total[g.b] || 0) + 1;
+  }
+  const D = Math.max(1, input.days.length);
+  const bounds = {};
+  for (const [t, n] of Object.entries(total))
+    bounds[t] = { lo: Math.floor(n / D), hi: Math.ceil(n / D) };
+
+  const days = {};
+  for (const day of input.days) {
+    const dayGames = games.filter(g => g.day === day.id);
+    if (!dayGames.length) { days[day.id] = { day, games: [] }; continue; }
+    const ctx = buildDayContext(input, day, dayGames, bounds);
+    const place = new Map();
+    for (const g of dayGames) if (g.slot && g.net) place.set(g.key, { slot: g.slot, net: g.net });
+    days[day.id] = { day, ctx, games: dayGames, place,
+                     cost: dayCost(place, ctx), length: dayLength(place, ctx) };
+  }
+  return { input, days, bounds };
+}
+
+function runScheduler(phases) {
+  // הרצה מלאה של 240 משחקים לוקחת ~2 שניות. בלי הצעד הזה הדפדפן קופא בלי
+  // שום חיווי; כאן הוא מצייר "מחשב…" ורק אחר כך נכנס לחישוב.
+  schedBusy = true; paint();
+  setTimeout(() => {
+    const t0 = performance.now();
+    try {
+      const { games, report } = generateSeason(schedInput(), { phases });
+      L.games = games;
+      report.ms = Math.round(performance.now() - t0);
+      schedLast = report;
+      queueSave();
+    } catch (e) {
+      console.error('Scheduler failed', e);
+      schedLast = { fatal: e.message, warnings: [], errors: [], categories: {}, days: {} };
+    }
+    schedBusy = false;
+    paint();
+  }, 30);
+}
+
+const NET_NAME  = id => (L.meta.nets || []).find(n => n.id === id)?.name  || ('רשת ' + id);
+const NET_COLOR = id => (L.meta.nets || []).find(n => n.id === id)?.color || '#888888';
+const CAT_NAME  = id => L.categories.find(c => c.id === id)?.name || id;
+const TEAM_NAME = id => findTeam(id)?.team.name || id;
+
+function renderSched() {
+  const st = schedState();
+  const rosterCount = L.categories.map(c => (L.roster[c.id] || []).filter(t => t.active !== false).length);
+  const anyTeams = rosterCount.some(n => n >= 2);
+  const days = regularDays();
+
+  const intro = `
+  <div class="info-box">
+    <strong>שלב 3 — המתזמן.</strong> שלושת השלבים של §6.1 רצים בנפרד:
+    <b>א׳</b> מחזורי RR בשיטת המעגל · <b>ב׳</b> חלוקה ל-${days.length} ימים שווים ·
+    <b>ג׳</b> אריזה לגריד סלוט×רשת עם פאס תיקון. הקצב 4-3-4-3 של §6.1.ג.2
+    <em>נגזר</em> מכלל אי־הרצף ולא מקודד: בליגה של N קבוצות שני סלוטים סמוכים
+    יכולים להכיל יחד ⌊N/2⌋ משחקים לכל היותר, כי הם דורשים קבוצות שונות.
+  </div>`;
+
+  if (!anyTeams) return intro + `
+    <div class="sett-section empty">
+      <h3>אין עדיין קבוצות</h3>
+      <p>המתזמן צריך לפחות שתי קבוצות פעילות בליגה אחת. רשימת הקבוצות
+         מתפרסמת אחרי <strong>12.8.2026</strong> (§15.4); עד אז אפשר להזין אותן
+         בעמוד <b>קבוצות</b>.</p>
+      ${DEV ? `<div class="sett-add-row"><button class="add-cat-btn" data-act="sched.seed">
+         מילוי רוסטר בדיקה (15 · 15 · 6)</button></div>` : ''}
+    </div>`;
+
+  // ── פקדים ──
+  const busy = schedBusy ? ' disabled' : '';
+  const controls = `
+  <div class="sett-section">
+    <div class="sett-section-title">הרצה</div>
+    <div class="sched-actions">
+      <button class="cf-btn" data-act="sched.all"${busy}>הכל — א׳ + ב׳ + ג׳</button>
+      <button class="filter-btn" data-act="sched.rr"${busy}>א׳ · מחזורי RR</button>
+      <button class="filter-btn" data-act="sched.days"${busy}${st.rr ? '' : ' disabled'}>ב׳ · חלוקה לימים</button>
+      <button class="filter-btn" data-act="sched.pack"${busy}${st.days ? '' : ' disabled'}>ג׳ · אריזה + תיקון</button>
+      <button class="team-del sched-clear" data-act="sched.clear"${busy}>מחיקת הלוז</button>
+    </div>
+    <div class="sched-state">
+      ${chip('א׳ RR', st.rr, st.games ? `${st.games} משחקים` : '')}
+      ${chip('ב׳ ימים', st.days, st.days ? `${days.length} מחזורים` : '')}
+      ${chip('ג׳ גריד', st.pack, '')}
+      ${schedBusy ? '<span class="status-badge badge-pending">מחשב…</span>' : ''}
+      ${schedLast?.ms != null ? `<span class="muted">ההרצה האחרונה: ${schedLast.ms} מ״ש</span>` : ''}
+    </div>
+  </div>`;
+
+  const msgs = [
+    ...(schedLast?.fatal ? [['err', 'המתזמן נפל: ' + schedLast.fatal]] : []),
+    ...(schedLast?.errors || []).map(t => ['err', t]),
+    ...(schedLast?.warnings || []).map(t => ['warn', t])
+  ];
+  const messages = msgs.length ? `
+  <div class="sett-section">
+    <div class="sett-section-title">הודעות מההרצה</div>
+    ${msgs.map(([k, t]) => `<div class="sched-msg ${k}">${escH(t)}</div>`).join('')}
+  </div>` : '';
+
+  if (!st.rr) return intro + controls + messages + rrTable();
+
+  const A = analyze();
+
+  // ── סיכום העונה ──
+  const seasonRows = days.map(d => {
+    const r = A.days[d.id];
+    if (!r || !r.games.length) return `<tr><td>${escH(d.label)}</td>
+      <td class="num">0</td><td colspan="5"><em>אין משחקים</em></td></tr>`;
+    const wins = r.ctx ? Object.entries(r.cost ? windowsFrom(r) : {}) : [];
+    const v = r.cost?.violations || [];
+    const hard = v.filter(x => x.cost >= 1_000_000).length;
+    return `<tr>
+      <td>${escH(d.label)}</td>
+      <td class="num">${r.games.length}</td>
+      <td class="wins">${wins.map(([c, w]) => w
+        ? `<span class="win-pill">${escH(CAT_NAME(c))} <b class="num">${slotLabel(d, w.from)}–${slotLabel(d, w.to + 1)}</b></span>`
+        : '').join('')}</td>
+      <td class="num">${escH(r.length.endTime)}</td>
+      <td class="num">${r.length.used}/${r.length.capacity}</td>
+      <td class="num">${r.cost.total.toLocaleString('en')}</td>
+      <td>${hard ? `<span class="status-badge badge-rejected">${hard} קשיחות</span>`
+                 : `<span class="status-badge badge-approved">תקין</span>`}</td>
+    </tr>`;
+  }).join('');
+
+  const season = `
+  <div class="sett-section">
+    <div class="sett-section-title">העונה</div>
+    <div class="tscroll"><table class="stbl">
+      <thead><tr><th>מחזור</th><th>משחקים</th><th>חלונות הגעה</th><th>סיום</th>
+        <th>תאים</th><th>עלות</th><th>אילוצים קשיחים</th></tr></thead>
+      <tbody>${seasonRows}</tbody>
+    </table></div>
+    <span class="sett-desc" style="margin-top:10px">"חלונות הגעה" הם תוצאה של
+      האריזה, לא קלט לה — הסלוט הראשון והאחרון שבו כל ליגה משחקת בפועל.
+      העלות היא פונקציית §6.2; אילוץ קשיח שקול ל-1,000,000 בה.</span>
+  </div>`;
+
+  if (!st.days) return intro + controls + messages + season + rrTable();
+
+  // ── היום הנבחר ──
+  if (!schedDay || !A.days[schedDay]) schedDay = days.find(d => A.days[d.id]?.games.length)?.id || days[0]?.id;
+  const sel = A.days[schedDay];
+
+  const picker = `<div class="day-picker">${days.map(d =>
+    `<button class="filter-btn${d.id === schedDay ? ' on' : ''}" data-act="sched.day" data-day="${escH(d.id)}"
+      >${escH(d.label)}</button>`).join('')}</div>`;
+
+  const detail = sel && sel.games.length ? `
+  <div class="sett-section">
+    <div class="sett-section-title">${escH(sel.day.label)}</div>
+    ${picker}
+    ${costChips(sel.cost)}
+    ${violationList(sel)}
+    ${st.pack ? grid(sel) : '<div class="info-box">השלב ג׳ עוד לא רץ — אין סלוטים ורשתות.</div>'}
+    ${lengthCounter(sel)}
+  </div>` : `<div class="sett-section">${picker}<div class="empty">אין משחקים ביום הזה.</div></div>`;
+
+  return intro + controls + messages + season + detail + rrTable();
+}
+
+const chip = (label, on, extra) =>
+  `<span class="status-badge ${on ? 'badge-approved' : 'badge-pending'}">${escH(label)}${
+    on && extra ? ' · ' + escH(extra) : ''}</span>`;
+
+// חלונות ההגעה מהשיבוץ השמור (אותו חישוב שהמתזמן מחזיר, כאן על L.games)
+function windowsFrom(r) {
+  const out = {};
+  for (const c of r.ctx.cats) {
+    let lo = Infinity, hi = 0, n = 0;
+    for (const g of r.games) {
+      if (g.cat !== c.id || !g.slot) continue;
+      n++; lo = Math.min(lo, g.slot); hi = Math.max(hi, g.slot);
+    }
+    out[c.id] = n ? { from: lo, to: hi, games: n } : null;
+  }
+  return out;
+}
+
+const COST_LABELS = {
+  hard: 'קשיח', backToBack: 'רצף', gamesOver: 'יותר מהמכסה',
+  gamesUnder: 'פחות מהמכסה', longWait: 'המתנה', span: 'טווח נוכחות', emptyCell: 'תאים ריקים'
+};
+
+function costChips(cost) {
+  const items = Object.entries(cost.breakdown)
+    .filter(([, v]) => v > 0)
+    .sort((a, b) => b[1] - a[1]);
+  return `<div class="cost-chips">
+    <span class="cost-chip total">עלות <b class="num">${cost.total.toLocaleString('en')}</b></span>
+    ${items.map(([k, v]) => `<span class="cost-chip${k === 'hard' ? ' bad' : ''}">${escH(COST_LABELS[k] || k)}
+      <b class="num">${v.toLocaleString('en')}</b></span>`).join('')}
+    ${items.length ? '' : '<span class="cost-chip">אפס הפרות</span>'}
+  </div>`;
+}
+
+// רשימת ההפרות. אותו מבנה נתונים יזין את סרגל האזהרות של §9 בשלב 5, ולכן
+// הקיבוץ הוא לפי kind ולא לפי טקסט.
+function violationList(r) {
+  const v = r.cost.violations;
+  if (!v.length) return '';
+  const groups = {};
+  for (const x of v) (groups[x.kind] ||= []).push(x);
+  const order = Object.entries(groups).sort((a, b) =>
+    b[1].reduce((s, x) => s + x.cost, 0) - a[1].reduce((s, x) => s + x.cost, 0));
+
+  return `<div class="viol-wrap">${order.map(([kind, list]) => {
+    const hard = list[0].cost >= 1_000_000;
+    return `<details class="viol${hard ? ' hard' : ''}">
+      <summary><b>${escH(VIOL_LABELS[kind] || kind)}</b>
+        <span class="muted">${list.length}</span></summary>
+      <ul>${list.slice(0, 12).map(x => `<li>${
+        escH(x.text.replace(/\b([sl]\d?t\d+)\b/g, (_, id) => TEAM_NAME(id)))
+      }${x.slot ? ` <span class="muted num">${slotLabel(r.day, x.slot)}</span>` : ''}${
+        x.net ? ` <span class="muted">${escH(NET_NAME(x.net))}</span>` : ''}</li>`).join('')}
+        ${list.length > 12 ? `<li class="muted">…ועוד ${list.length - 12}</li>` : ''}</ul>
+    </details>`;
+  }).join('')}</div>`;
+}
+
+const VIOL_LABELS = {
+  doubleBooked:'אותה קבוצה פעמיים באותו סלוט', cellClash:'שני משחקים על אותו תא',
+  blockedCell:'משחק על תא חסום', availability:'חריגה מחלון זמינות',
+  noReferee:'אין שופטת (5.2/5.3)', wrongNet:'רשת קבועה — שיבוץ שגוי',
+  backToBack:'שני משחקים ברצף', tooMany:'יותר מהמכסה היומית',
+  tooFew:'פחות מהמכסה היומית', noGames:'קבוצה בלי אף משחק ביום',
+  longWait:'המתנה של יותר מסלוט אחד'
+};
+
+function grid(r) {
+  const day = r.day, nets = r.ctx.netIds;
+  const at = new Map();
+  for (const g of r.games) if (g.slot && g.net) at.set(g.slot + '|' + g.net, g);
+  const blocks = new Map();
+  for (const b of (L.blocks || [])) if (b.day === day.id) blocks.set(b.slot + '|' + b.net, b);
+
+  const head = `<tr><th class="sg-time">שעה</th>${nets.map(n =>
+    `<th style="background:${escH(NET_COLOR(n))};color:${onColor(NET_COLOR(n))}">${escH(NET_NAME(n))}</th>`
+  ).join('')}</tr>`;
+
+  const rows = Array.from({ length: day.slots }, (_, i) => {
+    const s = i + 1;
+    return `<tr>
+      <td class="sg-time num">${escH(slotLabel(day, s))}</td>
+      ${nets.map(n => {
+        const g = at.get(s + '|' + n), b = blocks.get(s + '|' + n);
+        if (b) return `<td class="sg-cell blocked">${escH(b.label || b.kind)}</td>`;
+        if (!g) return `<td class="sg-cell empty"></td>`;
+        return `<td class="sg-cell" style="--gc:${escH(NET_COLOR(n))}">
+          <span class="sg-cat">${escH(CAT_NAME(g.cat))}</span>
+          <span class="sg-team">${escH(TEAM_NAME(g.a))}</span>
+          <span class="sg-team">${escH(TEAM_NAME(g.b))}</span>
+        </td>`;
+      }).join('')}
+    </tr>`;
+  }).join('');
+
+  return `<div class="tscroll"><table class="stbl sgrid">
+    <thead>${head}</thead><tbody>${rows}</tbody></table></div>`;
+}
+
+// §4.6 — כל תא שיישמר לליגה שלישית מאריך את המחזור
+function lengthCounter(r) {
+  const L2 = r.length;
+  return `
+  <div class="len-counter">
+    <div class="len-now">
+      <span>סיום בפועל <b class="num">${escH(L2.endTime)}</b></span>
+      <span>תאים תפוסים <b class="num">${L2.used}</b></span>
+      <span>חסימות <b class="num">${L2.blocks}</b></span>
+      <span>פנויים <b class="num">${L2.freeCells}</b></span>
+    </div>
+    <table class="stbl len-proj">
+      <thead><tr><th>תאים לליגה שלישית</th>${L2.projection.map(p =>
+        `<th class="num">${p.extra}</th>`).join('')}</tr></thead>
+      <tbody><tr><td>סיום המחזור</td>${L2.projection.map(p =>
+        `<td class="num">${escH(p.endTime)}</td>`).join('')}</tr></tbody>
+    </table>
+    <span class="sett-desc">חסם תחתון: ⌈תאים ÷ רשתות⌉. איפה בדיוק המנהלת תניח
+      את התאים ייקבע בלוח הגרירה (שלב 5), ולכן הסיום האמיתי יכול להיות מאוחר
+      יותר — לא מוקדם.</span>
+  </div>`;
+}
+
+// שלב א׳ — מה שיטת המעגל הוציאה
+function rrTable() {
+  const rows = L.categories.map(c => {
+    const n = (L.roster[c.id] || []).filter(t => t.active !== false).length;
+    if (n < 2) return `<tr><td>${escH(c.name)}</td><td class="num">${n}</td>
+      <td colspan="4"><em>פחות משתי קבוצות</em></td></tr>`;
+    const rr = c.rr || 1;
+    const rounds = (n % 2 ? n : n - 1) * rr;
+    return `<tr>
+      <td>${escH(c.name)}</td>
+      <td class="num">${n}</td>
+      <td class="num">${rr === 2 ? 'כפול' : 'יחיד'}</td>
+      <td class="num">${n * (n - 1) / 2 * rr}</td>
+      <td class="num">${(n - 1) * rr}</td>
+      <td class="num">${rounds}${n % 2 ? ` <span class="muted">+ bye מתחלף</span>` : ''}</td>
+    </tr>`;
+  }).join('');
+
+  return `
+  <div class="sett-section">
+    <div class="sett-section-title">שלב א׳ — מחזורי RR</div>
+    <div class="tscroll"><table class="stbl">
+      <thead><tr><th>ליגה</th><th>קבוצות</th><th>סיבובים</th><th>משחקים</th>
+        <th>לקבוצה</th><th>מחזורי RR</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table></div>
+    <span class="sett-desc" style="margin-top:10px">N אי־זוגי → N מחזורים וכל
+      קבוצה יושבת פעם אחת בעונה (זה ה-bye של §6.3). N זוגי → N-1 מחזורים בלי bye.
+      מחזורי RR מפוצלים בין ימים בשלב ב׳, כי 3.6 מתיר 1–5 משחקים לקבוצה במחזור —
+      וזה מה שמאפשר ימים שווים.</span>
+  </div>`;
 }
 
 // ============================================================================
@@ -601,7 +1009,7 @@ function renderSettings() {
     </div>`)).join('');
 
   const netsNote = `<div class="info-box" style="margin-bottom:12px">
-    ⚠️ ארבעת הקודים הנוכחיים זמניים — §15.1, הקודים האמיתיים טרם נשלחו.
+    ארבעת קודי הצבע הם פלטת פוצ׳ילינה (Pantone 807 · 809 · 2173 והכהה).
     צבע הטקסט על כל צ׳יפ מחושב אוטומטית כדי להישאר קריא.
   </div>`;
 
@@ -739,7 +1147,7 @@ function renderStatus() {
     <div class="sett-section-title">רשתות</div>
     <div class="net-chips">${netChips}</div>
     <div class="info-box" style="margin-top:12px;margin-bottom:0">
-      ⚠️ ארבעת קודי הצבע והשמות הם זמניים. §15.1 — הקודים האמיתיים טרם נשלחו.
+      ארבע הרשתות בפלטת פוצ׳ילינה: ורוד (807 C) · צהוב (809 C) · כחול (2173 C) · כהה.
     </div>
   </div>
 
@@ -789,9 +1197,15 @@ const ACT = {
     if (!confirm(`למחוק את "${f.team.name || f.team.id}"?`)) return false;
     L.roster[f.cat] = L.roster[f.cat].filter(t => t.id !== f.team.id);
   },
-  'team.name':   el => { const f = findTeam(el.dataset.id); if (f) f.team.name = el.value.trim(); },
-  'team.size':   el => { const f = findTeam(el.dataset.id); if (f) f.team.size = +el.value; },
-  'team.active': el => { const f = findTeam(el.dataset.id); if (f) f.team.active = !f.team.active; },
+  // שם שחקנית בסלוט. השם המאוחד (החלטה 8) נגזר מהשמות המלאים; זוג/שלישייה
+  // נגזר ממספרם ולא נשמר.
+  'team.player': el => {
+    const f = findTeam(el.dataset.id); if (!f) return;
+    const p = teamPlayers(f.team);
+    p[+el.dataset.slot] = el.value.trim();
+    f.team.players = p;
+    f.team.name = p.filter(Boolean).join(' ');
+  },
 
   // ── כללי ──
   'meta.name':    el => { L.meta.name = el.value.trim(); },
@@ -858,6 +1272,29 @@ const ACT = {
                           : d.netIds.filter(x => x !== id);
   },
 
+  // ── המתזמן (שלב 3) ──
+  // כל שלב בנפרד לפי §6.1. הרצה חוזרת שומרת תוצאות ונעילות לפי מזהה המשחק
+  // הלוגי (ליגה|א|ב|סיבוב), אבל אם הרוסטר השתנה המזהה משתנה איתו — ולכן
+  // אזהרה מפורשת כשיש תוצאות על השולחן.
+  'sched.all':  () => { if (confirmRegen()) runScheduler(['rr', 'days', 'pack']); return false; },
+  'sched.rr':   () => { if (confirmRegen()) runScheduler(['rr']); return false; },
+  // ב׳ ו-ג׳ לא מגרילים RR מחדש — הם עובדים על המשחקים ששמורים במסמך, ולכן
+  // תוצאות ונעילות לא בסכנה ואין מה לאשר.
+  'sched.days': () => { runScheduler(['days']); return false; },
+  'sched.pack': () => { runScheduler(['pack']); return false; },
+  'sched.day':  el => { schedDay = el.dataset.day; },
+  'sched.clear': () => {
+    if (!confirm('למחוק את כל הלוז? התוצאות שהוזנו יימחקו איתו.')) return false;
+    L.games = []; schedLast = null;
+  },
+
+  // בדיקה בלבד (?dev=1). §15.4 — רשימת הקבוצות האמיתית מתפרסמת אחרי 12.8.
+  'sched.seed': () => {
+    if (!DEV) return false;
+    if (!confirm('למלא רוסטר בדיקה של 15·15·6 קבוצות? הרוסטר הקיים יימחק.')) return false;
+    seedTestRoster();
+  },
+
   // ── סיסמאות ──
   'pw.admin':   el => hashPassword('adminPasswordHash', el),
   'pw.manager': el => hashPassword('managerPasswordHash', el),
@@ -865,6 +1302,32 @@ const ACT = {
   // ── בדיקת סנכרון (dev) ──
   'dev.name': el => { L.meta.name = el.value.trim(); }
 };
+
+function confirmRegen() {
+  const scored = (L.games || []).filter(g => g.result && g.result !== 'pending').length;
+  if (!scored) return true;
+  return confirm(`יש ${scored} משחקים עם תוצאה. הרצה מחדש שומרת תוצאה לכל משחק ` +
+    `שנשאר אותו מפגש, אבל אם שינית את הרוסטר — תוצאות עלולות להימחק. להמשיך?`);
+}
+
+// רוסטר בדיקה. שמות אמיתיים באורך אמיתי, כדי שהגריד ייבדק בתנאים אמיתיים
+// ולא מול "קבוצה 1". ?dev=1 בלבד, ורק מול futilina-test.
+function seedTestRoster() {
+  const first = ['רוני','טל','נועה','שירה','ליהי','עדי','מאיה','יערה','הילה','דנה',
+                 'אור','ניצן','שקד','רותם','אביגיל','יובל','גאיה','תמר','אלה','נטע'];
+  const pick = (i, k) => first[(i * 7 + k * 3) % first.length];
+  const build = (cat, n) => Array.from({ length: n }, (_, i) => {
+    // כל קבוצה שלישית = שלישייה (3 שמות), השאר זוגות (2 שמות)
+    const players = i % 3 === 0 ? [pick(i, 0), pick(i, 1), pick(i, 2)] : [pick(i, 0), pick(i, 1)];
+    return {
+      id: `${CAT_PREFIX[cat]}t${String(i + 1).padStart(2, '0')}`,
+      players, name: players.join(' '),
+      active: true, withdrewAfterDay: null
+    };
+  });
+  L.roster = { show: build('show', 6), liga1: build('liga1', 15), liga2: build('liga2', 15) };
+  L.games = []; schedLast = null;
+}
 
 // אסינכרוני, ולכן שומר בעצמו במקום להסתמך על המחזור של handle()
 async function hashPassword(field, el) {
@@ -881,11 +1344,16 @@ async function hashPassword(field, el) {
 // שערכה שלוש שורות ברוסטר ברצף איבדה את שתי האחרונות. רק פעולה שמשנה משהו
 // *מחוץ* לשדה עצמו — הוספה, מחיקה, מתג, או מדד מחושב — מפעילה רינדור.
 const NO_REPAINT = new Set([
-  'team.name', 'team.size', 'cat.name',
+  'team.player', 'cat.name',
   'fmt.to', 'fmt.third', 'fmt.cap',
   'day.label', 'day.beach',
   'sponsor.url', 'sponsor.alt'
 ]);
+
+// פעולות שמשנות רק מה שמוצג ולא את המודל. בלי זה כל לחיצה על טאב של יום
+// בעמוד המתזמן הייתה כותבת את המסמך כולו ל-Firestore — 240 משחקים על שינוי
+// שקיים רק בדפדפן.
+const NO_SAVE = new Set(['sched.day']);
 
 function handle(e, kinds) {
   const el = e.target.closest('[data-act]');
@@ -894,7 +1362,7 @@ function handle(e, kinds) {
   const fn = ACT[act];
   if (!fn) return;
   const skip = fn(el, e) === false || NO_REPAINT.has(act);
-  queueSave();
+  if (!NO_SAVE.has(act)) queueSave();
   if (!skip) paint();
 }
 
@@ -917,11 +1385,11 @@ document.addEventListener('toggle', e => {
 }, true);
 
 (async function start() {
-  // מסך הטעינה ורוד (החלטה 14) — הצבע מגיע מהמודל, כך שהחלפתו בשלב 8
-  // היא שינוי נתון ולא שינוי קוד.
+  // מסך הטעינה ורוד (החלטה 14). לפני שהמסמך נטען אין עדיין meta.loadingColor,
+  // ולכן הצבע הראשוני מגיע מקבוע המותג; ברגע שהמסמך זמין הוא גובר.
   const load = document.getElementById('view-loading');
-  load.style.background = PLACEHOLDER_PINK;
-  load.style.color = onColor(PLACEHOLDER_PINK);
+  load.style.background = BRAND_PINK;
+  load.style.color = onColor(BRAND_PINK);
 
   let outcome;
   try {

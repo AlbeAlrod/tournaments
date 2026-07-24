@@ -124,18 +124,16 @@ input[type="url"], input[type="date"], input[type="time"], input[type="number"] 
 .acc[open] > summary { border-bottom: 2px solid var(--primary); }
 .acc-body { padding: 6px 24px 20px; }
 
-/* שורת קבוצה ברוסטר */
+/* שורת קבוצה ברוסטר — שלושה שדות שם (2 מלאים = זוג, 3 = שלישייה) */
 .team-row { display: flex; align-items: center; gap: 8px;
   padding: 7px 0; border-bottom: 1px solid var(--border); }
 .team-row:last-of-type { border-bottom: 0; }
-.team-row.inactive { opacity: .55; }
 .team-num { min-width: 22px; height: 22px; border-radius: 50%; flex-shrink: 0;
   background: var(--primary); color: var(--on-primary);
   display: flex; align-items: center; justify-content: center;
   font-size: 12px; font-weight: 800; }
-.team-name-inp { flex: 1; min-width: 0; }
-.team-size-sel { width: 108px; flex-shrink: 0; }
-.team-id { flex-shrink: 0; font-size: 11px; opacity: .75; }
+.team-players { flex: 1; min-width: 0; display: flex; gap: 6px; }
+.team-player-inp { flex: 1; min-width: 0; }
 
 /* פורמט משחק — שדות מספר צרים בשורה אחת */
 .fmt-ctrl { flex-wrap: wrap; gap: 6px; }
@@ -158,6 +156,70 @@ input[type="url"], input[type="date"], input[type="time"], input[type="number"] 
 .cat-item-name-inp { flex: 1; min-width: 0; font-weight: 600; }
 .scaffold-note { border-style: dashed; }
 
+/* ── עמוד המתזמן (שלב 3) ───────────────────────────────────────────────── */
+
+.sched-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.sched-actions button:disabled { opacity: .45; cursor: default; }
+.sched-clear { margin-inline-start: auto; }
+.sched-state { display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+  margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+
+.sched-msg { padding: 9px 13px; border-radius: var(--rs); font-size: 13px;
+  margin-bottom: 7px; border-right: 3px solid; }
+.sched-msg.err  { background: color-mix(in srgb, var(--red) 8%, transparent);   border-right-color: var(--red); }
+.sched-msg.warn { background: color-mix(in srgb, var(--amber) 12%, transparent); border-right-color: var(--amber); }
+
+.day-picker { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 14px; }
+
+/* פירוק העלות של §6.2 — כל רכיב וכמה הוא תרם */
+.cost-chips { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 12px; }
+.cost-chip { padding: 5px 12px; border-radius: 999px; background: var(--bg3);
+  font-size: 12px; color: var(--text3); }
+.cost-chip b { color: var(--text2); margin-inline-start: 4px; }
+.cost-chip.total { background: var(--primary); color: var(--on-primary); }
+.cost-chip.total b { color: var(--on-primary); }
+.cost-chip.bad { background: color-mix(in srgb, var(--red) 15%, transparent); color: var(--red); }
+.cost-chip.bad b { color: var(--red); }
+
+/* ההפרות. אותו מבנה יזין את סרגל האזהרות של §9 בשלב 5. */
+.viol-wrap { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+.viol { border: 1px solid var(--border2); border-radius: var(--rs); overflow: hidden; }
+.viol.hard { border-color: var(--red); }
+.viol > summary { cursor: pointer; list-style: none; padding: 8px 13px; font-size: 13px;
+  display: flex; gap: 8px; align-items: center; background: var(--bg3); }
+.viol > summary::-webkit-details-marker { display: none; }
+.viol > summary::after { content: '⌄'; margin-inline-start: auto; color: var(--text3); }
+.viol[open] > summary::after { transform: rotate(180deg); }
+.viol ul { margin: 0; padding: 9px 30px 11px 13px; font-size: 12.5px;
+  color: var(--text2); line-height: 1.8; }
+
+/* הגריד: שורה לסלוט, עמודה לרשת. תצוגה בלבד — הגרירה היא שלב 5. */
+.sgrid { table-layout: fixed; min-width: 560px; }
+.sgrid th { font-size: 12px; padding: 7px 6px; }
+.sgrid .sg-time { width: 62px; font-size: 12px; color: var(--text3);
+  background: var(--bg3); vertical-align: middle; }
+.sg-cell { padding: 5px 7px !important; vertical-align: top;
+  border-right: 3px solid var(--gc, transparent); }
+.sg-cell.empty { background: repeating-linear-gradient(45deg,
+  transparent, transparent 5px, var(--bg3) 5px, var(--bg3) 10px); }
+.sg-cell.blocked { background: var(--surface); color: var(--text3);
+  font-size: 11px; text-align: center; vertical-align: middle; }
+.sg-cat { display: block; font-size: 9.5px; color: var(--text3); margin-bottom: 2px; }
+.sg-team { display: block; font-size: 11.5px; line-height: 1.35;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* מונה אורך היום — §4.6 */
+.len-counter { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--border); }
+.len-now { display: flex; flex-wrap: wrap; gap: 6px 20px; font-size: 12.5px;
+  color: var(--text3); margin-bottom: 12px; }
+.len-now b { color: var(--text2); }
+.len-proj { max-width: 420px; }
+.len-proj th, .len-proj td { font-size: 12px; padding: 6px 8px; }
+
+/* חלונות ההגעה בטבלת העונה */
+.wins { display: flex; flex-wrap: wrap; gap: 5px; justify-content: center; }
+.win-pill { background: var(--bg3); border-radius: 999px; padding: 3px 10px; font-size: 11.5px; }
+
 /* ב-styles.css קיים .sett-desc אבל הוא display:block. להערת אגב בתוך שורה
    אין מקבילה, וכך גם ל-code מחוץ ל-.no-t-wrap — שניהם מאמצים את אותם ערכים. */
 .muted { font-size: 12.5px; color: var(--text3); }
@@ -173,17 +235,13 @@ footer { padding: 20px; text-align: center; font-size: 12px;
   .kv { grid-template-columns: 1fr; gap: 2px 0; }
   .kv dd { margin-bottom: 8px; }
 
-  /* שש פקדים בשורה אחת מוחצים את שדה השם ל-40 פיקסלים — והשם הוא בדיוק
-     מה שצריך לראות. אותה בעיה שכבר תוקנה פעם לשמות זוגות בלוז: בטלפון
-     השם מקבל שורה משלו והפקדים יורדים מתחתיו. */
-  .team-row { display: grid; grid-template-columns: auto 1fr auto auto;
-    align-items: center; column-gap: 8px; row-gap: 7px; padding: 11px 0; }
-  .team-num                          { grid-column: 1;     grid-row: 1; }
-  .team-name-inp                     { grid-column: 2/-1;  grid-row: 1; }
-  .team-size-sel                     { grid-column: 1/3;   grid-row: 2; width: 100%; }
-  .team-row [data-act="team.active"] { grid-column: 3;     grid-row: 2; }
-  .team-row .team-del                { grid-column: 4;     grid-row: 2; }
-  .team-id                           { grid-column: 1/-1;  grid-row: 3; justify-self: start; }
+  /* שלושה שדות שם ברוחב 375 נמחצים לשליש שורה. בטלפון: מספר + מחיקה בשורה
+     אחת, ושלושת שדות השם נערמים מתחת בשורה משלהם. */
+  .team-row { display: grid; grid-template-columns: auto 1fr auto;
+    align-items: center; column-gap: 8px; row-gap: 8px; padding: 11px 0; }
+  .team-num       { grid-column: 1;    grid-row: 1; }
+  .team-players   { grid-column: 2/-1; grid-row: 2; flex-direction: column; }
+  .team-row .team-del { grid-column: 3; grid-row: 1; }
 
   .acc > summary { padding: 14px 16px; }
   .acc-body { padding: 6px 16px 18px; }
