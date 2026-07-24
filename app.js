@@ -147,10 +147,14 @@ async function pushToCloud() {
 
 async function pushMetaOnly() {
   if (!TREF) return;
+  // Guard like pushToCloud: without this our OWN write comes back through
+  // onSnapshot → renderAll() → the focused input is rebuilt and you lose focus
+  // after every keystroke (tournament name / category names).
+  skipNextSnapshot++;
   try {
     await setDoc(TREF, { meta, updatedAt: serverTimestamp() }, { merge: true });
     setSyncStatus(true);
-  } catch(e) { setSyncStatus(false); }
+  } catch(e) { skipNextSnapshot--; setSyncStatus(false); }
 }
 
 // ============ LOAD TOURNAMENT ============

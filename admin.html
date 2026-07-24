@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>Tournaments Admin</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
-<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@700;800;900&display=swap" rel="stylesheet"/>
-<link rel="stylesheet" href="styles.css?v=18"/>
+<link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700;800;900&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="styles.css?v=60"/>
 <style>
 /* ── Shared overrides ── */
 .h { display: none !important; }
@@ -35,7 +35,7 @@
   margin-bottom: 20px;
 }
 .login-title h1 {
-  font-family: 'Barlow Condensed', sans-serif;
+  font-family: 'Rubik', sans-serif;
   font-size: 24px;
   font-weight: 900;
   color: var(--text);
@@ -81,7 +81,7 @@
   gap: 10px;
 }
 .adm-header-title {
-  font-family: 'Barlow Condensed', sans-serif;
+  font-family: 'Rubik', sans-serif;
   font-size: 20px;
   font-weight: 800;
   color: var(--text);
@@ -93,7 +93,7 @@
   color: var(--text3);
   border: 1px solid var(--border2);
   border-radius: var(--rs);
-  font-family: 'Barlow Condensed', sans-serif;
+  font-family: 'Rubik', sans-serif;
   font-size: 14px;
   font-weight: 700;
   letter-spacing: .5px;
@@ -117,7 +117,7 @@
   gap: 12px;
 }
 .adm-toolbar h2 {
-  font-family: 'Barlow Condensed', sans-serif;
+  font-family: 'Rubik', sans-serif;
   font-size: 26px;
   font-weight: 800;
   text-transform: uppercase;
@@ -130,7 +130,7 @@
   color: var(--on-primary);
   border: none;
   border-radius: var(--rs);
-  font-family: 'Barlow Condensed', sans-serif;
+  font-family: 'Rubik', sans-serif;
   font-size: 16px;
   font-weight: 800;
   letter-spacing: 1px;
@@ -153,7 +153,7 @@
   box-shadow: 0 2px 10px rgba(0,0,0,0.05);
 }
 .t-table th {
-  font-family: 'Barlow Condensed', sans-serif;
+  font-family: 'Rubik', sans-serif;
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 2px;
@@ -199,7 +199,7 @@
 .t-expiry { font-size: 12px; color: var(--text3); white-space: nowrap; }
 .status-pill {
   display: inline-block;
-  font-family: 'Barlow Condensed', sans-serif;
+  font-family: 'Rubik', sans-serif;
   font-size: 11px;
   font-weight: 700;
   letter-spacing: .5px;
@@ -218,7 +218,7 @@
   border-radius: var(--rs);
   font-size: 12px;
   cursor: pointer;
-  font-family: 'Barlow', sans-serif;
+  font-family: 'Rubik', sans-serif;
   transition: all .15s;
   white-space: nowrap;
 }
@@ -231,7 +231,7 @@
   border-radius: var(--rs);
   font-size: 12px;
   cursor: pointer;
-  font-family: 'Barlow', sans-serif;
+  font-family: 'Rubik', sans-serif;
   transition: all .15s;
   white-space: nowrap;
   margin-right: 6px;
@@ -267,7 +267,7 @@
   font-size: 12px;
   cursor: pointer;
   white-space: nowrap;
-  font-family: 'Barlow', sans-serif;
+  font-family: 'Rubik', sans-serif;
   transition: all .15s;
 }
 .regen-btn:hover { background: var(--surface); }
@@ -294,7 +294,7 @@
   flex-shrink: 0;
 }
 .adm-lmark span {
-  font-family: 'Barlow Condensed', sans-serif;
+  font-family: 'Rubik', sans-serif;
   font-weight: 900;
   font-size: 18px;
   color: var(--on-primary);
@@ -633,8 +633,8 @@ async function createTournament() {
     adminPassword:  await sha256(adminPw),
     masterPassword: await sha256(masterPw),
     logoUrl:        tpl?.meta?.logoUrl        || '',
-    primaryColor:   isQueen ? '#EC0F8C' : (tpl?.meta?.primaryColor   || '#6B21A8'),
-    secondaryColor: isQueen ? '#F84FB0' : (tpl?.meta?.secondaryColor || '#7C3AED'),
+    primaryColor:   isQueen ? '#EC0F8C' : (tpl?.meta?.primaryColor   || '#652d92'),
+    secondaryColor: isQueen ? '#F84FB0' : (tpl?.meta?.secondaryColor || '#7a3fb0'),
     sponsorLogos:   tpl?.meta?.sponsorLogos   || [],
     bgColor:        isQueen ? '#0B0B16' : (tpl?.meta?.bgColor        || ''),
     groupColors:    isQueen ? ['#EC0F8C','#17A6E0','#C8DA1E','#33B24A'] : (tpl?.meta?.groupColors || []),
