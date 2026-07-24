@@ -983,8 +983,130 @@ async function saveAddPair() {
   renderBuildPage();
 }
 
+// ===== COORDINATED MULTI-CATEGORY SCHEDULER (opt-in via meta.coordinated) =====
+// Schedules ALL categories on ONE shared court grid: no cross-category court/time
+// collisions, the finale (last category) finishes last, pools before KO, no pair
+// plays >3 games in a row, compact blocks (low waiting). Runs on Build and re-runs
+// on withdrawal so the board updates itself. Reads state[cat].groups; writes sched/ko.
+function coordCfg(){
+  const courts = Math.max(2, ...categories.map(c=>(c.cfg||DEF_CAT_CFG).courts||2));
+  const c0 = (categories[0] && categories[0].cfg) || DEF_CAT_CFG;
+  const slot = (c0.gameDur||20) + (c0.breakDur||0);
+  const start = t2m(meta.startTime || c0.startTime || '17:00');
+  return { COURTS:courts, SLOT:slot, START:start };
+}
+function buildCoordinatedGroups(){
+  categories.forEach(cat=>{
+    const cs=state[cat.id]; if(!cs) return;
+    let roster = cs.roster.length ? cs.roster :
+      registrations.filter(r=>r.status==='approved'&&r.category===cat.id).map(r=>r.p1+(r.p2?' / '+r.p2:''));
+    if(!roster.length){ cs.groups=[]; cs.sched=[]; cs.ko=[]; return; }
+    const cfg=cat.cfg||DEF_CAT_CFG; const ng=cfg.numGroups||2;
+    let groups;
+    if(cfg.seeding==='snake') groups=snakeDistribute(roster,ng);
+    else { const sizes=distributeGroups(roster.length,ng); groups=[]; let idx=0;
+      for(let g=0;g<ng;g++){groups.push({name:String.fromCharCode(65+g),teams:roster.slice(idx,idx+sizes[g])}); idx+=sizes[g];} }
+    cs.roster=roster; cs.groups=groups; cs.sched=[]; cs.ko=[];
+  });
+}
+function generateCoordinatedSchedule(){
+  const { COURTS, SLOT, START } = coordCfg();
+  const cats = categories.filter(c => state[c.id] && (state[c.id].groups||[]).length);
+  if(!cats.length) return;
+  const finaleCat = cats[cats.length-1].id;
+  const games=[], koStruct={};
+  cats.forEach((cat,ci)=>{
+    const groups=state[cat.id].groups; const poolIds=[];
+    groups.forEach((grp,gi)=>rr(grp.teams).forEach(([a,b])=>{
+      const id=`${cat.id}:P:${gi}:${a}#${b}`; poolIds.push(id);
+      games.push({id,catId:cat.id,ci,kind:'pool',gi,gn:grp.name,a,b,teams:[`${cat.id}~${a}`,`${cat.id}~${b}`]});
+    }));
+    const cfg=cat.cfg||DEF_CAT_CFG; const adv=cfg.advPerGroup||0, ng=groups.length;
+    if(adv>=1 && ng>=1){
+      const seeds=[]; for(let rank=1;rank<=adv;rank++) for(let g=0;g<ng;g++) seeds.push(`${String.fromCharCode(65+g)}${rank}`);
+      let bs=1; while(bs<seeds.length) bs*=2; while(seeds.length<bs) seeds.push('TBD');
+      const rounds=[], first=[];
+      for(let i=0;i<bs/2;i++) first.push({a:seeds[i],b:seeds[bs-1-i],seedA:seeds[i],seedB:seeds[bs-1-i],sa:'',sb:'',catId:cat.id});
+      rounds.push(first);
+      let m=first.length/2;
+      while(m>=1){const rd=[]; for(let i=0;i<m;i++) rd.push({a:`W${i*2+1}`,b:`W${i*2+2}`,sa:'',sb:'',catId:cat.id}); rounds.push(rd); m=Math.floor(m/2);}
+      koStruct[cat.id]=rounds;
+      rounds.forEach((rd,ri)=>rd.forEach((g,gi)=>games.push({id:`${cat.id}:K${ri}:${gi}`,catId:cat.id,ci,kind:'ko',ri,gi,ref:g,poolIds,lastRound:ri===rounds.length-1})));
+      const sfRound=rounds.length-2;
+      if(sfRound>=0) games.push({id:`${cat.id}:3P`,catId:cat.id,ci,kind:'ko3p',sfRound,
+        ref:{catId:cat.id,gi:-1,isThirdPlace:true,a:'Loser of SF1',b:'Loser of SF2',sa:'',sb:''}});
+    }
+  });
+  const koRoundIds={};
+  games.forEach(g=>{ if(g.kind==='ko')(koRoundIds[`${g.catId}:${g.ri}`]=koRoundIds[`${g.catId}:${g.ri}`]||[]).push(g.id); });
+  const ready=(g,done)=>{
+    if(g.kind==='pool') return true;
+    if(g.kind==='ko3p') return (koRoundIds[`${g.catId}:${g.sfRound}`]||[]).every(id=>done.has(id));
+    if(!g.poolIds.every(id=>done.has(id))) return false;
+    if(g.ri===0) return true;
+    return (koRoundIds[`${g.catId}:${g.ri-1}`]||[]).every(id=>done.has(id));
+  };
+  const isFinaleLast=g=>g.catId===finaleCat && ((g.kind==='ko'&&g.lastRound)||g.kind==='ko3p');
+  const rankKind=g=>g.kind==='pool'?1:0, koOrder=g=>g.kind==='ko3p'?99:(g.kind==='ko'?g.ri:0);
+  const rounds=[], done=new Set(); let rem=new Set(games.map(g=>g.id));
+  const byId=Object.fromEntries(games.map(g=>[g.id,g])); const teamRounds={};
+  const played=t=>teamRounds[t]||new Set();
+  let guard=0;
+  while(rem.size && guard++<500){
+    const r=rounds.length;
+    const cand=[...rem].map(id=>byId[id]).filter(g=>ready(g,done)&&!isFinaleLast(g));
+    if(!cand.length){
+      const fin=[...rem].map(id=>byId[id]).filter(g=>ready(g,done));
+      if(fin.length){rounds.push(fin.map(g=>g.id)); fin.forEach(g=>{done.add(g.id);rem.delete(g.id);}); continue;}
+      rounds.push([]); if(rounds.length>200) break; continue;
+    }
+    const lastPlayed=t=>{const s=played(t); return s.size?Math.max(...s):-99;};
+    const phase=g=>g.catId===finaleCat?1:0;
+    cand.sort((x,y)=>{
+      if(phase(x)!==phase(y)) return phase(x)-phase(y);
+      const kx=rankKind(x),ky=rankKind(y); if(kx!==ky) return kx-ky;
+      if(kx===0) return (koOrder(x)-koOrder(y))||((x.gi||0)-(y.gi||0));
+      const wx=Math.max(...x.teams.map(t=>r-lastPlayed(t))), wy=Math.max(...y.teams.map(t=>r-lastPlayed(t)));
+      return wy-wx;
+    });
+    const chosen=[], usedTeams=new Set(), seenKO=new Set();
+    for(const g of cand){
+      if(chosen.length>=COURTS) break;
+      if(g.kind==='pool'){
+        if(g.teams.some(t=>usedTeams.has(t))) continue;
+        if(g.teams.some(t=>played(t).has(r-1)&&played(t).has(r-2))) continue;
+        g.teams.forEach(t=>usedTeams.add(t)); chosen.push(g);
+      } else if(g.kind==='ko3p'){ chosen.push(g); }
+      else {
+        const sk=`${g.catId}:${g.ri}`; if(seenKO.has(sk)) continue; seenKO.add(sk);
+        const stage=(koRoundIds[sk]||[]).map(id=>byId[id]).filter(x=>rem.has(x.id)&&ready(x,done)&&!isFinaleLast(x));
+        if(chosen.length+stage.length>COURTS) continue;
+        stage.forEach(x=>chosen.push(x));
+      }
+    }
+    if(!chosen.length){rounds.push([]); continue;}
+    rounds.push(chosen.map(g=>g.id));
+    chosen.forEach(g=>{done.add(g.id);rem.delete(g.id); if(g.kind==='pool')g.teams.forEach(t=>{(teamRounds[t]=teamRounds[t]||new Set()).add(r);});});
+  }
+  cats.forEach(c=>{ state[c.id].sched=[]; state[c.id].ko=(koStruct[c.id]||[]).map(()=>[]); });
+  rounds.forEach((ids,r)=>{ const time=m2t(START+r*SLOT);
+    ids.forEach((id,ix)=>{ const g=byId[id], court=ix+1;
+      if(g.kind==='pool') state[g.catId].sched.push({catId:g.catId,gi:g.gi,gn:g.gn,a:g.a,b:g.b,sa:'',sb:'',court,si:r,time});
+      else if(g.kind==='ko3p') state[g.catId].sched.push({...g.ref,court,si:r,time});
+      else state[g.catId].ko[g.ri][g.gi]={...g.ref,court,si:r,time};
+    });
+  });
+  categories.forEach(c=>{ if(state[c.id]) updateKOForCat(c.id); });
+}
+
 async function buildTournament(catId) {
   if (!admin || (meta.phase !== 'registration' && meta.phase !== 'built')) return;
+  if (meta.coordinated) {
+    buildCoordinatedGroups(); generateCoordinatedSchedule(); await pushToCloud();
+    if (meta.phase === 'registration') { meta.phase = 'built'; await pushMetaOnly(); renderAll(); goPage('standings'); }
+    else renderBuildPage();
+    return;
+  }
   const cs  = state[catId];
   const cat = categories.find(c => c.id === catId);
   if (!cat || !cs) return;
@@ -1528,6 +1650,8 @@ function deleteTeam(catId, gi, ti) {
   if (grp.teams.length<=1) { alert('Group needs at least 1 team'); return; }
   if (!confirm(`Remove "${grp.teams[ti]}" from group ${grp.name}?`)) return;
   grp.teams.splice(ti,1);
+  // Coordinated mode: re-run the whole shared-grid scheduler so the board updates itself.
+  if (meta.coordinated) { generateCoordinatedSchedule(); pushToCloud(); renderAll(); return; }
   // Withdrawal before start: re-optimize the pool schedule (no idle court) — keep the bracket
   if (cs.sched?.some(g => g.gi >= 0)) {
     const third = cs.sched.find(g => g.isThirdPlace);
