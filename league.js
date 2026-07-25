@@ -18,6 +18,10 @@ import {
   generateSeason, buildDayContext, dayCost, dayLength, slotLabel
 } from './league-sched.js?v=5';
 
+// לוח הגרירה — שלב 5. מודול תצוגה+שליטה שמקבל את המצב החי דרך Board.init().
+// אין לו window.* globals; פעולותיו בקידומת board.* ומוזרקות ל-ACT (ראו start()).
+import Board from './league-board.js?v=2';
+
 // ============ זהות הליגה ============
 // ⚠️ המזהה הזה מופיע בכתובת הציבורית שכל 72 השחקניות מקבלות. הוא לא זמני.
 // הפרמטר הוא ?l= ולא ?t= — ?t= שייך לאפליקציית הטורנירים, וערבוב בין השניים
@@ -632,6 +636,7 @@ function paint() {
     : page === 'settings'  ? renderSettings()
     : page === 'status'    ? renderStatus()
     : page === 'standings' ? renderStandings()
+    : page === 'schedule'  ? Board.render()
     : renderPlaceholder(target);
 
   renderSponsorBar();
@@ -1551,7 +1556,8 @@ function renderStandings() {
       <b class="num">${a.start === a.end ? a.start : a.start + '–' + a.end}</b>. התקנון לא מכריע —
       נדרשת החלטה ידנית${a.touchesF4 ? ' (נוגע לגבול הפיינל פור, מקומות 4–5)' : ''}.</div>`).join('');
 
-  return nav + standTable(ranked) + alertBox + entrySection(standCat);
+  // הזנת התוצאות עברה לטאב "לוז" (שלב 5, §8) — כאן נשארת רק הטבלה החיה.
+  return nav + standTable(ranked) + alertBox;
 }
 
 function standTable(ranked) {
@@ -1584,38 +1590,6 @@ function standTable(ranked) {
       מיני־ליגה (3 ומעלה). מקומות 1–4 מעפילים לפיינל פור (3.8). לחיצה על קבוצה מציגה את משחקיה בלבד.
       "טכני" ו"היעדרות" מפרטות הפסדי 0 נק׳ ואינן משפיעות על המיון.</span>
   </div>`;
-}
-
-// הזנת תוצאות — תצוגה זמנית (עוברת ל"לוז" בשלב 5). רשימה פשוטה לפי מחזור,
-// שקוראת ל-renderGameEntry לכל משחק. בלי עיצוב לוח.
-function entrySection(catId) {
-  let games = (L.games || []).filter(g => g.cat === catId);
-  const teamSel = standTeam ? findTeam(standTeam) : null;
-  if (teamSel) games = games.filter(g => g.a === standTeam || g.b === standTeam);
-
-  const header = `<div class="sett-section-title">הזנת תוצאות${teamSel ? ' — ' + escH(teamSel.team.name) : ''}
-    ${standTeam ? `<button class="team-del" data-act="stand.clearteam" title="כל המשחקים">×</button>` : ''}</div>`;
-
-  if (!games.length) return `<div class="sett-section">${header}
-    <div class="empty">${teamSel ? 'אין משחקים לקבוצה הזאת.' : 'אין עדיין משחקים. צרי לוז בעמוד <b>מתזמן</b>.'}</div></div>`;
-
-  const byDay = {};
-  for (const g of games) (byDay[g.day] ||= []).push(g);
-
-  const blocks = regularDays().filter(d => byDay[d.id]).map(d => {
-    const list = byDay[d.id].sort((a, b) => (a.slot || 0) - (b.slot || 0) || (a.net || 0) - (b.net || 0));
-    const nsd = teamSel ? `<button class="filter-btn nsd-btn" data-act="res.noshowDay"
-        data-team="${escH(standTeam)}" data-day="${escH(d.id)}">היעדרות ליום זה</button>` : '';
-    return `<div class="stand-day">
-      <div class="stand-day-hdr"><span>${escH(d.label)}</span>${nsd}</div>
-      ${list.map(renderGameEntry).join('')}
-    </div>`;
-  }).join('');
-
-  return `<div class="sett-section">${header}
-    <div class="info-box" style="margin-bottom:12px">תצוגת הזנה זמנית — בשלב 5 ההזנה תעבור לטאב "לוז".
-      ניקוד תקין (למשל 18:16) נספר מיד בטבלה; <b>ט</b> פותח הפסד טכני / היעדרות / כוח עליון.</div>
-    ${blocks}</div>`;
 }
 
 // ============================================================================
@@ -1781,6 +1755,10 @@ const ACT = {
   'dev.name': el => { L.meta.name = el.value.trim(); }
 };
 
+// פעולות לוח הגרירה (שלב 5). כולן בקידומת board.* וכל אחת עושה queueSave/paint
+// בעצמה, ולכן handle() לא שומר/מרנדר אותן אוטומטית (ראו התנאי ב-handle).
+Object.assign(ACT, Board.ACT);
+
 function confirmRegen() {
   const scored = (L.games || []).filter(g => g.result && g.result !== 'pending').length;
   if (!scored) return true;
@@ -1840,7 +1818,9 @@ function handle(e, kinds) {
   const fn = ACT[act];
   if (!fn) return;
   const skip = fn(el, e) === false || NO_REPAINT.has(act);
-  if (!NO_SAVE.has(act)) queueSave();
+  // פעולות board.* מנהלות שמירה ורינדור בעצמן (מטפל הלוח קורא ל-queueSave/paint
+  // רק כשבאמת חל שינוי) — כדי שהחלפת תצוגה או בחירת יום לא יכתבו את המסמך כולו.
+  if (!NO_SAVE.has(act) && !act.startsWith('board.')) queueSave();
   if (!skip) paint();
 }
 
@@ -1862,6 +1842,20 @@ document.addEventListener('toggle', e => {
   const id = d.id.slice(4);
   d.open ? openSections.add(id) : openSections.delete(id);
 }, true);
+
+// חיבור לוח הגרירה (שלב 5): מזריק את המצב החי ואת הכלים ש-league.js מחזיק
+// ושהמודול לא יכול לייבא (getL/queueSave/paint/שמות/הזנת תוצאה). את המתזמן
+// ו-escH/onColor הלוח מייבא ישירות — הם טהורים.
+Board.init({
+  getL: () => L,
+  queueSave, repaint: paint,
+  schedInput, regularDays,
+  findTeam, findGame,
+  teamName: TEAM_NAME, netName: NET_NAME, netColor: NET_COLOR, catName: CAT_NAME,
+  slotTime, dayEndTime,
+  renderGameEntry,
+  leagueId: LEAGUE_ID, isDev: DEV
+});
 
 (async function start() {
   // מסך הטעינה ורוד (החלטה 14). לפני שהמסמך נטען אין עדיין meta.loadingColor,
