@@ -164,59 +164,46 @@ export function splitIntoDays(cats, dayIds, opts = {}) {
 
   const ordered = [...cats].sort((a, b) => (a.order || 0) - (b.order || 0));
 
-  // חלוקת מערך הימים ל-k תת-קבוצות רציפות שוות.
-  const partition = (arr, k) => Array.from({ length: k }, (_, i) =>
-    arr.slice(Math.round(i * arr.length / k), Math.round((i + 1) * arr.length / k)));
+  for (const cat of ordered) {
+    if (!cat.games.length) continue;
 
-  // הקצאת משחקים (של סבב אחד, או של ליגה שלמה) לתת-קבוצת ימים: מכסות שוות +
-  // חמדני. הקריטריון הראשי הוא כמה משחקים כבר יש לשתי הקבוצות ביום — כך כל
-  // קבוצה מתפזרת על פני הימים ולא מתרכזת באחד. דטרמיניסטי, בלי לולאות חסרות-חסם.
-  const assignLeg = (catId, games, days) => {
-    if (!games.length) return;
-    const n = games.length, k = days.length;
-    const q = Object.fromEntries(days.map(d => [d, Math.floor(n / k)]));
-    [...days].sort((x, y) => (dayTotal[x] - dayTotal[y]) || (dayIds.indexOf(x) - dayIds.indexOf(y)))
-      .slice(0, n % k).forEach(d => q[d]++);
-    (quotas[catId] ||= {});
-    for (const d of days) { quotas[catId][d] = (quotas[catId][d] || 0) + q[d]; dayTotal[d] += q[d]; }
+    // ── מכסות: בסיס שווה, והשאריות לימים הקלים ביותר עד כה ──
+    // בלי החלק השני: ליגה א׳ 27/26/26/26 + ליגה ב׳ 27/26/26/26 + שואו 8/8/7/7
+    // היו נותנים 62/60/59/59 ביום. עם החלק השני זה יוצא 60/60/60/60.
+    const n = cat.games.length;
+    const q = Object.fromEntries(dayIds.map(d => [d, Math.floor(n / D)]));
+    [...dayIds]
+      .sort((x, y) => (dayTotal[x] - dayTotal[y]) || (dayIds.indexOf(x) - dayIds.indexOf(y)))
+      .slice(0, n % D)
+      .forEach(d => q[d]++);
+    quotas[cat.id] = q;
+    dayIds.forEach(d => { dayTotal[d] += q[d]; });
 
-    const used = Object.fromEntries(days.map(d => [d, 0]));
+    // ── נעולים קודם: הם קובעים עובדה ──
+    const used = zeroDays();
     const rest = [];
-    for (const g of games) {
+    for (const g of cat.games) {
       const d = locked[g.key];
-      if (d && days.includes(d)) { assign[g.key] = d; used[d]++; bump(g.a, d); bump(g.b, d); }
+      if (d && dayIds.includes(d)) { assign[g.key] = d; used[d]++; bump(g.a, d); bump(g.b, d); }
       else rest.push(g);
     }
+
+    // ── הקצאה חמדנית, בסדר המחזורים ──
+    // הקריטריון הראשי הוא כמה משחקים כבר יש לשתי הקבוצות ביום הזה. זה מה
+    // שמפזר כל קבוצה על פני כל הימים במקום לרכז אותה באחד.
     for (const g of rest) {
       let best = null;
-      for (const d of days) {
+      for (const d of dayIds) {
         if (used[d] >= q[d]) continue;
         const load = (teamDay[g.a]?.[d] || 0) + (teamDay[g.b]?.[d] || 0);
         const tg   = (tight[d]?.[g.a] || 0) + (tight[d]?.[g.b] || 0);
         const score = load * 1000 + tg * 300 + used[d];
         if (!best || score < best.score) best = { d, score };
       }
-      const d = best ? best.d : days.reduce((x, y) => used[x] <= used[y] ? x : y);
+      // מכסות מלאות בכל הימים לא אמור לקרות (סכום המכסות = מספר המשחקים),
+      // אבל נעילות סותרות יכולות ליצור את זה. אז ליום הכי דל — ולא לאבד משחק.
+      const d = best ? best.d : dayIds.reduce((x, y) => used[x] <= used[y] ? x : y);
       assign[g.key] = d; used[d]++; bump(g.a, d); bump(g.b, d);
-    }
-  };
-
-  for (const cat of ordered) {
-    if (!cat.games.length) continue;
-
-    // סבב כפול (שואו, החלטה 5): כל סבב שלם על **חצי-ימים נפרד** → אף זוג לא
-    // נפגש פעמיים באותו יום, וסבב 1 מסתיים לפני שסבב 2 מתחיל (בקשת המשתמשת).
-    // מוחל רק כשהימים מתחלקים שווה במספר הסבבים ואין חלון-זמינות על קבוצות
-    // הליגה — אחרת נופלים לסיבוב יחיד על כל הימים (הפרדה קפדנית + זמינות/מעט
-    // ימים היו יוצרים עומס לא ישים). דטרמיניסטי.
-    const numLegs = Math.max(0, ...cat.games.map(g => g.leg || 0)) + 1;
-    const hasAvail = (cat.teams || []).some(t => dayIds.some(d => tight[d]?.[t]));
-    if (numLegs > 1 && D % numLegs === 0 && D >= numLegs && !hasAvail) {
-      const groups = partition(dayIds, numLegs);
-      for (let leg = 0; leg < numLegs; leg++)
-        assignLeg(cat.id, cat.games.filter(g => (g.leg || 0) === leg), groups[leg]);
-    } else {
-      assignLeg(cat.id, cat.games, dayIds);
     }
 
     balanceTeamDays(cat, dayIds, assign, teamDay, locked);
@@ -263,10 +250,6 @@ function balanceTeamDays(cat, dayIds, assign, teamDay, locked) {
       let done = false;
       for (const g of mine) {
         for (const h of others) {
-          // רק החלפה בין משחקים של אותו סבב — כדי לא לזלוג סבב לחצי-הימים של
-          // סבב אחר ולשמור על הפרדת הסבבים של שואו. לליגה של סבב יחיד כל
-          // המשחקים בסבב 0, ולכן זה תמיד עובר (בלי השפעה).
-          if ((g.leg || 0) !== (h.leg || 0)) continue;
           const touched = [[g.a, dOver], [g.b, dOver], [h.a, dUnder], [h.b, dUnder],
                            [g.a, dUnder], [g.b, dUnder], [h.a, dOver], [h.b, dOver]];
           const before = touched.reduce((s, [x, d]) => s + pen(x, d), 0);
