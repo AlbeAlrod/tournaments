@@ -684,8 +684,7 @@ function renderSponsorBar() {
 function renderPlaceholder(p) {
   return `<div class="sett-section empty">
     <h3>${escH(p.label)}</h3>
-    <p>העמוד הזה נבנה בשלב ${p.stage} מתוך §14 במפרט. כרגע בנויים שלבים 1–3:
-       מודל הנתונים, סנכרון חי, רוסטר, רשתות, ימים, הגדרות והמתזמן.</p>
+    <p>העמוד הזה ייבנה בשלב ${p.stage} מתוך §14 במפרט.</p>
   </div>`;
 }
 
