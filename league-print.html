@@ -1,0 +1,282 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<title>פוצ׳ילינה — לוז להדפסה</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;700;800;900&display=swap" rel="stylesheet">
+<style>
+  /* ============================================================================
+     league-print.html — שלב 9 (§13): דפי הדפסה A4.
+     בסיס העיצוב: volleylab-mixed/mentormix-luach.html (תבנית מאומתת) —
+     A4 לאורך, שחור־לבן, Heebo, לוגו למעלה, שעה בשוליים מול שוליים ריקים
+     זהים כך שתיבת הניקוד נוחתת במרכז הדף המדויק.
+     מה השתנה לפוצ׳ילינה: דף לכל רשת, כותרת = שם הרשת + תאריך + חוף,
+     טבלה נפרדת לכל ליגה על אותה רשת.
+     ============================================================================ */
+  *{box-sizing:border-box;margin:0;padding:0}
+  :root{
+    --ink:#0a0a0a;      /* שחור ראשי */
+    --sec:#3a3a3a;      /* שעות */
+    --mut:#8a8a8a;      /* תוויות עמומות */
+    --hair:#e4e4e4;     /* קווי הפרדה בין שורות */
+    --field:#c4c4c4;    /* מסגרת תיבת ניקוד */
+    --gutter:64px;      /* שולי השעה = שוליים ריקים תואמים בצד השני */
+  }
+  html,body{font-family:"Heebo","Assistant","Arial Hebrew",system-ui,sans-serif;color:var(--ink);
+    -webkit-font-smoothing:antialiased}
+  body{background:#e7e7e7}
+
+  .page{
+    width:210mm; min-height:297mm; background:#fff; margin:10mm auto;
+    padding:18mm 16mm 13mm; display:flex; flex-direction:column;
+  }
+
+  /* ===== כותרת ===== */
+  .head{text-align:center}
+  .head .brand{height:46px; width:auto; object-fit:contain; display:inline-block; margin:0 0 14px}
+  .head .brand-txt{font-size:20px; font-weight:900; letter-spacing:2px; margin-bottom:12px}
+  .head .eyebrow{font-size:13px; font-weight:500; letter-spacing:6px; color:var(--mut); padding-right:6px}
+  /* שם הרשת בצבע הרשת שלו — החריג היחיד לשחור־לבן (החלטת המשתמשת).
+     קו מתאר כהה דק שומר על הגוון המדויק גם כשהצבע בהיר (רשת צהובה על לבן). */
+  .head .court{font-size:40px; font-weight:800; letter-spacing:1px; line-height:1.05; margin-top:6px;
+    -webkit-text-stroke:0.6px #0a0a0a; paint-order:stroke fill}
+  .head .rule{height:2.5px; background:var(--ink); margin-top:16px}
+
+  /* ===== כותרת ליגה (ממורכזת בין שני קווים) ===== */
+  /* המרווחים דחוסים כך שרשת עמוסה (~16 משחקים על פני 2 ליגות) נכנסת בדף A4 יחיד. */
+  .pool{margin-top:18px; break-inside:avoid}
+  .pool + .pool{margin-top:16px}
+  .pool-h{display:flex; align-items:center; gap:20px}
+  .pool-h h2{font-size:21px; font-weight:800; letter-spacing:3px; white-space:nowrap; padding-bottom:2px}
+  .pool-h .ln{flex:1; height:1.5px; background:var(--ink)}
+
+  /* ===== משחקים ===== */
+  .games{margin-top:6px}
+  /* גריד סימטרי: תיבת הניקוד יושבת במרכז הדף האמיתי; שולי השעה מימין
+     ממוסכים על ידי שוליים ריקים זהים משמאל, כך שהשעה לא מושכת את
+     ההרכב אל מחוץ למרכז. */
+  .row{display:grid; grid-template-columns:var(--gutter) 1fr auto 1fr var(--gutter);
+    align-items:center; padding:5px 0; border-bottom:1px solid var(--hair)}
+  .row:last-child{border-bottom:none}
+
+  .row .time{text-align:center; font-size:16px; font-weight:700; color:var(--sec);
+    font-variant-numeric:tabular-nums; letter-spacing:.5px}
+  .row .tA{text-align:left;  padding-left:18px}
+  .row .tB{text-align:right; padding-right:18px}
+  .row .tA,.row .tB{font-size:18px; font-weight:600; color:var(--ink); line-height:1.25}
+  .row .sc{text-align:center}
+
+  .field{display:inline-flex; align-items:center; justify-content:center; gap:20px;
+    width:104px; height:28px; border:1.3px solid var(--field); border-radius:14px;
+    font-variant-numeric:tabular-nums}
+  .field .colon{color:var(--mut); font-weight:700; font-size:16px}
+
+  .empty-pool{margin-top:8px; text-align:center; font-size:14px; color:var(--mut);
+    padding:24px 0; letter-spacing:2px}
+
+  /* ===== ספונסרים / הערת תחתית ===== */
+  .foot{margin-top:auto; padding-top:16px}
+  /* מרכוז: text-align לשורת המחזור, ו-flex ברמת-בלוק (רוחב מלא) לספונסרים */
+  .foot .inner{border-top:1px solid var(--hair); padding-top:12px; text-align:center}
+  .sponsors{display:flex; justify-content:center; align-items:center; gap:28px; flex-wrap:wrap}
+  .sponsors img{height:28px; width:auto; object-fit:contain}
+  /* מחזור + תאריך בקטן, בתחתית (במקום למעלה) */
+  .foot-meta{font-size:13px; font-weight:600; letter-spacing:4px; color:var(--sec); margin-top:10px}
+
+  /* ===== סרגל בחירה (מסך בלבד) ===== */
+  .toolbar{max-width:210mm; margin:14px auto 0; padding:12px 16px; background:#fff;
+    border-radius:10px; display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+    font-size:14px; box-shadow:0 1px 4px rgba(0,0,0,.12)}
+  .toolbar .lbl{font-weight:700; margin-inline-end:4px}
+  .toolbar button{padding:8px 16px; border:1px solid #d0d0d0; border-radius:8px; background:#f6f6f6;
+    cursor:pointer; font:inherit; font-weight:600}
+  .toolbar button.on{background:var(--ink); color:#fff; border-color:var(--ink)}
+  .toolbar .print-btn{margin-inline-start:auto; background:#0775ED; color:#fff; border-color:#0775ED}
+  .toolbar .status{width:100%; font-size:12.5px; color:#666}
+
+  @page{size:A4; margin:0}
+  @media print{
+    body{background:#fff}
+    .no-print{display:none !important}
+    .page{margin:0; width:auto; min-height:auto; page-break-after:always}
+    .page:last-child{page-break-after:auto}
+  }
+</style>
+</head>
+<body>
+
+<div class="toolbar no-print" id="toolbar">
+  <span class="lbl">יום:</span>
+  <span id="day-btns"></span>
+  <button class="print-btn" onclick="window.print()">הדפסה / PDF</button>
+  <div class="status" id="status">טוען…</div>
+</div>
+
+<div id="pages"></div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
+import { getFirestore, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
+
+// קונפיג זהה ל-common.js / seed-*.html — פרויקט tournaments-33619.
+const firebaseConfig = {
+  apiKey: "AIzaSyA-rPlg0Oau16QcTjD20hDfkyveRSrD8I0",
+  authDomain: "tournaments-33619.firebaseapp.com",
+  projectId: "tournaments-33619",
+  storageBucket: "tournaments-33619.firebasestorage.app",
+  messagingSenderId: "409384565600",
+  appId: "1:409384565600:web:61bd55676343d6035abc05"
+};
+const db = getFirestore(initializeApp(firebaseConfig));
+
+// זהות הליגה — אותו חוזה כמו league.js: ?l= (ברירת מחדל futilina-2026).
+const params    = new URLSearchParams(location.search);
+const LEAGUE_ID = params.get('l') || 'futilina-2026';
+
+// ---- utils ----
+const escH = s => String(s ?? '')
+  .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+const hhmmToMin = t => { const [h,m] = String(t||'0:0').split(':').map(Number); return h*60 + m; };
+const minToHhmm = m => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
+// slotIndex 1-based (כמו slotTime ב-league.js): סלוט 1 = שעת ההתחלה.
+const slotTime = (day, slot) => minToHhmm(hhmmToMin(day.startTime) + (slot - 1) * (day.slotMin || 20));
+const fmtDate = iso => {
+  if (!iso) return '';
+  const [y,m,d] = String(iso).split('-');
+  return `${+d}.${+m}.${y}`;
+};
+
+const $ = id => document.getElementById(id);
+const status = msg => { $('status').textContent = msg; };
+
+let L = null;          // מסמך הליגה
+let nameById = new Map();
+
+function buildNameIndex(roster) {
+  nameById = new Map();
+  for (const list of Object.values(roster || {})) {
+    for (const t of (list || [])) {
+      const nm = t.name || (Array.isArray(t.players) ? t.players.filter(Boolean).join(' ') : '') || t.id;
+      nameById.set(t.id, nm);
+    }
+  }
+}
+const teamName = id => nameById.get(id) || id || '';
+
+const netName  = id => (L.meta?.nets || []).find(n => n.id === id)?.name || ('רשת ' + id);
+const netColor = id => (L.meta?.nets || []).find(n => n.id === id)?.color || '#0a0a0a';
+const catName  = id => (L.categories || []).find(c => c.id === id)?.name || id;
+const catOrder = id => (L.categories || []).find(c => c.id === id)?.order ?? 99;
+
+// ---- rendering ----
+function gameRow(day, g) {
+  return `<div class="row">
+    <div class="time">${escH(slotTime(day, g.slot))}</div>
+    <div class="tA">${escH(teamName(g.a))}</div>
+    <div class="sc"><span class="field"><span></span><span class="colon">:</span><span></span></span></div>
+    <div class="tB">${escH(teamName(g.b))}</div>
+    <div></div>
+  </div>`;
+}
+
+function poolBlock(day, catId, games) {
+  const rows = games.slice()
+    .sort((x, y) => (x.slot || 0) - (y.slot || 0))
+    .map(g => gameRow(day, g)).join('');
+  return `<div class="pool">
+    <div class="pool-h"><span class="ln"></span><h2>${escH(catName(catId))}</h2><span class="ln"></span></div>
+    <div class="games">${rows}</div>
+  </div>`;
+}
+
+function headBlock(day, netId) {
+  const m = L.meta || {};
+  const brand = m.logoUrl
+    ? `<img class="brand" src="${escH(m.logoUrl)}" alt="">`
+    : `<div class="brand-txt">${escH(m.name || 'פוצ׳ילינה')}</div>`;
+  return `<div class="head">
+    ${brand}
+    <div class="court" style="color:${escH(netColor(netId))}">${escH(netName(netId))}</div>
+    <div class="rule"></div>
+  </div>`;
+}
+
+// תחתית: ספונסרים (אם יש) ומעליהם/מתחתם שורת מחזור + תאריך בקטן (בלי חוף, החלטת המשתמשת).
+function footBlock(day) {
+  const logos = (L.meta?.sponsorLogos || [])
+    .map(s => `<img src="${escH(typeof s === 'string' ? s : (s.url || ''))}" alt="">`).join('');
+  const meta = [day.label, fmtDate(day.date)].filter(Boolean).join('  ·  ');
+  return `<div class="foot"><div class="inner">
+    ${logos ? `<div class="sponsors">${logos}</div>` : ''}
+    <div class="foot-meta">${escH(meta || 'ליגת קיץ פוצ׳ילינה 2026')}</div>
+  </div></div>`;
+}
+
+function pageForNet(day, netId, dayGames) {
+  const onNet = dayGames.filter(g => g.net === netId && g.slot);
+  // טבלה נפרדת לכל ליגה, בסדר הקטגוריות (§13: שואו / ראשונה / שנייה).
+  const byCat = new Map();
+  for (const g of onNet) (byCat.get(g.cat) || byCat.set(g.cat, []).get(g.cat)).push(g);
+  const cats = [...byCat.keys()].sort((a, b) => catOrder(a) - catOrder(b));
+  const pools = cats.length
+    ? cats.map(c => poolBlock(day, c, byCat.get(c))).join('')
+    : `<div class="empty-pool">אין משחקים על רשת זו ביום זה</div>`;
+  return `<section class="page">
+    ${headBlock(day, netId)}
+    ${pools}
+    ${footBlock(day)}
+  </section>`;
+}
+
+function render(dayId) {
+  const day = (L.meta?.days || []).find(d => d.id === dayId);
+  if (!day) { $('pages').innerHTML = ''; status('לא נמצא יום.'); return; }
+  const dayGames = (L.games || []).filter(g => g.day === dayId);
+  const netIds = day.netIds && day.netIds.length ? day.netIds : (L.meta?.nets || []).map(n => n.id);
+  $('pages').innerHTML = netIds.map(nid => pageForNet(day, nid, dayGames)).join('');
+
+  // עדכון כפתורי היום + הכתובת (בלי טעינה מחדש)
+  for (const b of $('day-btns').querySelectorAll('button'))
+    b.classList.toggle('on', b.dataset.day === dayId);
+  const u = new URL(location.href); u.searchParams.set('day', dayId);
+  history.replaceState(null, '', u);
+
+  const placed = dayGames.filter(g => g.slot).length;
+  status(`${day.label} · ${fmtDate(day.date) || 'ללא תאריך'} · ${placed} משחקים · ${netIds.length} דפים`);
+}
+
+function buildDayButtons() {
+  const days = L.meta?.days || [];
+  const gamesPerDay = id => (L.games || []).filter(g => g.day === id && g.slot).length;
+  $('day-btns').innerHTML = days.map(d =>
+    `<button data-day="${escH(d.id)}">${escH(d.label)}${gamesPerDay(d.id) ? '' : ' (ריק)'}</button>`
+  ).join('');
+  $('day-btns').addEventListener('click', e => {
+    const b = e.target.closest('button'); if (b) render(b.dataset.day);
+  });
+}
+
+async function load() {
+  try {
+    const snap = await getDoc(doc(db, 'tournaments', LEAGUE_ID));
+    if (!snap.exists()) { status(`המסמך "${LEAGUE_ID}" לא קיים.`); return; }
+    L = snap.data();
+    buildNameIndex(L.roster);
+    buildDayButtons();
+    // יום התחלתי: ?day=, אחרת היום הראשון שיש בו משחקים, אחרת הראשון.
+    const days = L.meta?.days || [];
+    const withGames = days.find(d => (L.games || []).some(g => g.day === d.id && g.slot));
+    const start = params.get('day') || withGames?.id || days[0]?.id;
+    if (start) render(start); else status('אין ימים מוגדרים.');
+  } catch (e) {
+    status('שגיאה בטעינה: ' + e.message);
+    console.error(e);
+  }
+}
+
+load();
+</script>
+</body>
+</html>
