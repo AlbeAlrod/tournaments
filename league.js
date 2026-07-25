@@ -208,6 +208,222 @@ function findTeam(id) {
   return null;
 }
 
+const findGame  = id => (L.games || []).find(g => g.id === id);
+const dayLabel  = id => (L.meta.days || []).find(d => d.id === id)?.label || id;
+
+// ============================================================================
+// ניקוד ודירוג — §10 (הליבה של שלב 4). פונקציות טהורות: קוראות מ-L ומחזירות
+// מספרים, בלי DOM. שלב 5 (טאב "לוז") יקרא לאותן פונקציות — ה-UI זמני, זה נשאר.
+// ============================================================================
+//
+// מוסכמת result (המודל ב-§5.1 נעול, ולכן הסיווג טכני/היעדרות נגזר מ-attendance
+// ולא משדה חדש, החלטת המשתמשת):
+//   pending      — לא שוחק. לא נספר.
+//   ok           — sa/sb אמיתיים. מנצחת win, מפסידה loss. הפרש = sa−sb.
+//   tech_a/tech_b— האות היא הצד ה*מפסיד* (A או B קיבל הפסד טכני). היריבה win + 18:10.
+//   both_absent  — 0:0, שתיהן techLoss, שתיהן היעדרות.
+//   unfinished   — כוח עליון (6.2): שתיהן unfinished(=1.5), הפרש 0.
+//   cancelled    — 6.1.1: לא נספר כלל.
+// פציעה (6.3.2 = מנצחת 2 / פצועה 1 / 18:10) נרשמת כ-ok עם 18:10 — אין לה value ייעודי.
+
+// §10.1 — מערכה עד `to`, הפרש 2, תקרה `cap`. cap=null → כלל ה-21 ללא תקרה (החלטה 18).
+function validSet(win, lose, to, cap) {
+  if (!(win > lose) || lose < 0 || win < 0) return false;
+  if (cap == null) return (win === to && lose <= to - 2) || (win > to && win - lose === 2);
+  return (win === to && lose <= to - 2)
+      || (win > to && win < cap && win - lose === 2)
+      || (win === cap && lose >= cap - 2);
+}
+
+// הניקוד להצגה: תוצאה טכנית/כוח-עליון גוזרת ניקוד קבוע; אחרת מה שהוזן.
+function techScores(g) {
+  const sc = L.meta.scoring || {};
+  const wf = sc.walkoverFor ?? 18, wa = sc.walkoverAgainst ?? 10;
+  if (g.result === 'tech_a')      return { sa: wa,   sb: wf   };
+  if (g.result === 'tech_b')      return { sa: wf,   sb: wa   };
+  if (g.result === 'both_absent') return { sa: 0,    sb: 0    };
+  if (g.result === 'unfinished')  return { sa: null, sb: null };
+  return { sa: g.sa, sb: g.sb };
+}
+
+// האם ההפסד הטכני של הצד המפסיד הוא היעדרות (noshow ב-attendance) או "רק" טכני.
+function isNoShowLoser(g) {
+  const loser = g.result === 'tech_a' ? g.a : g.b;
+  return (L.attendance?.[g.day]?.[loser]) === 'noshow';
+}
+
+// תרומת משחק לכל צד, או null אם אינו נספר (pending/cancelled/ok בלי ניקוד).
+// כל הניקוד עשרוני — unfinished=1.5 (6.2) הוא הסיבה שאסור int בשום מקום.
+function scoreGame(g) {
+  const sc = L.meta.scoring || {};
+  const r = g.result;
+  if (r === 'pending' || r === 'cancelled') return null;
+  const z = () => ({ pts:0, pf:0, pa:0, win:0, loss:0, tech:0, noshow:0, unf:0 });
+  const absent = team => (L.attendance?.[g.day]?.[team]) === 'noshow';
+
+  if (r === 'ok') {
+    if (g.sa == null || g.sb == null) return null;
+    const a = z(), b = z();
+    a.pf = g.sa; a.pa = g.sb; b.pf = g.sb; b.pa = g.sa;
+    if (g.sa > g.sb)      { a.pts = sc.win; a.win = 1; b.pts = sc.loss; b.loss = 1; }
+    else if (g.sb > g.sa) { b.pts = sc.win; b.win = 1; a.pts = sc.loss; a.loss = 1; }
+    else                  { a.pts = sc.loss; b.pts = sc.loss; }   // מערכה לא נגמרת בתיקו — הגנה בלבד
+    return { a, b };
+  }
+
+  if (r === 'tech_a' || r === 'tech_b') {
+    const loser = r === 'tech_a' ? 'a' : 'b';
+    const wf = sc.walkoverFor ?? 18, wa = sc.walkoverAgainst ?? 10;
+    const Ls = z(), Ws = z();
+    Ws.pts = sc.win; Ws.win = 1; Ws.pf = wf; Ws.pa = wa;
+    Ls.pts = sc.techLoss; Ls.pf = wa; Ls.pa = wf;
+    absent(g[loser]) ? (Ls.noshow = 1) : (Ls.tech = 1);
+    return loser === 'a' ? { a: Ls, b: Ws } : { a: Ws, b: Ls };
+  }
+
+  if (r === 'both_absent') {
+    const a = z(), b = z();
+    a.pts = sc.techLoss; b.pts = sc.techLoss;   // 0:0, הפרש 0
+    a.noshow = 1; b.noshow = 1;                 // both_absent → שתיהן היעדרות
+    return { a, b };
+  }
+
+  if (r === 'unfinished') {                     // 6.2 — 1.5 לשתיהן, הפרש 0
+    const a = z(), b = z();
+    a.pts = sc.unfinished; b.pts = sc.unfinished;
+    a.unf = 1; b.unf = 1;
+    return { a, b };
+  }
+  return null;
+}
+
+// טבלת סטטיסטיקה מלאה לליגה, לכל קבוצה ברוסטר (גם בלי משחקים).
+function computeStats(catId) {
+  const stat = {};
+  for (const t of (L.roster[catId] || []))
+    stat[t.id] = { id:t.id, name:t.name || t.id, played:0, wins:0, losses:0,
+                   tech:0, noshow:0, unf:0, pf:0, pa:0, pts:0, diff:0 };
+  for (const g of (L.games || [])) {
+    if (g.cat !== catId) continue;
+    const o = scoreGame(g);
+    if (!o) continue;
+    for (const side of ['a', 'b']) {
+      const s = stat[g[side]];
+      if (!s) continue;   // קבוצה שנמחקה מהרוסטר אך נשארה במשחק
+      const x = o[side];
+      s.played++; s.wins += x.win; s.losses += x.loss;
+      s.tech += x.tech; s.noshow += x.noshow; s.unf += x.unf;
+      s.pf += x.pf; s.pa += x.pa; s.pts += x.pts;
+    }
+  }
+  for (const s of Object.values(stat)) s.diff = s.pf - s.pa;
+  return stat;
+}
+
+// §2.5 — מיני־ליגה: נקודות והפרש רק ממשחקים שהתקיימו בין חברי idSet.
+function miniStandings(catId, idSet) {
+  const m = {};
+  for (const id of idSet) m[id] = { pts:0, diff:0 };
+  for (const g of (L.games || [])) {
+    if (g.cat !== catId || !idSet.has(g.a) || !idSet.has(g.b)) continue;
+    const o = scoreGame(g);
+    if (!o) continue;   // §2.5 — משחקים שבוטלו/טרם שוחקו אינם נספרים במיני־ליגה
+    m[g.a].pts += o.a.pts; m[g.a].diff += o.a.pf - o.a.pa;
+    m[g.b].pts += o.b.pts; m[g.b].diff += o.b.pf - o.b.pa;
+  }
+  return m;
+}
+
+// האם כל המשחקים *בין* חברי הקבוצה כבר שוחקו (אף אחד לא pending). רק אז שוויון
+// מלא הוא באמת מבוי סתום: אם עוד לא נפגשו, המפגש הישיר עדיין יכול להכריע ואין
+// להתריע "סתם". cancelled נחשב מוכרע (הקבוצה פרשה, המשחק לא יתקיים) ולא חוסם.
+function mutualAllPlayed(catId, idSet) {
+  for (const g of (L.games || [])) {
+    if (g.cat !== catId || !idSet.has(g.a) || !idSet.has(g.b)) continue;
+    if (g.result === 'pending') return false;
+  }
+  return true;
+}
+
+// §2.5 + 3.10.3 — שובר שוויון רקורסיבי לקבוצה ששווה בנקודות ובהפרש הכללי.
+// מחזיר בלוקים בסדר סופי: { ids, resolved }. resolved=false = "שוויון מלא" שהתקנון
+// לא מכריע. N=2 מייצר אוטומטית "מפגש ישיר" (מיני־ליגה של שתיים = המשחק ביניהן).
+function breakTie(catId, group) {
+  if (group.length <= 1) return [{ ids: group, resolved: true }];
+  const m = miniStandings(catId, new Set(group));
+  const key = id => m[id].pts + '|' + m[id].diff;
+  const sorted = [...group].sort((x, y) => (m[y].pts - m[x].pts) || (m[y].diff - m[x].diff));
+  const subs = [];
+  for (const id of sorted) {
+    const last = subs[subs.length - 1];
+    if (last && key(last[0]) === key(id)) last.push(id);
+    else subs.push([id]);
+  }
+  if (subs.length === 1) return [{ ids: sorted, resolved: false }];   // סימטריה מלאה — לא הופרד
+  const out = [];
+  for (const sub of subs) out.push(...breakTie(catId, sub));           // רקורסיה על כל תת־קבוצה
+  return out;
+}
+
+// דירוג מלא לליגה: שורות ממוינות עם מקום, סימון שוויון לא־פתור, והתראות למנהלת.
+function rankStandings(catId) {
+  const stat = computeStats(catId);
+  const rows = Object.values(stat).sort((x, y) => (y.pts - x.pts) || (y.diff - x.diff));
+  const byId = Object.fromEntries(rows.map(r => [r.id, r]));
+
+  const groups = [];   // קיבוץ ראשוני לפי (נק׳, הפרש)
+  for (const r of rows) {
+    const last = groups[groups.length - 1];
+    if (last && last[0].pts === r.pts && last[0].diff === r.diff) last.push(r);
+    else groups.push([r]);
+  }
+
+  const blocks = [];
+  for (const grp of groups) {
+    if (grp.length === 1) blocks.push({ ids: [grp[0].id], resolved: true });
+    else blocks.push(...breakTie(catId, grp.map(r => r.id)));
+  }
+
+  const ranked = [], alerts = [];
+  let pos = 1;
+  for (const b of blocks) {
+    if (b.resolved || b.ids.length === 1) {
+      for (const id of b.ids) { ranked.push({ row: byId[id], rank: pos, tied: false }); pos++; }
+    } else {
+      const start = pos, end = pos + b.ids.length - 1;
+      const ids = [...b.ids].sort((x, y) => (byId[x].name || '').localeCompare(byId[y].name || '', 'he'));
+      // מבוי סתום *אמיתי* (§2.5): כל הקבוצות שיחקו, **וגם** כל המשחקים ביניהן כבר
+      // שוחקו ובכל זאת לא הפרידו. אם עוד לא נפגשו — זה שוויון זמני שהמפגש ביניהן
+      // עוד יכריע, ואין להתריע "סתם": מציגים מקומות רצופים (לפי שם) בלי סימון.
+      const deadEnd = b.ids.every(id => byId[id].played > 0) && mutualAllPlayed(catId, new Set(b.ids));
+      if (deadEnd) {
+        for (const id of ids) ranked.push({ row: byId[id], rank: start, tied: true, tieRange: [start, end] });
+        alerts.push({ start, end, size: b.ids.length, touchesF4: start <= 4 && end >= 5 });
+      } else {
+        let p = start;
+        for (const id of ids) ranked.push({ row: byId[id], rank: p++, tied: false });
+      }
+      pos += b.ids.length;
+    }
+  }
+  return { ranked, alerts };
+}
+
+// §10.2 — הניקוד עשרוני. 1.5 מוצג "1.5", שלמים בלי נקודה.
+const fmtPts = p => Number.isInteger(p) ? String(p) : p.toFixed(1);
+
+// קובע result + ניקוד שמור לפי סוג הטכני. sets מתאפס — ליגה סדירה היא מערכה יחידה.
+function setTech(g, kind) {
+  const sc = L.meta.scoring || {};
+  const wf = sc.walkoverFor ?? 18, wa = sc.walkoverAgainst ?? 10;
+  g.sets = [];
+  if (kind === 'a')         { g.result = 'tech_a';      g.sa = wa;   g.sb = wf;   }
+  else if (kind === 'b')    { g.result = 'tech_b';      g.sa = wf;   g.sb = wa;   }
+  else if (kind === 'both') { g.result = 'both_absent'; g.sa = 0;    g.sb = 0;    }
+  else if (kind === 'unf')  { g.result = 'unfinished';  g.sa = null; g.sb = null; }
+  else                      { g.result = 'pending';     g.sa = null; g.sb = null; }   // clear
+}
+
 // ============================================================================
 // שעון הסלוטים — הבסיס למונה אורך היום (§4.6)
 // ============================================================================
@@ -411,10 +627,11 @@ function paint() {
 
   const target = PAGES.find(p => p.id === page);
   document.getElementById('page-body').innerHTML =
-      page === 'teams'    ? renderTeams()
-    : page === 'sched'    ? renderSched()
-    : page === 'settings' ? renderSettings()
-    : page === 'status'   ? renderStatus()
+      page === 'teams'     ? renderTeams()
+    : page === 'sched'     ? renderSched()
+    : page === 'settings'  ? renderSettings()
+    : page === 'status'    ? renderStatus()
+    : page === 'standings' ? renderStandings()
     : renderPlaceholder(target);
 
   renderSponsorBar();
@@ -1262,6 +1479,147 @@ function renderStatus() {
 }
 
 // ============================================================================
+// עמוד דירוג + הזנת תוצאות — §14 שלב 4
+// ============================================================================
+
+let standCat  = null;   // הליגה המוצגת
+let standTeam = null;   // סינון למשחקי קבוצה אחת (§7.2)
+
+// פונקציית רינדור עצמאית: תיבות ניקוד + תפריט טכני למשחק בודד. אין לה state
+// ותלות בטאב — שלב 5 (לוז) יקרא לה. הזיהוי דרך data-id בלבד.
+function renderGameEntry(g) {
+  const r = g.result;
+  const tech = r === 'tech_a' || r === 'tech_b' || r === 'both_absent' || r === 'unfinished';
+  const fmt = L.formats[g.cat]?.regular || F_SET18;
+  const { sa, sb } = techScores(g);
+
+  const invalid = !tech && sa != null && sb != null &&
+    !validSet(Math.max(sa, sb), Math.min(sa, sb), fmt.to, fmt.cap);
+
+  const nameA = TEAM_NAME(g.a), nameB = TEAM_NAME(g.b);
+  const winA = (r === 'ok' && sa > sb) || r === 'tech_b';
+  const winB = (r === 'ok' && sb > sa) || r === 'tech_a';
+
+  const box = (side, val) => `<input class="text-inp res-inp" type="number" min="0" max="60"
+      id="ri-${escH(g.id)}-${side}" value="${val ?? ''}"
+      data-act="res.score" data-id="${escH(g.id)}" data-side="${side}"${tech ? ' disabled' : ''}/>`;
+
+  const badge =
+      r === 'tech_a' || r === 'tech_b' ? `<span class="status-badge badge-rejected">${isNoShowLoser(g) ? 'היעדרות' : 'טכני'}</span>`
+    : r === 'both_absent'              ? `<span class="status-badge badge-rejected">שתיהן נעדרו</span>`
+    : r === 'unfinished'               ? `<span class="status-badge badge-pending">לא הסתיים</span>`
+    : r === 'ok'                       ? `<span class="status-badge badge-approved">הסתיים</span>`
+    : '';
+
+  const menu = `<details class="tech-menu">
+    <summary title="הפסד טכני / היעדרות / כוח עליון">ט</summary>
+    <div class="tech-pop">
+      <button data-act="res.tech" data-id="${escH(g.id)}" data-side="a">${escH(nameA)} לא הגיעה</button>
+      <button data-act="res.tech" data-id="${escH(g.id)}" data-side="b">${escH(nameB)} לא הגיעה</button>
+      <button data-act="res.tech" data-id="${escH(g.id)}" data-side="both">שתיהן לא הגיעו</button>
+      <button data-act="res.tech" data-id="${escH(g.id)}" data-side="unf">לא הסתיים (כוח עליון)</button>
+      ${r !== 'pending' ? `<button class="tp-clear" data-act="res.tech" data-id="${escH(g.id)}" data-side="clear">נקה תוצאה</button>` : ''}
+    </div>
+  </details>`;
+
+  return `<div class="res-row${invalid ? ' invalid' : ''}${tech ? ' tech' : ''}">
+    <span class="res-team${winA ? ' win' : ''}">${escH(nameA)}</span>
+    <span class="res-score">${box('sa', sa)}<b>:</b>${box('sb', sb)}</span>
+    <span class="res-team${winB ? ' win' : ''}">${escH(nameB)}</span>
+    <span class="res-meta">${badge}${menu}</span>
+    ${invalid ? `<span class="score-err">תוצאה לא חוקית — עד ${fmt.to}${fmt.cap ? `, תקרה ${fmt.cap}` : ', ללא תקרה'}, הפרש 2 (§10.1)</span>` : ''}
+  </div>`;
+}
+
+function renderStandings() {
+  const cats = L.categories.filter(c => (L.roster[c.id] || []).length >= 2);
+  if (!cats.length) return `<div class="sett-section empty">
+    <h3>אין עדיין דירוג</h3>
+    <p>הדירוג יופיע כשיהיו קבוצות ומשחקים. רשימת הקבוצות מתפרסמת אחרי
+       <strong>12.8.2026</strong>; אפשר להזין ידנית בעמוד <b>קבוצות</b> ואז ליצור לוז ב<b>מתזמן</b>.</p>
+  </div>`;
+
+  if (!standCat || !cats.find(c => c.id === standCat)) standCat = cats[0].id;
+
+  const nav = `<div class="court-filter">${cats.map(c =>
+    `<button class="cf-btn${c.id === standCat ? ' on' : ''}" data-act="stand.cat" data-cat="${escH(c.id)}">${escH(c.name)}</button>`
+  ).join('')}</div>`;
+
+  const { ranked, alerts } = rankStandings(standCat);
+
+  const alertBox = alerts.map(a =>
+    `<div class="sched-msg warn tie-alert">⚠ שוויון מלא בין ${a.size} קבוצות על מקומות
+      <b class="num">${a.start === a.end ? a.start : a.start + '–' + a.end}</b>. התקנון לא מכריע —
+      נדרשת החלטה ידנית${a.touchesF4 ? ' (נוגע לגבול הפיינל פור, מקומות 4–5)' : ''}.</div>`).join('');
+
+  return nav + standTable(ranked) + alertBox + entrySection(standCat);
+}
+
+function standTable(ranked) {
+  const rows = ranked.map(({ row, rank, tied }) => {
+    const dc = row.diff > 0 ? 'diff-pos' : row.diff < 0 ? 'diff-neg' : 'diff-zero';
+    const sign = row.diff > 0 ? '+' : '';
+    return `<tr class="stand-row${rank <= 4 ? ' winner' : ''}${standTeam === row.id ? ' sel' : ''}"
+        data-act="stand.team" data-id="${escH(row.id)}">
+      <td class="num">${rank}${tied ? '<span class="tie-mark" title="שוויון לא מוכרע">=</span>' : ''}</td>
+      <td class="stand-name">${escH(row.name)}</td>
+      <td class="num">${row.played}</td>
+      <td class="num">${row.wins}</td>
+      <td class="num">${row.losses}</td>
+      <td class="num">${row.tech || ''}</td>
+      <td class="num">${row.noshow || ''}</td>
+      <td class="num"><b class="stand-pts">${fmtPts(row.pts)}</b></td>
+      <td class="num">${row.pf}</td>
+      <td class="num">${row.pa}</td>
+      <td class="num ${dc}">${sign}${row.diff}</td>
+    </tr>`;
+  }).join('');
+
+  return `<div class="sett-section">
+    <div class="tscroll"><table class="stbl stand-tbl">
+      <thead><tr><th>#</th><th>קבוצה</th><th>מש׳</th><th>נצ׳</th><th>הפ׳</th>
+        <th>טכני</th><th>היעדרות</th><th>נק׳</th><th>לזכות</th><th>לחובה</th><th>הפרש</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table></div>
+    <span class="sett-desc" style="margin-top:10px">מיון לפי 3.10: נקודות ← הפרש ← מפגש ישיר ←
+      מיני־ליגה (3 ומעלה). מקומות 1–4 מעפילים לפיינל פור (3.8). לחיצה על קבוצה מציגה את משחקיה בלבד.
+      "טכני" ו"היעדרות" מפרטות הפסדי 0 נק׳ ואינן משפיעות על המיון.</span>
+  </div>`;
+}
+
+// הזנת תוצאות — תצוגה זמנית (עוברת ל"לוז" בשלב 5). רשימה פשוטה לפי מחזור,
+// שקוראת ל-renderGameEntry לכל משחק. בלי עיצוב לוח.
+function entrySection(catId) {
+  let games = (L.games || []).filter(g => g.cat === catId);
+  const teamSel = standTeam ? findTeam(standTeam) : null;
+  if (teamSel) games = games.filter(g => g.a === standTeam || g.b === standTeam);
+
+  const header = `<div class="sett-section-title">הזנת תוצאות${teamSel ? ' — ' + escH(teamSel.team.name) : ''}
+    ${standTeam ? `<button class="team-del" data-act="stand.clearteam" title="כל המשחקים">×</button>` : ''}</div>`;
+
+  if (!games.length) return `<div class="sett-section">${header}
+    <div class="empty">${teamSel ? 'אין משחקים לקבוצה הזאת.' : 'אין עדיין משחקים. צרי לוז בעמוד <b>מתזמן</b>.'}</div></div>`;
+
+  const byDay = {};
+  for (const g of games) (byDay[g.day] ||= []).push(g);
+
+  const blocks = regularDays().filter(d => byDay[d.id]).map(d => {
+    const list = byDay[d.id].sort((a, b) => (a.slot || 0) - (b.slot || 0) || (a.net || 0) - (b.net || 0));
+    const nsd = teamSel ? `<button class="filter-btn nsd-btn" data-act="res.noshowDay"
+        data-team="${escH(standTeam)}" data-day="${escH(d.id)}">היעדרות ליום זה</button>` : '';
+    return `<div class="stand-day">
+      <div class="stand-day-hdr"><span>${escH(d.label)}</span>${nsd}</div>
+      ${list.map(renderGameEntry).join('')}
+    </div>`;
+  }).join('');
+
+  return `<div class="sett-section">${header}
+    <div class="info-box" style="margin-bottom:12px">תצוגת הזנה זמנית — בשלב 5 ההזנה תעבור לטאב "לוז".
+      ניקוד תקין (למשל 18:16) נספר מיד בטבלה; <b>ט</b> פותח הפסד טכני / היעדרות / כוח עליון.</div>
+    ${blocks}</div>`;
+}
+
+// ============================================================================
 // חיווט
 // ============================================================================
 
@@ -1375,6 +1733,47 @@ const ACT = {
     seedTestRoster();
   },
 
+  // ── דירוג + הזנת תוצאות (שלב 4) ──
+  'stand.cat':       el => { standCat = el.dataset.cat; standTeam = null; },
+  'stand.team':      el => { standTeam = standTeam === el.dataset.id ? null : el.dataset.id; },
+  'stand.clearteam': () => { standTeam = null; },
+
+  // ניקוד: שומר sa/sb; שני ערכים תקינים → ok, אחרת חוזר ל-pending.
+  'res.score': el => {
+    const g = findGame(el.dataset.id); if (!g) return false;
+    const wasOk = g.result === 'ok';
+    const v = el.value === '' ? null : Math.max(0, Math.floor(+el.value) || 0);
+    g[el.dataset.side] = v;
+    g.sets = [];
+    const fmt = L.formats[g.cat]?.regular || F_SET18;
+    const complete = g.sa != null && g.sb != null;
+    if (complete && validSet(Math.max(g.sa, g.sb), Math.min(g.sa, g.sb), fmt.to, fmt.cap))
+      g.result = 'ok';
+    else if (g.result === 'ok')
+      g.result = 'pending';
+    // רינדור מחדש רק כשהמשחק *שלם* (שני ציונים) או היה תקין — כך הטבלה זזה בלייב
+    // ברגע שיש תוצאה, אבל מילוי התיבה הראשונה (השנייה ריקה) לא בונה מחדש את ה-DOM
+    // תחת האצבע, ואפשר לעבור לתיבה השנייה בלי לאבד את מה שמקלידים (מלכודת 3).
+    if (!complete && !wasOk) return false;
+  },
+  'res.tech': el => {
+    const g = findGame(el.dataset.id); if (!g) return false;
+    setTech(g, el.dataset.side);
+  },
+  // היעדרות ליום שלם (מאסטר, §10.3): attendance=noshow + הפסד טכני 18:10 לכל
+  // משחקי הקבוצה באותו יום. זה מה שמפריד "היעדרות" מ"טכני" בטבלה.
+  'res.noshowDay': el => {
+    const team = el.dataset.team, day = el.dataset.day;
+    const t = findTeam(team);
+    if (!confirm(`לסמן היעדרות של "${t?.team.name || team}" ל${dayLabel(day)}? כל משחקיה באותו יום יירשמו כהפסד טכני 18:10.`)) return false;
+    (L.attendance[day] ||= {})[team] = 'noshow';
+    for (const g of (L.games || [])) {
+      if (g.day !== day) continue;
+      if (g.a === team) setTech(g, 'a');
+      else if (g.b === team) setTech(g, 'b');
+    }
+  },
+
   // ── סיסמאות ──
   'pw.admin':   el => hashPassword('adminPasswordHash', el),
   'pw.manager': el => hashPassword('managerPasswordHash', el),
@@ -1433,7 +1832,7 @@ const NO_REPAINT = new Set([
 // פעולות שמשנות רק מה שמוצג ולא את המודל. בלי זה כל לחיצה על טאב של יום
 // בעמוד המתזמן הייתה כותבת את המסמך כולו ל-Firestore — 240 משחקים על שינוי
 // שקיים רק בדפדפן.
-const NO_SAVE = new Set(['sched.day']);
+const NO_SAVE = new Set(['sched.day', 'stand.cat', 'stand.team', 'stand.clearteam']);
 
 function handle(e, kinds) {
   const el = e.target.closest('[data-act]');
@@ -1449,7 +1848,8 @@ function handle(e, kinds) {
 document.addEventListener('click',  e => {
   const tab = e.target.closest('[data-page]');
   if (tab) { page = tab.dataset.page; paint(); return; }
-  handle(e, /^(BUTTON|A)$/);
+  // TR — שורת קבוצה בטבלת הדירוג לחיצה (§7.2: מציגה את משחקי הקבוצה)
+  handle(e, /^(BUTTON|A|TR)$/);
 });
 document.addEventListener('change', e => handle(e, /^(INPUT|SELECT|TEXTAREA)$/));
 // type=color בלבד — כל שאר השדות נשמרים ב-blur (מלכודת 3)

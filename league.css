@@ -248,9 +248,75 @@ footer { padding: 20px; text-align: center; font-size: 12px;
 /* כרטיס שקיים רק בשלב 1 ונעלם בשלב 2 — מסומן ויזואלית ככזה */
 .sett-section.scaffold { border-style: dashed; border-color: var(--border2); }
 
+/* ── עמוד דירוג + הזנת תוצאות (שלב 4) ──────────────────────────────────────
+   מחזר .stbl, .status-badge/.badge-*, .diff-*, .score-err, .cf-btn מ-styles.css.
+   כאן רק מה שאין: פיל ניקוד עשרוני, שורת הזנה, ותפריט הטכני. תצוגת ההזנה זמנית
+   (עוברת ל"לוז" בשלב 5) ולכן מינימלית במכוון. */
+
+.stand-tbl .stand-name { text-align: right; font-weight: 600; }
+.stand-row { cursor: pointer; }
+.stand-row:hover td { background: var(--bg3); }
+.stand-row.sel td { background: color-mix(in srgb, var(--primary) 12%, transparent); }
+.stand-row.sel.winner td { background: color-mix(in srgb, var(--primary) 16%, transparent); }
+
+/* פיל הניקוד — כמו .pts-val אבל ברוחב גמיש כדי ש-"1.5" ייכנס (6.2) */
+.stand-pts { display: inline-flex; align-items: center; justify-content: center;
+  min-width: 26px; padding: 2px 7px; border-radius: 999px; font-size: 12px; font-weight: 800;
+  background: var(--primary); color: var(--on-primary); font-variant-numeric: tabular-nums; }
+
+.tie-mark { color: var(--amber); font-weight: 800; margin-inline-start: 3px; }
+.tie-alert { margin-bottom: 8px; }
+
+/* כותרת יום בהזנה + כפתור היעדרות-ליום */
+.stand-day { margin-bottom: 16px; }
+.stand-day-hdr { display: flex; align-items: center; gap: 10px;
+  font-size: 13px; font-weight: 800; color: var(--primary-text);
+  padding-bottom: 5px; margin-bottom: 4px; border-bottom: 1px solid var(--border); }
+.nsd-btn { margin-inline-start: auto; font-size: 12px; padding: 4px 12px; }
+
+/* שורת הזנת תוצאה — שם : ניקוד : שם : סטטוס. תצוגה זמנית, לא לוח. */
+.res-row { display: flex; align-items: center; gap: 8px;
+  padding: 8px 2px; border-bottom: 1px solid var(--border); }
+.res-row:last-child { border-bottom: 0; }
+.res-row.invalid { flex-wrap: wrap; }
+.res-team { flex: 1; min-width: 0; font-size: 13px; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap; }
+.res-team.win { font-weight: 800; color: var(--primary-text); }
+.res-score { display: flex; align-items: center; gap: 5px; flex-shrink: 0; }
+.res-score b { color: var(--text3); }
+.res-inp { width: 46px; padding: 6px 4px; text-align: center; direction: ltr;
+  font-variant-numeric: tabular-nums; }
+.res-inp:disabled { opacity: .55; }
+.res-meta { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.res-row .score-err { flex-basis: 100%; text-align: center; }
+
+/* תפריט הטכני — "ט" קטן שפותח פופאובר עם האפשרויות */
+.tech-menu { position: relative; }
+.tech-menu > summary { cursor: pointer; list-style: none; user-select: none;
+  width: 26px; height: 26px; border-radius: 50%; background: var(--bg3);
+  color: var(--text2); font-size: 13px; font-weight: 800;
+  display: flex; align-items: center; justify-content: center; }
+.tech-menu > summary::-webkit-details-marker { display: none; }
+.tech-menu[open] > summary { background: var(--primary); color: var(--on-primary); }
+/* התפריט "ט" יושב בקצה השמאלי של השורה (סוף ב-RTL). left:0 פותח אותו ימינה,
+   פנימה למסך, כדי שלא ייחתך על שפת החלון. */
+.tech-pop { position: absolute; z-index: 20; left: 0; right: auto; top: 30px;
+  width: max-content; min-width: 190px; max-width: 78vw; background: var(--surface);
+  border: 1px solid var(--border2); border-radius: var(--rs);
+  box-shadow: var(--shadow, 0 8px 24px rgba(0,0,0,.18)); padding: 5px; }
+.tech-pop button { display: block; width: 100%; text-align: right; background: none;
+  border: 0; cursor: pointer; padding: 8px 10px; border-radius: var(--rs);
+  font-size: 12.5px; color: var(--text); font-family: inherit; }
+.tech-pop button:hover { background: var(--bg3); }
+.tech-pop .tp-clear { color: var(--red); border-top: 1px solid var(--border); margin-top: 4px; }
+
 @media (max-width: 640px) {
   .kv { grid-template-columns: 1fr; gap: 2px 0; }
   .kv dd { margin-bottom: 8px; }
+
+  /* שורת הזנה בטלפון: השם לא יימחץ */
+  .res-team { font-size: 12.5px; }
+  .res-inp { width: 42px; }
 
   /* שלושה שדות שם ברוחב 375 נמחצים לשליש שורה. בטלפון: מספר + מחיקה בשורה
      אחת, ושלושת שדות השם נערמים מתחת בשורה משלהם. */
