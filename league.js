@@ -16,7 +16,7 @@ import {
 // והוא מקבל תמונת מצב ומחזיר משחקים ודוח. ראו league-sched.js.
 import {
   generateSeason, buildDayContext, dayCost, dayLength, slotLabel
-} from './league-sched.js?v=4';
+} from './league-sched.js?v=5';
 
 // ============ זהות הליגה ============
 // ⚠️ המזהה הזה מופיע בכתובת הציבורית שכל 72 השחקניות מקבלות. הוא לא זמני.
@@ -113,7 +113,9 @@ function defaultDoc() {
     categories: [
       { id:'show',  name:'ליגת שואו',    rr:2, order:1, fixedNet:1 },  // החלטות 4,5
       { id:'liga1', name:'ליגה ראשונה', rr:1, order:2 },               // 3.4
-      { id:'liga2', name:'ליגה שנייה',  rr:1, order:3 }
+      // allowConsecutive: רק ליגה ב׳ מתירה רצף נדיר (החלטת המשתמשת 25.7) —
+      // נותן למתזמן מוצא במקום המתנות ארוכות; שואו וליגה א׳ נשארות אפס רצף.
+      { id:'liga2', name:'ליגה שנייה',  rr:1, order:3, allowConsecutive:true }
     ],
 
     formats: {
@@ -267,9 +269,16 @@ function setSync(state, detail) {
 
 function mergeDefaults(data) {
   const d = defaultDoc();
+  // ליגות: ערכי המשתמשת גוברים, אבל שדות חדשים שהמסמך לא מכיר (למשל
+  // allowConsecutive שנוסף 25.7) נמשכים מברירת המחדל לפי id — כך תוספת שדה
+  // מחלחלת גם למסמכים קיימים בלי לדרוס שם/פורמט שהמשתמשת שינתה.
+  const mergeCats = docCats => docCats.map(c => {
+    const def = d.categories.find(x => x.id === c.id);
+    return def ? { ...def, ...c } : c;
+  });
   return {
     meta:         { ...d.meta, ...(data.meta || {}) },
-    categories:   data.categories?.length ? data.categories : d.categories,
+    categories:   data.categories?.length ? mergeCats(data.categories) : d.categories,
     formats:      { ...d.formats, ...(data.formats || {}) },
     roster:       { ...d.roster,  ...(data.roster  || {}) },
     availability: data.availability || {},
@@ -533,6 +542,7 @@ function schedInput() {
   return {
     categories: L.categories.map(c => ({
       id: c.id, name: c.name, rr: c.rr, order: c.order, fixedNet: c.fixedNet,
+      allowConsecutive: !!c.allowConsecutive,
       teams: (L.roster[c.id] || []).filter(t => t.active !== false).map(t => t.id)
     })),
     days: regularDays().map(d => ({
@@ -757,14 +767,20 @@ function windowsFrom(r) {
 // המנהלת לא צריכה לדעת ש"העלות 3,740"; היא צריכה לדעת אם מישהי משחקת פעמיים
 // ברצף, כמה מחכים, ומתי היום נגמר. זה גוזר בדיוק את זה מהשיבוץ.
 function dayQuality(r) {
+  // ליגה שמתירה רצף נדיר (ליגה ב׳, החלטת המשתמשת): רצף בה **מותר** ולכן לא
+  // נספר כבעיה. רצף בשאר הליגות (שואו/א׳) הוא הפרה של החלטה 3.
+  const allowB2B = new Set((L.categories || []).filter(c => c.allowConsecutive).map(c => c.id));
+  const teamCat = {};
+  for (const g of r.games) { teamCat[g.a] = g.cat; teamCat[g.b] = g.cat; }
+
   const perTeam = {};
   for (const g of r.games) if (g.slot) for (const t of [g.a, g.b]) (perTeam[t] ??= []).push(g.slot);
-  let b2b = 0, maxWait = 0;
-  for (const slots of Object.values(perTeam)) {
+  let b2b = 0, allowedB2B = 0, maxWait = 0;
+  for (const [t, slots] of Object.entries(perTeam)) {
     slots.sort((a, b) => a - b);
     for (let i = 0; i + 1 < slots.length; i++) {
       const w = slots[i + 1] - slots[i] - 1;   // סלוטים ריקים בין שני משחקים
-      if (w === 0) b2b++;
+      if (w === 0) { allowB2B.has(teamCat[t]) ? allowedB2B++ : b2b++; }
       else if (w > maxWait) maxWait = w;
     }
   }
@@ -780,16 +796,19 @@ function dayQuality(r) {
     if (jumps >= 2) flipNets++;
   }
   const hard = (r.cost?.violations || []).filter(x => x.cost >= 1_000_000);
-  return { b2b, maxWait, flipNets, hard };
+  return { b2b, allowedB2B, maxWait, flipNets, hard };
 }
 
 function qualityChips(r) {
   const q = dayQuality(r);
   const sm = r.day.slotMin;
   const c = [];
+  const b2bCatName = (L.categories || []).find(c => c.allowConsecutive)?.name || 'ליגה ב׳';
   c.push(q.b2b === 0
     ? `<span class="q-chip good">✓ אף קבוצה לא משחקת פעמיים ברצף</span>`
     : `<span class="q-chip bad">⚠ ${q.b2b} ${q.b2b === 1 ? 'קבוצה משחקת' : 'קבוצות משחקות'} פעמיים ברצף</span>`);
+  if (q.allowedB2B)
+    c.push(`<span class="q-chip">${q.allowedB2B} ${q.allowedB2B === 1 ? 'משחק רצוף' : 'משחקים רצופים'} ב${escH(b2bCatName)} (מותר מדי פעם)</span>`);
   c.push(q.maxWait <= 1
     ? `<span class="q-chip good">✓ המתנה של סלוט אחד לכל היותר (≈${sm} דק׳)</span>`
     : `<span class="q-chip">המתנה מקסימלית ${q.maxWait} סלוטים (≈${q.maxWait * sm} דק׳) — רובן סלוט אחד</span>`);

@@ -71,6 +71,12 @@ export const gameKey = (cat, a, b, leg) =>
 export const WEIGHTS = {
   hard:       1_000_000,   // חמשת האילוצים הקשיחים של §6.2 + רשת קבועה (החלטה 4)
   backToBack: 50_000,      // קבוצה בשני סלוטים רצופים — היעד הקשיח של החלטה 3
+  // ליגה עם allowConsecutive (החלטת המשתמשת: רק ליגה ב׳) מקבלת קנס רצף נמוך.
+  // כוונן ל-1000: **בין** עלות המתנה של 3 סלוטים (480) לבין 4 סלוטים (1080), כך
+  // שהמתזמן מעדיף המתנה של 3 על פני רצף, אבל מעדיף רצף על פני המתנה של 4+. נמדד:
+  // ~4 רצפים בעונה בליגה ב׳ (מדי פעם ממש), המתנה מקס׳ יורדת ל-3, שואו וליגה א׳
+  // נשארות 0 רצף. מעל 1080 הרצף לא נוצל וההמתנות של 4 חוזרות.
+  backToBackSoft: 1_000,
   gamesOver:  200,         // יותר מהמכסה העליונה ביום
   gamesUnder: 200,         // פחות מהמכסה התחתונה ביום
   longWait:   120,         // מקדם ההמתנה — מוכפל ריבועית ב-(עודף הסלוטים)²
@@ -426,8 +432,15 @@ function scratch(ctx) {
     teamGames[gA[i]].push(i); teamGames[gB[i]].push(i);
   }
 
+  // משקל הרצף לכל קבוצה — ליגה עם allowConsecutive (ליגה ב׳) מקבלת קנס רך
+  const b2bW = new Int32Array(T).fill(WEIGHTS.backToBack);
+  for (const c of ctx.cats) {
+    if (!c.allowConsecutive) continue;
+    for (const t of c.teams || []) { const i = ti.get(t); if (i != null) b2bW[i] = WEIGHTS.backToBackSoft; }
+  }
+
   return ctx._s = {
-    teams, ti, T, S, nets, N, netPos, blocked, availFrom, availTo, lo, hi,
+    teams, ti, T, S, nets, N, netPos, blocked, availFrom, availTo, lo, hi, b2bW,
     G, gA, gB, gFixedNet, gCat, gLocked, teamGames,
     tc:      new Int32Array(T * (S + 2)),      // קבוצה × סלוט
     cc:      new Int32Array((S + 2) * N),      // סלוט × רשת — כמה משחקים
@@ -488,8 +501,9 @@ function evalDay(pl, ctx, collect) {
       if (prev) {
         const gap = sl - prev;
         if (gap === 1) {
-          backToBack += W.backToBack;
-          if (V) V.push({ kind:'backToBack', cost:W.backToBack, slot:prev, team:s.teams[t],
+          const bw = s.b2bW[t];   // ליגה ב׳ (allowConsecutive) — קנס רך; השאר קשיח
+          backToBack += bw;
+          if (V) V.push({ kind:'backToBack', cost:bw, slot:prev, team:s.teams[t],
                           text:`${s.teams[t]} משחקת פעמיים ברצף` });
         } else if (gap - 1 > 1) {
           // המתנה של סלוט אחד (gap=2) היא האידיאל — אפס קנס. מעבר לזה הקנס
@@ -996,7 +1010,8 @@ export function buildDayContext(input, day, dayGames, bounds) {
 
   const cats = (input.categories || [])
     .filter(c => dayGames.some(g => g.cat === c.id))
-    .map(c => ({ id: c.id, name: c.name, order: c.order, fixedNet: c.fixedNet, teams: c.teams || [] }));
+    .map(c => ({ id: c.id, name: c.name, order: c.order, fixedNet: c.fixedNet,
+                 allowConsecutive: !!c.allowConsecutive, teams: c.teams || [] }));
 
   const present = new Set(cats.flatMap(c => c.teams));
   for (const g of dayGames) { present.add(g.a); present.add(g.b); }
