@@ -47,6 +47,7 @@ let pick = null;
 let warnsOpen = false;   // סרגל האזהרות מורחב?
 let leagueFilter = null; // הצג רק ליגה אחת (null=הכל) — §5
 let fixNote = null;      // "מה תיקנתי" — הודעה קצרה אחרי "תקן לי" (§4 שקיפות)
+let resultsOpen = false; // פאנל הזנת התוצאות פתוח? (מתג — כדי שלא יגזול גובה מהגריד)
 
 // בטל / בצע שוב — עותקים מלאים (המצב קטן, 240 משחקים). "שחזר לתחילת היום" נתפס
 // עצלנית ליום ברגע פתיחתו בסשן.
@@ -74,6 +75,7 @@ const netsOf     = day => [...(day.netIds || [])].sort((a, b) => a - b);
 const unassigned = () => (L().games || []).filter(g => !g.slot || !g.net);
 const escLabel   = id => escH(dayById(id)?.label || id);
 const teamName   = id => X.teamName(id);
+const pairName   = g => `${teamName(g.a)} / ${teamName(g.b)}`;
 
 function cellIndex(dayId) {
   const m = new Map();
@@ -148,18 +150,21 @@ function restoreScroll(s) {
 function boardRepaint() { const s = captureScroll(); X.repaint(); restoreScroll(s); fixNote = null; }
 function commit()       { X.queueSave(); boardRepaint(); }
 
-// יום שלם נכנס למסך (§11): מותחים את גובה הגריד לגובה הזמין בפועל (חלון פחות
-// הכרום מעל, פחות סרגל האזהרות). כך הדף לא גולל, והגריד גולל פנימית רק אם ממש
-// לא נכנס. CSS לבד לא יכול — הוא לא יודע את ה-top של הגריד.
-function fitDayGrid() {
-  if (view !== 'day' || window.innerHeight <= 0) return;
-  const grid = document.querySelector('.board-scroll.vscroll'); if (!grid) return;
+// הגריד נכנס למסך בלי גלילת-דף (§2/§11): מותחים את גובהו לגובה הזמין בפועל (חלון
+// פחות הכרום מעל, פחות כל מה שמתחת — סרגל אזהרות/עזרה/תוצאות). עובד לשתי התצוגות:
+// ביום זה מכניס את כל הסלוטים; בעונה זה מכניס את כל השורות (במחשב — בקשת המשתמשת).
+// CSS לבד לא יכול — הוא לא יודע את ה-top של הגריד.
+function fitGrid() {
+  if (window.innerHeight <= 0) return;
+  const grid = document.querySelector('.board-scroll'); if (!grid) return;
   grid.style.maxHeight = '';                         // מדידה נקייה
   const rect = grid.getBoundingClientRect();
   const docTop = rect.top + window.scrollY;
   // כל מה שמתחת לגריד (פאנלים, רווחים, ריפוד) — בלתי-תלוי בגובה הגריד:
   const below = document.documentElement.scrollHeight - (rect.bottom + window.scrollY);
-  const avail = window.innerHeight - docTop - below - 4;
+  // בלי שולי-ביטחון: below כבר כולל את סרגל האזהרות/המקרא, אז הגריד ממלא בדיוק
+  // עד תחתית החלון והדף לא גולל (§2). Math.floor מונע גלישת תת-פיקסל.
+  const avail = Math.floor(window.innerHeight - docTop - below);
   grid.style.maxHeight = (avail > 160 ? avail : 160) + 'px';
 }
 
@@ -292,8 +297,12 @@ function dropTile(kind, day, slot, net) {
 // ============================================================================
 const violSig = v => `${v.kind}|${v.team || v.net || ''}|${v.slot || ''}`;
 
+// העדפות מתזמן פנימיות (§6.2) — לא אזהרות §9 של המנהלת. מסוננות מהסרגל כדי שלא
+// יצעק "בעיות" על אופטימיזציה: רצף-קטגוריה, הוגנות מוקדם/מאוחר, קפיצות-רשת,
+// תא-ריק-מוקדם ושעת-סיום (הראשונים by-design §6.3; שעת הסיום מוצגת במונה המגירה §4.6).
+const SCHED_ONLY = new Set(['netJump', 'catReturn', 'fairness', 'emptyEarly', 'lateFinish']);
 function classify(v, allowSet) {
-  if (v.kind === 'netJump') return 'skip';   // העדפת מתזמן (§6.2), לא אזהרת §9
+  if (SCHED_ONLY.has(v.kind)) return 'skip';
   if (v.kind === 'doubleBooked') return 'block';
   if (v.kind === 'backToBack') return allowSet.has(v.team) ? 'allowed' : 'soft';
   if (v.kind === 'longWait') return 'info';
@@ -344,13 +353,31 @@ const realProblems = () => boardWarnings().filter(v => v.cls === 'block' || v.cl
 // noGames דורשים הוספה/הסרה של משחק, לא הזזה — להם רק הצעה בטקסט.
 const FIXABLE = new Set(['backToBack', 'availability', 'noReferee', 'doubleBooked', 'cellClash', 'blockedCell']);
 
+// בעיות שדורשות הוספה/הסרה של משחק (לא הזזה) — אין להן "תקן לי". במקום זה: קישור
+// שמדליק את כל משחקי הקבוצה כדי לראות מה לשנות (§4), ולחוסר-משחקים גם צ׳יפים של
+// משחקי-קופסה של אותה קבוצה (אם יש) — "כמה אופציות" לבחור מהן.
+const ADDREMOVE = new Set(['tooMany', 'tooFew', 'noGames']);
+function violExtra(v) {
+  if (!ADDREMOVE.has(v.kind) || !v.team) return '';
+  const t = v.team, on = selTeam === t ? ' on' : '';
+  let chips = '';
+  if (v.kind === 'tooFew' || v.kind === 'noGames') {
+    const box = unassigned().filter(g => g.a === t || g.b === t);
+    chips = box.length
+      ? box.slice(0, 4).map(g => `<button class="wb-chip" data-act="board.pickBoxGame" data-game="${escH(g.id)}" title="בחרי כדי לראות לאן אפשר לשבץ">＋ ${escH(pairName(g))}</button>`).join('')
+      : `<span class="wb-chip-none">אין לקבוצה משחק בקופסה — כדי להוסיף צריך לפצל משחק מיום אחר.</span>`;
+  }
+  return `<div class="wb-extra">
+    <button class="wb-team${on}" data-act="board.highlightTeam" data-team="${escH(t)}">🔦 הראה את כל משחקי ${escH(teamName(t))}</button>${chips}</div>`;
+}
+
 // הצעת פתרון קצרה לכל סוג בעיה (§9).
 function suggestFix(v) {
   switch (v.kind) {
     case 'backToBack':   return 'הזיזי אחד משני המשחקים הצמודים לסלוט אחר.';
-    case 'tooMany':      return 'העבירי משחק אחד של הקבוצה לסלוט אחר או לקופסה.';
-    case 'tooFew':       return 'הוסיפי לקבוצה משחק ביום הזה מהקופסה.';
-    case 'noGames':      return 'שבצי לקבוצה משחק, או סמני היעדרות בדירוג.';
+    case 'tooMany':      return 'צריך להסיר מהקבוצה משחק ביום הזה — הזיזי אחד לקופסה.';
+    case 'tooFew':       return 'צריך להוסיף לקבוצה משחק ביום הזה — ראי אפשרויות למטה.';
+    case 'noGames':      return 'צריך לשבץ לקבוצה משחק ביום הזה (או לסמן היעדרות בדירוג).';
     case 'availability': return 'הזיזי את המשחק לתוך חלון הזמן שהקבוצה ביקשה.';
     case 'noReferee':    return 'הזיזי אחת הקבוצות כדי שתהיה פנויה לשפוט בסלוט הבא.';
     case 'doubleBooked': return 'לקבוצה שני משחקים באותו סלוט — הזיזי אחד מהם.';
@@ -383,11 +410,14 @@ function warnBar() {
   let body = '';
   if (warnsOpen && (real.length || info.length)) {
     const row = ({ v, i }) => `<div class="wb-prob ${v.cls}">
-      <button class="wb-prob-main" data-act="board.gotoViol" data-i="${i}" title="הראה איפה זה, וסמן אפשרויות">
-        <span class="wb-prob-t">${view === 'season' ? escLabel(v.dayId) + ' · ' : ''}${escH(v.text)}</span>
-        <span class="wb-prob-fix">💡 ${escH(suggestFix(v))}</span>
-      </button>
-      ${FIXABLE.has(v.kind) ? `<button class="wb-fix" data-act="board.fixViol" data-i="${i}">✨ תקן לי</button>` : ''}
+      <div class="wb-prob-row">
+        <button class="wb-prob-main" data-act="board.gotoViol" data-i="${i}" title="הראה איפה זה, וסמן אפשרויות">
+          <span class="wb-prob-t">${view === 'season' ? escLabel(v.dayId) + ' · ' : ''}${escH(v.text)}</span>
+          <span class="wb-prob-fix">💡 ${escH(suggestFix(v))}</span>
+        </button>
+        ${FIXABLE.has(v.kind) ? `<button class="wb-fix" data-act="board.fixViol" data-i="${i}">✨ תקן לי</button>` : ''}
+      </div>
+      ${violExtra(v)}
     </div>`;
     const grp = (title, arr, k) => arr.length ? `<div class="wb-grp ${k}"><div class="wb-grp-h">${title}</div>${arr.map(row).join('')}</div>` : '';
     const waits = info.length ? `<div class="wb-waits">🔵 <b>המתנות ארוכות</b> (יותר מסלוט בין משחקים) — לא בעיה, רק פחות אידיאלי: ${
@@ -417,6 +447,9 @@ function fixViol(index) {
   if (!g || g.locked) { alert('לא הצלחתי לזהות משחק פנוי להזזה. נסי "סדר מחדש".'); return; }
   const target = violSig(v), dayObj = dayById(day), nets = netsOf(dayObj);
   const ci = cellIndex(day), bi = blockIndex(day);
+  // §5: תיאור מלא — כל זוג שנגע בו, עם שעת-היעד שלו.
+  const pair = x => `${teamName(x.a)} / ${teamName(x.b)}`;
+  const spot = (s, n) => `${slotLabel(dayObj, s)} · ${X.netName(n)}`;
   // אחרי מצב זמני: מספר ההפרות שנשארות, או Infinity אם הבעיה נשארה / נוצר block.
   const evalState = () => {
     const viols = dayViolations(day);
@@ -435,7 +468,7 @@ function fixViol(index) {
     if (ci.get(k) || bi.has(k) || (s === G.slot && n === G.net)) continue;
     g.slot = s; g.net = n; const bad = evalState(); g.slot = G.slot; g.net = G.net;
     if (bad < Infinity) consider({ kind: 'move', bad, gs: s, gn: n, flash: [g.id],
-      note: `הזזתי את ${teamName(g.a)} / ${teamName(g.b)} ל-${slotLabel(dayObj, s)}` });
+      note: `הזזתי את ${pair(g)} ל-${spot(s, n)}` });
   }
   // 2) החלפה עם משחק משובץ אחר
   for (const h of gamesOf(day)) {
@@ -445,7 +478,7 @@ function fixViol(index) {
     const bad = evalState();
     g.slot = G.slot; g.net = G.net; h.slot = H.slot; h.net = H.net;
     if (bad < Infinity) consider({ kind: 'swap', bad, hId: h.id, gs: H.slot, gn: H.net, hs: G.slot, hn: G.net, flash: [g.id, h.id],
-      note: `החלפתי בין ${teamName(g.a)} ל-${teamName(h.a)}` });
+      note: `החלפתי את ${pair(g)} (→ ${spot(H.slot, H.net)}) עם ${pair(h)} (→ ${spot(G.slot, G.net)})` });
   }
   // 3) bump — רק אם אין הזזה/החלפה נקייה
   if (!best) {
@@ -456,8 +489,8 @@ function fixViol(index) {
       g.slot = s; g.net = n; occ.slot = null; occ.net = null;
       const bad = evalState();
       g.slot = G.slot; g.net = G.net; occ.slot = O.slot; occ.net = O.net;
-      if (bad < Infinity) consider({ kind: 'bump', bad, gs: s, gn: n, occId: occ.id, flash: [g.id],
-        note: `הזזתי את ${teamName(g.a)} ל-${slotLabel(dayObj, s)}, ו-${teamName(occ.a)} עבר לקופסה` });
+      if (bad < Infinity) consider({ kind: 'bump', bad, gs: s, gn: n, occId: occ.id, flash: [g.id, occ.id],
+        note: `הזזתי את ${pair(g)} ל-${spot(s, n)}, ו${pair(occ)} חזר לקופסה` });
     }
   }
 
@@ -503,15 +536,16 @@ function bcard(g) {
     const c = classifyPlacement(g, pick.day, pick.slot, pick.net);
     cand = c === 'ok' ? ' cand-ok' : c === 'no' ? ' cand-no' : '';
   } else if (pick?.kind === 'game' && pick.id !== g.id) {
-    const c = classifySwap(pickGame(), g);
-    cand = c === 'ok' ? ' cand-ok' : c === 'no' ? ' cand-no' : '';
+    const pg = pickGame();
+    // כרטיס שחולק קבוצה עם הנבחר = מופע נוסף של הזוג (§1) — לא לעמעם, שהצביעה תיראה.
+    if (shareTeam(pg, g)) cand = '';
+    else { const c = classifySwap(pg, g); cand = c === 'ok' ? ' cand-ok' : c === 'no' ? ' cand-no' : ''; }
   }
   const dim = leagueFilter && g.cat !== leagueFilter ? ' lg-dim' : '';   // §5
   const cls = `bcard cat-${escH(g.cat)}${picked ? ' picked' : ''}${g.locked ? ' locked' : ''}${cand}${dim}`;
   return `<div class="${cls}" data-drag="game" data-game="${escH(g.id)}" data-day="${escH(g.day || '')}" title="${escH(X.catName(g.cat))}">
     <span class="bc-lg lg-${escH(g.cat)}">${escH(leagueShort(g.cat))}</span>
-    <span class="bc-team${teamHl(g.a)}" data-team="${escH(g.a)}">${escH(teamName(g.a))}</span>
-    <span class="bc-team${teamHl(g.b)}" data-team="${escH(g.b)}">${escH(teamName(g.b))}</span>
+    <span class="bc-team${teamHl(g.a)}" data-team="${escH(g.a)}">${escH(teamName(g.a))}</span><span class="bc-sep"> · </span><span class="bc-team${teamHl(g.b)}" data-team="${escH(g.b)}">${escH(teamName(g.b))}</span>
     <button class="bc-lock" data-act="board.lock" data-game="${escH(g.id)}" title="${g.locked ? 'נעול' : 'נעילה'}">${g.locked ? '📌' : '📍'}</button>
   </div>`;
 }
@@ -580,19 +614,25 @@ function renderSeason() {
 // ============================================================================
 function drawer() {
   const un = unassigned();
-  const tiles = [['liga3', '🟨', 'ליגה שלישית'], ['break', '⏸', 'הפסקה'], ['ceremony', '📸', 'צילום / טקס']]
+  // §11: בלי אריחי הפסקה/צילום — רק ליגה שלישית.
+  const tiles = [['liga3', '🟨', 'ליגה שלישית']]
     .map(([k, ic, lbl]) => `<div class="tile" data-drag="tile" data-kind="${k}"><span class="tile-ic">${ic}</span>${escH(lbl)}</div>`).join('');
   const unHtml = un.length ? un.map(g => bcard(g)).join('') : `<div class="drawer-empty">כל המשחקים משובצים.</div>`;
-  const hint = pick?.kind === 'cell'
-    ? `<div class="drawer-hint">בחרת תא ${escH(slotLabel(dayById(pick.day), pick.slot))} · ${escH(X.netName(pick.net))}. 🟢 = אפשר לשים · דהוי = אסור. הקישי משחק.</div>`
-    : '';
+  // רמז לפי מצב הבחירה (§4: לא להזמין פעולה בלתי-אפשרית; §12: לחיצה על הקופסה מוציאה):
+  let hint = '';
+  if (pick?.kind === 'cell')
+    hint = un.length
+      ? `<div class="drawer-hint">בחרת תא ${escH(slotLabel(dayById(pick.day), pick.slot))} · ${escH(X.netName(pick.net))}. הקישי משחק להצבה (מסומן = אפשר · דהוי = אסור).</div>`
+      : `<div class="drawer-hint empty">הקופסה ריקה — אין משחק להציב כאן. גררי משחק מהלוח לכאן כדי לפנות אותו.</div>`;
+  else if (pick?.kind === 'game')
+    hint = `<div class="drawer-hint drop">↩ הקישי כאן כדי להוציא את המשחק הנבחר לקופסה.</div>`;
   return `<aside class="drawer" data-drawer>
-    <div class="drawer-sec">
+    <div class="drawer-sec box${pick?.kind === 'game' ? ' can-drop' : ''}" data-boxdrop>
       <div class="drawer-h">קופסת משחקים <span class="muted">${un.length}</span></div>
       ${hint}
       <div class="drawer-un" data-drawer-un>${unHtml}</div>
     </div>
-    <div class="drawer-sec"><div class="drawer-h">אריחים לגרירה</div><div class="drawer-tiles">${tiles}</div></div>
+    <div class="drawer-sec"><div class="drawer-h">אריח לגרירה</div><div class="drawer-tiles">${tiles}</div></div>
     ${lenCounter()}
   </aside>`;
 }
@@ -617,7 +657,7 @@ function resultsPanel(dayId) {
   if (!gs.length) return '';
   const filtered = selTeam ? gs.filter(g => g.a === selTeam || g.b === selTeam) : gs;
   const nsd = selTeam ? `<button class="filter-btn nsd-btn" data-act="res.noshowDay" data-team="${escH(selTeam)}" data-day="${escH(dayId)}">היעדרות ליום זה</button>` : '';
-  return `<details class="results-panel" ${selTeam ? 'open' : ''}>
+  return `<details class="results-panel" open>
     <summary class="sett-section-title">תוצאות ${escLabel(dayId)}${selTeam ? ' — ' + escH(teamName(selTeam)) : ''} <span class="muted">${filtered.length}</span>${nsd}</summary>
     <div class="results-body">${filtered.map(X.renderGameEntry).join('')}</div></details>`;
 }
@@ -652,54 +692,60 @@ function render() {
     ? (matchCount ? `<span class="team-counter" id="board-team-counter">${matchCount} משחקים מודגשים</span>` : `<span class="team-counter no" id="board-team-counter">לא נמצאה קבוצה</span>`)
     : `<span class="team-counter" id="board-team-counter"></span>`;
 
+  // שורה 1: תצוגה + בורר-ימים + כלים. שורה 2: מסנן-ליגה + חיפוש. הכרום צומצם כדי
+  // שהגריד יקבל את מרב הגובה — היום נכנס בלי גלילה בגודל קריא (§2/§9, בקשת המשתמשת).
   const toolbar = `<div class="board-toolbar">
-    <div class="board-views">${viewBtns}</div>
+    <div class="board-views">${viewBtns}${dayPicker}</div>
     <div class="board-tools">
       <button class="filter-btn" data-act="board.undo"${undoStack.length ? '' : ' disabled'} title="בטל (Ctrl+Z)">↶ בטל</button>
       <button class="filter-btn" data-act="board.redo"${redoStack.length ? '' : ' disabled'} title="בצע שוב (Ctrl+Shift+Z)">↷ בצע שוב</button>
       <button class="filter-btn" data-act="board.restore">↩ ${view === 'season' ? 'שחזר הכל' : 'שחזר יום'}</button>
-      ${view !== 'season' ? `<button class="filter-btn" data-act="board.reorderDay">סדר מחדש</button>
-      <button class="cf-btn" data-act="board.print">🖨 לוז להדפסה</button>` : ''}
+      ${view === 'season'
+        ? `<button class="filter-btn" data-act="board.reorderSeason" title="מסדר מחדש את כל הימים; משחקים נעולים 📌 יישארו במקומם">🗓 תזמן מחדש</button>`
+        : `<button class="filter-btn" data-act="board.reorderDay">סדר מחדש</button>
+      <button class="filter-btn${resultsOpen ? ' on' : ''}" data-act="board.toggleResults">🏐 תוצאות</button>
+      <button class="cf-btn" data-act="board.print">🖨 הדפסה</button>`}
     </div>
   </div>
-  ${leagueBtns}
-  <div class="board-search">
-    <input class="text-inp" id="board-search" placeholder="חיפוש קבוצה…" value="${escH(teamQuery)}" data-act="board.search"/>
-    ${teamQuery ? `<button class="team-del" data-act="board.clearSearch" title="נקה">×</button>` : ''}
-    ${counter}
-    ${pick ? `<span class="tap-hint">${pick.kind === 'game' ? 'בחרת משחק — התאים הירוקים = לאן אפשר להעביר. הקישי על תא, או על משחק אחר להחלפה' : 'בחרת תא — הקישי על משחק מהקופסה'} <button class="team-del" data-act="board.pickClear">×</button></span>` : ''}
+  <div class="board-subbar">
+    ${leagueBtns}
+    <div class="board-search">
+      <input class="text-inp" id="board-search" placeholder="חיפוש קבוצה…" value="${escH(teamQuery)}" data-act="board.search"/>
+      ${teamQuery ? `<button class="team-del" data-act="board.clearSearch" title="נקה">×</button>` : ''}
+      ${counter}
+      ${pick ? `<span class="tap-hint">${pick.kind === 'game' ? 'בחרת משחק — התאים הצהובים = לאן אפשר · הקישי תא / הקופסה (הוצאה) / משחק אחר (החלפה)' : 'בחרת תא — הקישי משחק מהקופסה'} <button class="team-del" data-act="board.pickClear">×</button></span>` : ''}
+    </div>
   </div>`;
 
   const grid = view === 'season' ? renderSeason() : renderDayGrid(boardDay);
-  const results = view === 'day' ? resultsPanel(boardDay) : '';
+  // הזנת תוצאות במתג — נטענת רק כשפתוח, כדי שלא תגזול גובה מהגריד (§2).
+  const results = (view === 'day' && resultsOpen) ? resultsPanel(boardDay) : '';
 
-  // מקרא: תגי הליגות (מילוי) + שפת הצבעים (טקסט נצבע לזוגות, מרקר לחיפוש).
-  const legend = `<div class="board-legend">
-    <span class="lg-key"><span class="bc-lg lg-show">שואו</span></span>
-    <span class="lg-key"><span class="bc-lg lg-liga1">ליגה א׳</span></span>
-    <span class="lg-key"><span class="bc-lg lg-liga2">ליגה ב׳</span></span>
-    <span class="lg-sep"></span>
-    <span class="lg-key">זוג נבחר: <b class="hl-a">זוג</b> · <b class="hl-b">זוג</b></span>
-    <span class="lg-key">חיפוש: <b class="hl-search">זוג</b></span>
-    <span class="lg-key"><span class="lg-sw sw-ok"></span>אפשר לשים</span>
-    <span class="lg-key"><span class="lg-sw sw-prob"></span>בעיה</span>
-  </div>`;
-
-  const help = `<details class="board-help">
-    <summary>איך זה עובד?</summary>
+  // מקרא + עזרה מקופלים יחד בתחתית — לא תופסים גובה כשסגורים (ברירת מחדל).
+  const guide = `<details class="board-guide">
+    <summary>מקרא ועזרה</summary>
+    <div class="bg-legend">
+      <span class="lg-key"><span class="bc-lg lg-show">שואו</span></span>
+      <span class="lg-key"><span class="bc-lg lg-liga1">ליגה א׳</span></span>
+      <span class="lg-key"><span class="bc-lg lg-liga2">ליגה ב׳</span></span>
+      <span class="lg-sep"></span>
+      <span class="lg-key">זוג נבחר: <b class="hl-a">זוג</b> · <b class="hl-b">זוג</b></span>
+      <span class="lg-key">חיפוש: <b class="hl-search">זוג</b></span>
+      <span class="lg-key"><span class="lg-sw sw-ok"></span>אפשר לשים</span>
+      <span class="lg-key"><span class="lg-sw sw-prob"></span>בעיה</span>
+    </div>
     <ul>
-      <li><b>לגרור</b> משחק לתא — עובד גם באצבע. גרירה על תא תפוס → המשחק שהיה שם עובר לקופסה.</li>
-      <li><b>להקיש</b> על משחק ואז על תא — או על תא פנוי ואז על משחק מהקופסה. הקשה על שני משחקים = החלפה.</li>
-      <li>כשבוחרים תא, <span class="lg-sw sw-ok"></span> = אפשר לשים · דהוי = אסור.</li>
-      <li>יש בעיה? פתחי את הסרגל למטה, לחצי על הבעיה כדי לראות אותה, או "✨ תקן לי".</li>
+      <li><b>לגרור</b> או <b>להקיש</b> משחק ואז תא. הקשה על משחק ואז על הקופסה = הוצאה. הקשה על שני משחקים = החלפה.</li>
+      <li>גרירה על תא תפוס → המשחק שהיה שם עובר לקופסה.</li>
+      <li>יש בעיה? פתחי את הסרגל למטה, לחצי עליה כדי לראות אותה, או "✨ תקן לי".</li>
       <li class="muted">לוח הגרירה ייפתח למאסטר בלבד בשלב 6 (§7.1).</li>
     </ul>
   </details>`;
 
-  setTimeout(fitDayGrid, 0);   // אחרי שה-HTML נכנס ל-DOM (§11)
-  return `${toolbar}${legend}
-    <div class="board-main"><div class="board-canvas">${dayPicker}${grid}</div>${drawer()}</div>
-    ${results}${help}${warnBar()}`;
+  setTimeout(fitGrid, 0);   // אחרי שה-HTML נכנס ל-DOM (§2/§11)
+  return `${toolbar}
+    <div class="board-main"><div class="board-canvas">${grid}</div>${drawer()}</div>
+    ${results}${warnBar()}${guide}`;
 }
 
 // עדכון הדגשות חי בזמן הקלדה — בלי רינדור, כדי לא לאבד פוקוס בשדה. צובע את
@@ -743,10 +789,21 @@ ACT['board.undo'] = () => { if (!undoStack.length) return false; redoStack.push(
 ACT['board.redo'] = () => { if (!redoStack.length) return false; undoStack.push(snapshot()); restore(redoStack.pop()); commit(); return false; };
 // מסנן ליגה (§5)
 ACT['board.league'] = el => { leagueFilter = el.dataset.cat || null; pick = null; boardRepaint(); return false; };
+// §4: קישור-קבוצה מסרגל האזהרות — מדליק/מכבה את כל משחקי הקבוצה (selTeam → hl-a).
+ACT['board.highlightTeam'] = el => { const t = el.dataset.team; selTeam = selTeam === t ? null : t; pick = null; boardRepaint(); return false; };
+// §4: בחירת משחק-קופסה של הקבוצה → מציג לאן אפשר לשבצו (תאים מוארים).
+ACT['board.pickBoxGame'] = el => { pick = { kind: 'game', id: el.dataset.game }; selTeam = null; boardRepaint(); return false; };
 // שחזור לתחילת הסשן — בעונה: כל הימים; ביום: היום הנוכחי (§9, מחזר dayStart).
 function restoreDay(d) {
   const snap = dayStart[d]; if (!snap) return;
-  for (const g of gamesOf(d)) { const p = snap.place.get(g.id); if (p) { g.slot = p.slot; g.net = p.net; g.locked = p.locked; } }
+  // לעבור על ה**תמונה** (id→מיקום), לא על משחקי-היום הנוכחיים: בעונה גוררים משחקים
+  // בין ימים (dragMove משנה g.day), ואז משחק שעבר מיום d כבר לא ב-gamesOf(d) —
+  // המעבר על התמונה לפי id הוא היחיד שמחזיר אותו הביתה (כולל g.day). id יציב על פני
+  // "תזמן מחדש" (finish() משמר את ה-id לפי key), אז כל id מופיע בתמונה של יום אחד.
+  for (const [id, p] of snap.place) {
+    const g = X.findGame(id);
+    if (g) { g.day = d; g.slot = p.slot; g.net = p.net; g.locked = p.locked; }
+  }
   L().blocks = (L().blocks || []).filter(b => b.day !== d).concat(clone(snap.blocks));
 }
 ACT['board.restore'] = () => {
@@ -766,21 +823,32 @@ ACT['board.reorderDay'] = () => {
   catch (e) { console.error(e); alert('הסידור נכשל: ' + e.message); restore(undoStack.pop()); boardRepaint(); return false; }
   commit(); return false;
 };
+// §8: תזמון מחדש של כל העונה (שומר נעצים). כמו reorderDay אבל בלי onlyDays —
+// pack רץ על כל הימים, מכבד locked (§6.3), וה-id-ים נשמרים (finish() לפי key).
+ACT['board.reorderSeason'] = () => {
+  if (!confirm('לתזמן מחדש את כל העונה? המתזמן יסדר את כל הימים; משחקים נעולים 📌 יישארו במקומם.')) return false;
+  pushUndo();
+  try { const { games } = generateSeason(X.schedInput(), { phases: ['pack'] }); L().games = games; }
+  catch (e) { console.error(e); alert('הסידור נכשל: ' + e.message); restore(undoStack.pop()); boardRepaint(); return false; }
+  commit(); return false;
+};
 ACT['board.toggleWarns'] = () => { warnsOpen = !warnsOpen; boardRepaint(); return false; };
+ACT['board.toggleResults'] = () => { resultsOpen = !resultsOpen; boardRepaint(); return false; };
 // לחיצה על בעיה (§2+§4): קפיצה למקום בלוז, הבהוב, ו**בחירת המשחק הפוגע** —
 // כך התאים הטובים להעברה נצבעים ירוק (אופציות), ואפשר להעביר בהקשה/גרירה.
 ACT['board.gotoViol'] = el => {
   const v = realProblems()[+el.dataset.i]; if (!v) return false;
-  if (view === 'season') view = 'day';
-  boardDay = v.dayId; captureDayStart(boardDay);
+  // §6: בעונה נשארים בעונה ומדגישים שם — לא קופצים לתצוגת היום.
+  if (view !== 'season') { boardDay = v.dayId; captureDayStart(boardDay); }
   const g = violGame(v);
-  pick = g && g.slot ? { kind: 'game', id: g.id } : null;   // בחירה → אופציות ירוקות
+  pick = g && g.slot ? { kind: 'game', id: g.id } : null;   // בחירת המשחק הפוגע → אפשרויות מוארות
   warnsOpen = true;
   boardRepaint();
+  // §10: בלי טבעת-היקוף מהבהבת (חסימה אדומה נמנעת ממילא לפני שנוחתת). רק גלילה עדינה לתא.
   setTimeout(() => {
     const key = g && g.slot && g.net ? `${g.slot}|${g.net}` : (v.slot && v.net ? `${v.slot}|${v.net}` : null);
     const cell = key ? document.querySelector(`[data-cell="${key}"][data-day="${v.dayId}"]`) : null;
-    if (cell) { cell.scrollIntoView({ block: 'center', inline: 'center', behavior: 'smooth' }); cell.classList.add('viol-flash'); setTimeout(() => cell.classList.remove('viol-flash'), 1800); }
+    if (cell) cell.scrollIntoView({ block: 'center', inline: 'center', behavior: 'smooth' });
   }, 90);
   return false;
 };
@@ -843,7 +911,7 @@ function attachListeners() {
     const el = e.target.closest('#board-search'); if (!el) return;
     teamQuery = el.value.trim(); applyHighlightsLive();
   });
-  window.addEventListener('resize', () => { if (onBoard()) fitDayGrid(); });
+  window.addEventListener('resize', () => { if (onBoard()) fitGrid(); });
   // קיצורי מקלדת בטל/בצע-שוב (§10) — רק בעמוד הלוח וכשלא מקלידים בשדה.
   document.addEventListener('keydown', e => {
     if (!onBoard()) return;
@@ -871,7 +939,9 @@ function onDown(e) {
   if (e.target.closest('button')) return;
   // הקשה על תא (פנוי) → מיקוד/הצבה
   const cell = e.target.closest('[data-cell]');
-  if (cell) tapPend = { startX: e.clientX, startY: e.clientY, day: cell.dataset.day, slot: +cell.dataset.cell.split('|')[0], net: +cell.dataset.cell.split('|')[1] };
+  if (cell) { tapPend = { startX: e.clientX, startY: e.clientY, day: cell.dataset.day, slot: +cell.dataset.cell.split('|')[0], net: +cell.dataset.cell.split('|')[1] }; return; }
+  // §12: הקשה על הקופסה כשמשחק נבחר → הוצאה לקופסה
+  if (pick?.kind === 'game' && e.target.closest('[data-boxdrop]')) tapPend = { startX: e.clientX, startY: e.clientY, box: true };
 }
 
 function onMove(e) {
@@ -901,6 +971,11 @@ function onUp(e) {
   if (tapPend) {
     const p = tapPend; tapPend = null;
     if (Math.hypot(e.clientX - p.startX, e.clientY - p.startY) > TH) return;   // תזוזה = גלילה, לא הקשה
+    if (p.box) {   // §12: הקשה על הקופסה כשמשחק נבחר → הוצאה
+      const g = pickGame(); pick = null;
+      if (g) tryOp(() => unassign(g)); else boardRepaint();
+      return;
+    }
     handleCellTap(p.day, p.slot, p.net);
   }
 }

@@ -327,7 +327,7 @@ footer { padding: 20px; text-align: center; font-size: 12px;
 .board-search { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; }
 .board-search .text-inp { width: 200px; }
 .team-counter { font-size: 13px; color: var(--text2); }
-.team-counter.no { color: var(--red); }
+.team-counter.no { color: var(--text3); }
 .team-counter b { color: var(--primary-text); font-variant-numeric: tabular-nums; }
 .tap-hint { font-size: 12.5px; color: var(--primary-text);
   background: color-mix(in srgb, var(--primary) 12%, transparent); padding: 4px 10px; border-radius: 999px; }
@@ -336,23 +336,28 @@ footer { padding: 20px; text-align: center; font-size: 12px;
 .board-main { display: flex; gap: 16px; align-items: flex-start; }
 .board-canvas { flex: 1; min-width: 0; }
 
-/* אזורי גלילה — הגריד גולל בתוכם, לא הדף. גלילה אוטומטית נתלית ב-.board-scroll */
-.board-scroll { overflow: auto; max-width: 100%; border: 1px solid var(--border); border-radius: var(--rs); }
-/* תצוגת יום — למלא את הגובה הזמין כך שיום שלם נכנס בלי גלילה (§11) */
-.board-scroll.vscroll { max-height: calc(100vh - 250px); }
+/* אזורי גלילה — הגריד גולל בתוכם, לא הדף. גלילה אוטומטית נתלית ב-.board-scroll.
+   fitGrid() קובע max-height חי; ה-fallback כאן תקף לפני שה-JS רץ (§2/§11). */
+.board-scroll { overflow: auto; max-width: 100%; border: 1px solid var(--border); border-radius: var(--rs);
+  max-height: calc(100vh - 230px); }
 
 /* הגריד המשותף לשלוש התצוגות */
 .board-grid { border-collapse: collapse; width: 100%; }
 .board-grid th, .board-grid td { border: 1px solid var(--border); }
 .bg-time { width: 60px; background: var(--bg3); color: var(--text3); font-size: 12px;
   text-align: center; vertical-align: middle; white-space: nowrap; position: sticky; right: 0; z-index: 2; }
-/* שפת הצבעים של הלוח — צבעי מותג קבועים לסימון משמעות (לא תלויים בערכת הנושא
-   של המסמך, שיכולה להיות ניטרלית). כחול=נבחר · מגנטה=חיפוש. ירוק/אדום מהטוקנים. */
+/* שפת הצבעים של הלוח — פלטת המותג בלבד לסימון משמעות (בלי ירוק/אדום/כתום —
+   בקשת המשתמשת). המשמעות נישאת בצבע, וסוג-הסימון (מילוי/טבעת/מקווקו/צביעת-טקסט)
+   מבדיל בין משמעויות שחולקות צבע. קבועים — לא תלויים בערכת הנושא של המסמך. */
 :root {
   --p-magenta: #EE2BC1; --p-yellow: #DAFF00; --p-blue: #0775ED; --p-dark: #000B19;   /* פלטת פוצ׳ילינה */
-  --sel: var(--p-blue); --search: var(--p-magenta);   /* כינויים */
-  --hl-a: var(--p-magenta);   /* זוג 1 */
-  --hl-b: var(--p-blue);      /* זוג 2 */
+  --hl-a: var(--p-magenta);       /* זוג נבחר A — צביעת טקסט + מסגרת כרטיס */
+  --hl-b: var(--p-blue);          /* זוג נבחר B — צביעת טקסט + מסגרת כרטיס */
+  --place: var(--p-yellow);       /* אפשר לשים / יעד — טבעת מלאה=מותר · מקווקו=מפר-רך */
+  --focus: var(--p-dark);         /* בחירה / מיקוד — טבעת/מסגרת כהה */
+  --block: var(--p-magenta);      /* בעיה נדירה (חסימה) — אייקון + פס-צד */
+  --sel: var(--p-dark);           /* כינוי ישן → מיקוד (כהה) */
+  --search: var(--p-yellow);      /* כינוי ישן → חיפוש (צהוב) */
 }
 
 /* כותרות רשת ניטרליות — הצבע שוחרר לסימון משמעות (בקשת המשתמשת) */
@@ -362,26 +367,43 @@ footer { padding: 20px; text-align: center; font-size: 12px;
 .season-dayh { font-size: 13px; font-weight: 800; padding: 9px; text-align: center;
   background: color-mix(in srgb, var(--sel) 7%, var(--bg2)); color: var(--text); }
 .day-grid { min-width: 520px; table-layout: fixed; }
-.season-grid { min-width: 720px; }
+/* עונה במחשב: העמודות מתפרשׂות לרוחב הקנבס (table-layout:fixed + width:100%) כך
+   שכל 20 העמודות נכנסות בלי גלילה אופקית. בטלפון מוחזר min-width למטה → גלילה מכוונת. */
+.season-grid { table-layout: fixed; width: 100%; min-width: 0; }
+.season-grid .bcell { min-width: 0; }
 /* הפרדה ברורה בין ימים בעונה (בקשת המשתמשת) */
 .board-grid .first-of-day { border-inline-start: 3px solid var(--text3); }
 
-/* תצוגת יום קומפקטית — יום שלם נכנס למסך (§11). התג יושב בשורה עם זוג 1. */
+/* תצוגת יום — גודל נוח לקריאה (בקשת המשתמשת: לא קטן מדי). fitGrid() דואג שהיום
+   ייכנס למסך; כאן שומרים על גופן קריא. התג יושב בשורה עם זוג 1. */
 .day-grid .bcell { height: auto; padding: 1px; }
-.day-grid .bcard { padding: 1px 6px 2px; border-radius: 7px; box-shadow: none; }
+.day-grid .bcard { padding: 2px 8px 3px; border-radius: 8px; box-shadow: none; }
 .day-grid .bcard:hover { box-shadow: 0 2px 6px rgba(0,0,0,.10); }
-.day-grid .bc-lg { font-size: 7.5px; padding: 0 5px; margin: 0 0 0 4px; float: inline-start; }
-.day-grid .bc-team { font-size: 9.7px; line-height: 1.22; }
-.day-grid .bc-lock { font-size: 10px; top: 0; left: 0; padding: 0; }
-.day-grid .bg-time { font-size: 10.5px; padding: 1px 4px; }
-.day-grid .bg-neth { padding: 3px 6px; font-size: 11px; }
+.day-grid .bc-lg { font-size: 9px; padding: 1px 6px; margin: 0 0 0 5px; float: inline-start; }
+/* בתצוגת יום העמודות רחבות (~4 בקנבס) → הזוג על שורה אחת עם מפריד = חצי מהגובה,
+   ועדיין קריא (12px). בעונה העמודות צרות ולכן הזוג נשאר מוערם (bc-sep מוסתר). */
+.day-grid .bc-team { font-size: 12px; line-height: 1.3; display: inline; }
+.bc-sep { display: none; }
+.day-grid .bc-sep { display: inline; color: var(--text3); font-weight: 400; }
+.day-grid .bc-lock { font-size: 12px; top: 1px; left: 1px; padding: 0; }
+.day-grid .bg-time { font-size: 12px; padding: 2px 5px; }
+.day-grid .bg-neth { padding: 5px 6px; font-size: 12px; }
 .day-grid thead th { position: sticky; top: 0; z-index: 3; }   /* כותרות נשארות בגלילה פנימית */
-/* פחות כרום מעל הגריד → יותר מקום ליום */
-.board-legend { margin: 6px 0 8px; }
-.board-toolbar { margin-bottom: 8px; }
-.board-search { margin-bottom: 8px; }
-.league-filter { margin-bottom: 8px; }
-.day-picker { margin-bottom: 8px; }
+/* תצוגת עונה קומפקטית — כל השורות נכנסות למסך במחשב בלי גלילה (§2). התגית צפה
+   בשורת שם 1; המנעול מוסתר (נועלים מתצוגת יום). הזוג מוערם כי העמודות צרות. */
+.season-grid .bcell { height: auto; padding: 1px; }
+.season-grid .bcard { padding: 1px 5px 2px; border-radius: 6px; box-shadow: none; touch-action: none; }
+.season-grid .bc-lg { font-size: 7.5px; padding: 0 4px; margin: 0 0 0 3px; float: inline-start; }
+.season-grid .bc-team { font-size: 9.5px; line-height: 1.22; }
+.season-grid .bc-lock { display: none; }
+.season-grid thead th { position: sticky; top: 0; z-index: 3; }
+/* פחות כרום מעל הגריד → יותר מקום ליום (הכל בשתי שורות דקות) */
+.board-toolbar { margin-bottom: 6px; }
+.board-subbar { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; margin-bottom: 6px; }
+.board-search { margin: 0; }
+.league-filter { margin: 0; }
+.day-picker { display: inline-flex; gap: 6px; flex-wrap: wrap; margin: 0; }
+.day-picker::before { content: ''; width: 1px; align-self: stretch; background: var(--border2); margin: 2px 4px; }
 
 /* תא */
 .bcell { padding: 3px; vertical-align: top; height: 46px; min-width: 96px; }
@@ -389,23 +411,24 @@ footer { padding: 20px; text-align: center; font-size: 12px;
 .bcell.empty { background: repeating-linear-gradient(45deg,
   transparent, transparent 6px, var(--bg3) 6px, var(--bg3) 12px); }
 .bcell.na { background: var(--surface); }
-.bcell.tap-target.empty { outline: 1px dashed color-mix(in srgb, var(--sel) 45%, transparent); outline-offset: -3px; cursor: pointer; }
-/* בחירת משחק → היכן אפשר לשים: 🟢 ירוק · רגיל דק · דהוי = אסור */
-.bcell.cell-ok { outline: 2px solid var(--green); outline-offset: -2px; cursor: pointer;
-  background: color-mix(in srgb, var(--green) 12%, transparent) !important; }
-.bcell.cell-soft { outline: 1px dashed var(--border2); outline-offset: -2px; cursor: pointer; }
-.bcell.cell-no { opacity: .45; }
-.bcell.cell-focused { outline: 2px solid var(--sel); outline-offset: -2px;
-  background: color-mix(in srgb, var(--sel) 14%, transparent) !important; }
+.bcell.tap-target.empty { outline: 1px dashed color-mix(in srgb, var(--focus) 35%, transparent); outline-offset: -3px; cursor: pointer; }
+/* בחירת משחק → היכן אפשר לשים: טבעת צהובה מלאה=מותר · צהובה מקווקוות=מפר-רך · דהוי=אסור */
+.bcell.cell-ok { outline: 2px solid var(--place); outline-offset: -2px; cursor: pointer;
+  background: color-mix(in srgb, var(--place) 20%, transparent) !important; }
+.bcell.cell-soft { outline: 2px dashed color-mix(in srgb, var(--place) 80%, transparent); outline-offset: -2px; cursor: pointer;
+  background: color-mix(in srgb, var(--place) 8%, transparent) !important; }
+.bcell.cell-no { opacity: .4; }
+.bcell.cell-focused { outline: 3px solid var(--focus); outline-offset: -2px;
+  background: color-mix(in srgb, var(--focus) 10%, transparent) !important; }
 .bcell.blocked { background: var(--surface); text-align: center; vertical-align: middle;
   position: relative; font-size: 11px; color: var(--text3); }
 .blk-lbl { display: block; }
 .blk-x { position: absolute; top: 2px; left: 2px; border: 0; background: none; cursor: pointer;
   color: var(--text3); font-size: 14px; line-height: 1; }
-.drop-hi { outline: 2px solid var(--sel); outline-offset: -2px;
-  background: color-mix(in srgb, var(--sel) 10%, transparent) !important; }
-.viol-flash { animation: violflash 1.4s ease; }
-@keyframes violflash { 0%,100% { box-shadow: none; } 30% { box-shadow: inset 0 0 0 3px var(--red); } }
+/* יעד גרירה חי — טבעת צהובה (אפשר לשים כאן) */
+.drop-hi { outline: 2px solid var(--place); outline-offset: -2px;
+  background: color-mix(in srgb, var(--place) 14%, transparent) !important; }
+/* (§10: אנימציית ההיקוף viol-flash הוסרה — חסימה נמנעת ממילא לפני שנוחתת.) */
 
 /* כרטיס משחק — לבן ונקי; זהות הליגה בתג צבעוני; הצבע נשמר לסימון משמעות.
    (בקשת המשתמשת: כרטיס לבן + תג צבעוני, ותחושה משחקית) */
@@ -418,8 +441,8 @@ footer { padding: 20px; text-align: center; font-size: 12px;
 /* הכרטיס ה"מוחזק" (מקור להזזה) — טבעת כהה, סימון שונה מהדגשת הטקסט */
 .bcard.picked { outline: 3px solid var(--p-dark); outline-offset: 1px;
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--p-dark) 16%, transparent); }
-.bcard.locked { border-color: color-mix(in srgb, var(--amber) 45%, var(--border));
-  background: color-mix(in srgb, var(--amber) 10%, var(--bg2)); }
+.bcard.locked { border-color: color-mix(in srgb, var(--focus) 55%, var(--border)); border-style: dashed;
+  background: color-mix(in srgb, var(--focus) 6%, var(--bg2)); }
 /* תגי הליגה — מילוי מצבעי הפלטה (בקשת המשתמשת); הטקסט מזהה חד-משמעית */
 .bc-lg { display: inline-block; font-size: 9px; font-weight: 800; line-height: 1;
   padding: 2px 7px; border-radius: 999px; color: #fff; margin-bottom: 3px; letter-spacing: 0; }
@@ -434,16 +457,21 @@ footer { padding: 20px; text-align: center; font-size: 12px;
 .hl-b { color: var(--hl-b); font-weight: 800; }
 .hl-search { background: color-mix(in srgb, var(--p-yellow) 80%, transparent);
   color: #1a1a1a; font-weight: 800; padding: 0 3px; border-radius: 3px; box-decoration-break: clone; }
+/* §1: זוג נבחר בולט גם על הכרטיס עצמו — מסגרת + מילוי עדין בצבע הזוג, בכל מופע
+   (מתעדכן חי דרך :has כשהטקסט מקבל hl-a/hl-b/hl-search, בלי רינדור). */
+.bcard:has(.bc-team.hl-a) { border-color: var(--hl-a); background: color-mix(in srgb, var(--hl-a) 9%, var(--bg2)); }
+.bcard:has(.bc-team.hl-b) { border-color: var(--hl-b); background: color-mix(in srgb, var(--hl-b) 9%, var(--bg2)); }
+.bcard:has(.bc-team.hl-search) { border-color: color-mix(in srgb, var(--p-yellow) 85%, var(--border));
+  background: color-mix(in srgb, var(--p-yellow) 12%, var(--bg2)); }
 .bc-lock { position: absolute; top: 2px; left: 2px; border: 0; background: none;
   cursor: pointer; font-size: 12px; line-height: 1; padding: 2px; opacity: .5; }
 .bc-lock:hover { opacity: 1; }
 .bcard.locked .bc-lock { opacity: 1; }
 
 /* רמזי הצבה/החלפה: 🟢 מותר · רגיל = אפשרי · דהוי ומולבן ולא-לחיץ = אסור (בקשת המשתמשת) */
-.bcard.cand-ok { outline: 3px solid var(--green); outline-offset: 2px;
-  box-shadow: 0 0 0 5px color-mix(in srgb, var(--green) 25%, transparent); }
-.bcard.cand-no { opacity: .3; filter: grayscale(.85); pointer-events: none;
-  background: repeating-linear-gradient(45deg, var(--bg3), var(--bg3) 4px, var(--bg2) 4px, var(--bg2) 8px); }
+.bcard.cand-ok { outline: 3px solid var(--place); outline-offset: 2px;
+  box-shadow: 0 0 0 5px color-mix(in srgb, var(--place) 30%, transparent); }
+.bcard.cand-no { opacity: .5; filter: grayscale(.55); pointer-events: none; }
 
 /* מסנן ליגה (§5): ליגות שאינן נבחרות מעומעמות חזק */
 .league-filter { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; align-items: center; }
@@ -458,8 +486,12 @@ footer { padding: 20px; text-align: center; font-size: 12px;
 .drawer-un { display: flex; flex-direction: column; gap: 6px; max-height: 40vh; overflow: auto; }
 .drawer-empty { font-size: 12px; color: var(--text3); }
 .drawer-hint { font-size: 11px; color: var(--text2); line-height: 1.4;
-  background: color-mix(in srgb, var(--sel) 10%, transparent); padding: 5px 8px;
+  background: color-mix(in srgb, var(--focus) 8%, transparent); padding: 5px 8px;
   border-radius: 6px; margin-bottom: 8px; }
+/* §12: קופסה כיעד להוצאה — טבעת צהובה כשמשחק נבחר */
+.drawer-hint.drop { background: color-mix(in srgb, var(--place) 20%, transparent); color: var(--text); font-weight: 700; }
+.drawer-hint.empty { background: color-mix(in srgb, var(--focus) 6%, transparent); color: var(--text3); }
+.drawer-sec.box.can-drop { outline: 2px dashed var(--place); outline-offset: 2px; cursor: pointer; }
 /* מונה אורך היום — הכותרת גדולה, ההיטל מקופל */
 .len-headline { font-size: 13px; font-weight: 700; color: var(--text); margin-bottom: 6px; }
 .len-headline b { font-size: 16px; color: var(--primary-text); }
@@ -475,55 +507,67 @@ footer { padding: 20px; text-align: center; font-size: 12px;
 .len-box .len-now { margin-bottom: 8px; }
 .len-box .len-proj { max-width: 100%; }
 
-/* סרגל תחתון דביק (§9) — בעיות(אדום) ≠ אזהרות(כתום); פאנל קומפקטי שלא מכסה מסך */
-.warnbar { position: sticky; bottom: 0; z-index: 15; margin-top: 14px;
-  background: var(--bg2); border-top: 3px solid var(--green);
+/* סרגל תחתון דביק (§9) — פלטה בלבד: אזהרה=צהוב · בעיה נדירה=מגנטה · תקין=כחול.
+   הצבע בפס-הצד/אייקון; הטקסט תמיד קריא (--text). פאנל קומפקטי שלא מכסה מסך. */
+.warnbar { position: sticky; bottom: 0; z-index: 15; margin-top: 8px;
+  background: var(--bg2); border-top: 3px solid var(--p-blue);
   border-radius: var(--rs) var(--rs) 0 0; padding: 8px 14px; box-shadow: 0 -3px 12px rgba(0,0,0,.10); }
-.warnbar.has-prob { border-top-color: var(--red); }
-.warnbar.has-warn { border-top-color: var(--amber); }
+.warnbar.has-prob { border-top-color: var(--block); }
+.warnbar.has-warn { border-top-color: var(--warn, var(--p-yellow)); }
 .wb-head { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; }
-.wb-ok { color: var(--green); font-weight: 800; font-size: 15px; }
+.wb-ok { color: var(--p-blue); font-weight: 800; font-size: 15px; }
 .wb-toggle { border: 0; font-weight: 800; font-size: 14px; padding: 5px 14px; border-radius: 999px;
-  cursor: pointer; font-family: inherit; display: inline-flex; align-items: center; gap: 6px; }
-.wb-toggle.prob { background: color-mix(in srgb, var(--red) 14%, transparent); color: var(--red); }
-.wb-toggle.warn { background: color-mix(in srgb, var(--amber) 16%, transparent); color: var(--amber); }
+  cursor: pointer; font-family: inherit; display: inline-flex; align-items: center; gap: 6px; color: var(--text); }
+.wb-toggle.prob { background: color-mix(in srgb, var(--block) 16%, transparent); color: color-mix(in srgb, var(--block) 78%, var(--text)); }
+.wb-toggle.warn { background: color-mix(in srgb, var(--p-yellow) 28%, transparent); color: var(--text); }
 .wb-caret { transition: transform .15s; font-size: 10px; }
 .wb-toggle.open .wb-caret { transform: rotate(180deg); }
 .wb-note { font-size: 12px; color: var(--text3); background: none; border: 0; font-family: inherit; }
-.wb-note.ok { color: var(--green); }
+.wb-note.ok { color: var(--p-blue); }
 .wb-note.wb-info { cursor: pointer; text-decoration: underline dotted; }
-.wb-fixnote { font-size: 12.5px; font-weight: 700; color: var(--green);
-  background: color-mix(in srgb, var(--green) 12%, transparent); padding: 4px 10px; border-radius: 999px; }
+.wb-fixnote { font-size: 12.5px; font-weight: 700; color: var(--text);
+  background: color-mix(in srgb, var(--p-yellow) 30%, transparent); padding: 4px 10px; border-radius: 999px; }
 /* גוף מתקפל — max-height נמוך + גלילה פנימית כדי שלא יכסה את המסך */
 .wb-body { margin-top: 8px; display: flex; flex-direction: column; gap: 8px;
   max-height: 34vh; overflow-y: auto; padding-inline-end: 2px; }
 .wb-grp-h { font-size: 11.5px; font-weight: 800; margin-bottom: 4px; }
-.wb-grp.prob .wb-grp-h { color: var(--red); }
-.wb-grp.warn .wb-grp-h { color: var(--amber); }
+.wb-grp.prob .wb-grp-h { color: color-mix(in srgb, var(--block) 78%, var(--text)); }
+.wb-grp.warn .wb-grp-h { color: var(--text2); }
 .wb-grp { display: flex; flex-direction: column; gap: 5px; }
-.wb-prob { display: flex; align-items: stretch; gap: 8px; }
+.wb-prob { display: flex; flex-direction: column; gap: 6px; }
+.wb-prob-row { display: flex; align-items: stretch; gap: 8px; }
 .wb-prob-main { flex: 1; text-align: right; border: 1px solid var(--border); border-radius: var(--rs);
   background: var(--bg3); padding: 6px 12px; cursor: pointer; font-family: inherit;
-  border-inline-start: 4px solid var(--amber); }
-.wb-prob.block .wb-prob-main { border-inline-start-color: var(--red); }
-.wb-prob-main:hover { background: color-mix(in srgb, var(--amber) 10%, var(--bg3)); }
+  border-inline-start: 4px solid var(--p-yellow); }
+.wb-prob.block .wb-prob-main { border-inline-start-color: var(--block); }
+.wb-prob-main:hover { background: color-mix(in srgb, var(--p-yellow) 12%, var(--bg3)); }
 .wb-prob-t { display: block; font-size: 12.5px; font-weight: 700; color: var(--text); }
 .wb-prob-fix { display: block; font-size: 11px; color: var(--text3); margin-top: 1px; }
-.wb-fix { border: 0; border-radius: var(--rs); background: var(--green); color: #fff;
+.wb-fix { border: 0; border-radius: var(--rs); background: var(--p-blue); color: #fff;
   font-weight: 800; font-size: 12px; padding: 5px 11px; cursor: pointer; font-family: inherit; white-space: nowrap; }
 .wb-fix:hover { filter: brightness(1.08); }
+/* §4: קישור-קבוצה + צ׳יפים של משחקי-קופסה מתחת לבעיות הוספה/הסרה */
+.wb-extra { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding-inline-start: 4px; }
+.wb-team { border: 1px solid color-mix(in srgb, var(--hl-a) 55%, var(--border)); background: color-mix(in srgb, var(--hl-a) 8%, transparent);
+  color: var(--text); border-radius: 999px; font: inherit; font-size: 11.5px; font-weight: 700; padding: 3px 10px; cursor: pointer; }
+.wb-team.on { background: var(--hl-a); color: #fff; border-color: var(--hl-a); }
+.wb-chip { border: 1px dashed color-mix(in srgb, var(--place) 75%, var(--border)); background: color-mix(in srgb, var(--place) 12%, transparent);
+  color: var(--text); border-radius: 999px; font: inherit; font-size: 11.5px; font-weight: 700; padding: 3px 10px; cursor: pointer; }
+.wb-chip:hover { background: color-mix(in srgb, var(--place) 24%, transparent); }
+.wb-chip-none { font-size: 11px; color: var(--text3); }
 .wb-waits { font-size: 12px; color: var(--text2); background: color-mix(in srgb, var(--sel) 8%, transparent);
   border-radius: var(--rs); padding: 7px 12px; line-height: 1.5; }
-/* הבהוב "מה זז" אחרי תקן-לי (§4 שקיפות) */
+/* הבהוב "מה זז" אחרי תקן-לי (§4 שקיפות) — צהוב (תזוזה) */
 .moved-flash { animation: movedflash 1.8s ease; }
-@keyframes movedflash { 0%,100% { box-shadow: 0 1px 2px rgba(0,0,0,.06); } 25% { box-shadow: 0 0 0 4px var(--green); } }
+@keyframes movedflash { 0%,100% { box-shadow: 0 1px 2px rgba(0,0,0,.06); } 25% { box-shadow: 0 0 0 4px var(--place); } }
 
-/* הזנת תוצאות בתוך "לוז" (הועברה מ"דירוג") */
-.results-panel { margin-top: 16px; border: 1px solid var(--border); border-radius: var(--rs); overflow: hidden; }
-.results-panel > summary { cursor: pointer; list-style: none; padding: 12px 16px;
+/* הזנת תוצאות בתוך "לוז" (הועברה מ"דירוג") — מתג; כשפתוח, גלילה פנימית כדי לא
+   לדחוף את הדף (§2). */
+.results-panel { margin-top: 8px; border: 1px solid var(--border); border-radius: var(--rs); overflow: hidden; }
+.results-panel > summary { cursor: pointer; list-style: none; padding: 10px 16px;
   display: flex; align-items: center; gap: 10px; background: var(--bg3); }
 .results-panel > summary::-webkit-details-marker { display: none; }
-.results-body { padding: 6px 16px 14px; }
+.results-body { padding: 6px 16px 14px; max-height: 46vh; overflow: auto; }
 
 /* רוח הרפאים של הגרירה */
 .drag-ghost { position: fixed; z-index: 9999; pointer-events: none; opacity: .92;
@@ -535,7 +579,7 @@ body.board-dragging * { cursor: grabbing !important; }
    styles.css תוחם את main ל-980px במרכז. פותחים לרוחב מלא (ה-nav/header כבר
    מלאים), אבל שומרים על קריאוּת: תוכן טקסט נתחם למידה נוחה, טבלאות/גריד מנצלים
    את כל הרוחב, ומקטעי הגדרות עוברים לרב-טורי במסך גדול. */
-main { max-width: min(1680px, 100%) !important; padding: 18px 24px 24px !important; }
+main { max-width: min(1680px, 100%) !important; padding: 14px 24px 12px !important; }
 /* תוכן קריאה — מידה נוחה בתוך הקנבס הרחב */
 .info-box, .scaffold-note, .sett-desc { max-width: 900px; }
 /* עמוד ההגדרות — מקטעים זה לצד זה במסך רחב */
@@ -544,26 +588,26 @@ main { max-width: min(1680px, 100%) !important; padding: 18px 24px 24px !importa
   #page-body:has(.acc) > .info-box { grid-column: 1 / -1; }
 }
 
-/* ── מקרא: זהות ליגות + שפת הצבעים ─────────────────────────────────────── */
-.board-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px;
-  margin: 10px 0 14px; font-size: 12px; color: var(--text2); }
+/* ── מקרא: זהות ליגות + שפת הצבעים (בתוך "מקרא ועזרה" המקופל) ──────────── */
+.board-legend, .bg-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px;
+  margin: 6px 0 10px; font-size: 12px; color: var(--text2); }
 .lg-key { display: inline-flex; align-items: center; gap: 5px; }
 .lg-sep { width: 1px; height: 16px; background: var(--border2); }
 .lg-sw { width: 14px; height: 14px; border-radius: 4px; display: inline-block; }
-.sw-sel    { background: transparent; box-shadow: inset 0 0 0 2px var(--sel); }
-.sw-search { background: color-mix(in srgb, var(--search) 14%, var(--bg2)); box-shadow: inset 0 0 0 2px var(--search); }
-.sw-ok     { background: color-mix(in srgb, var(--green) 14%, var(--bg2)); box-shadow: inset 0 0 0 2px var(--green); }
-.sw-prob   { background: color-mix(in srgb, var(--red) 16%, var(--bg2)); box-shadow: inset 0 0 0 2px var(--red); }
+.sw-sel    { background: transparent; box-shadow: inset 0 0 0 2px var(--focus); }
+.sw-search { background: color-mix(in srgb, var(--search) 30%, var(--bg2)); box-shadow: inset 0 0 0 2px var(--search); }
+.sw-ok     { background: color-mix(in srgb, var(--place) 22%, var(--bg2)); box-shadow: inset 0 0 0 2px var(--place); }
+.sw-prob   { background: color-mix(in srgb, var(--block) 16%, var(--bg2)); box-shadow: inset 0 0 0 2px var(--block); }
 
-/* ── "איך זה עובד?" — מקופל, לא מרתיע ─────────────────────────────────── */
-.board-help { margin: 12px 0; border: 1px solid var(--border); border-radius: var(--rs);
-  background: var(--bg3); padding: 4px 14px; }
-.board-help > summary { cursor: pointer; list-style: none; font-size: 13px; font-weight: 700;
-  color: var(--text2); padding: 8px 0; }
-.board-help > summary::-webkit-details-marker { display: none; }
-.board-help > summary::before { content: '💡 '; }
-.board-help ul { margin: 0 0 10px; padding-inline-start: 20px; line-height: 1.9; font-size: 12.5px; color: var(--text2); }
-.board-help .lg-sw { vertical-align: middle; }
+/* ── "מקרא ועזרה" — מקופל, לא תופס גובה כשסגור ─────────────────────────── */
+.board-help, .board-guide { margin: 8px 0 0; border: 1px solid var(--border); border-radius: var(--rs);
+  background: var(--bg3); padding: 2px 14px; }
+.board-help > summary, .board-guide > summary { cursor: pointer; list-style: none; font-size: 13px; font-weight: 700;
+  color: var(--text2); padding: 7px 0; }
+.board-help > summary::-webkit-details-marker, .board-guide > summary::-webkit-details-marker { display: none; }
+.board-help > summary::before, .board-guide > summary::before { content: '💡 '; }
+.board-help ul, .board-guide ul { margin: 0 0 10px; padding-inline-start: 20px; line-height: 1.9; font-size: 12.5px; color: var(--text2); }
+.board-help .lg-sw, .board-guide .lg-sw { vertical-align: middle; }
 
 @media (max-width: 860px) {
   /* בלוק ולא flex-column: פריט flex בציר-רוחב לא מצטמצם מתחת ל-min-width של
@@ -573,12 +617,37 @@ main { max-width: min(1680px, 100%) !important; padding: 18px 24px 24px !importa
   .drawer { width: 100%; flex-direction: row; flex-wrap: wrap; margin-top: 14px; }
   .drawer-sec { flex: 1; min-width: 150px; }
   .drawer-un { flex-direction: row; flex-wrap: wrap; }
-  .board-scroll.vscroll { max-height: none; }
+  /* בטלפון: היום נכנס בלי גלילת-דף (fitGrid קובע גובה); העונה — גלילה מכוונת
+     בתוך הגריד (בקשת המשתמשת: במחשב שתיהן בלי גלילה, בטלפון רק היום). */
+  .season-grid { min-width: 1080px; }
+  .season-grid .bcell { min-width: 52px; }
 }
 
 @media (max-width: 640px) {
   .kv { grid-template-columns: 1fr; gap: 2px 0; }
   .kv dd { margin-bottom: 8px; }
+
+  /* כרום דק בטלפון — פחות שורות סרגל → יותר גובה ליום (בקשת המשתמשת: בטלפון היום
+     בלי גלילת-דף). הגריד עצמו גולל פנימית (4 מגרשים לא נכנסים ל-375). */
+  .board-toolbar { gap: 5px 7px; margin-bottom: 5px; }
+  .board-toolbar .filter-btn, .board-toolbar .cf-btn { padding: 4px 8px; font-size: 11.5px; }
+  .day-picker { gap: 5px; }
+  .day-picker::before { display: none; }
+  .board-subbar { gap: 5px 8px; margin-bottom: 5px; }
+  .board-subbar .filter-btn { padding: 4px 8px; font-size: 11.5px; }
+  .board-search .text-inp { width: 130px; }
+  /* מגירה = רצועה אחת קומפקטית בטלפון (3 מקטעים בשורה) → הגריד מקבל הרבה יותר גובה.
+     ההיטל של ליגה ג׳ מוסתר (משני); הקופסה גוללת פנימית אם מלאה. */
+  .drawer { gap: 6px; margin-top: 8px; align-items: stretch; }
+  .drawer-sec { padding: 6px 8px; flex: 1 1 30%; min-width: 0; }
+  .drawer-h { margin-bottom: 4px; font-size: 11px; }
+  .drawer-un { max-height: 84px; }
+  .drawer-hint { font-size: 10.5px; padding: 4px 6px; margin-bottom: 5px; }
+  .tile { padding: 6px 8px; font-size: 11.5px; }
+  .len-headline { font-size: 11.5px; margin-bottom: 2px; }
+  .len-headline b { font-size: 14px; }
+  .len-box .len-now { margin-bottom: 0; font-size: 10.5px; }
+  .len-proj-wrap { display: none; }   /* היטל ליגה ג׳ — מוסתר בטלפון (זמין במחשב) */
 
   /* שורת הזנה בטלפון: השם לא יימחץ */
   .res-team { font-size: 12.5px; }
