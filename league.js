@@ -20,7 +20,7 @@ import {
 
 // לוח הגרירה — שלב 5. מודול תצוגה+שליטה שמקבל את המצב החי דרך Board.init().
 // אין לו window.* globals; פעולותיו בקידומת board.* ומוזרקות ל-ACT (ראו start()).
-import Board from './league-board.js?v=3';
+import Board from './league-board.js?v=5';
 
 // ============ זהות הליגה ============
 // ⚠️ המזהה הזה מופיע בכתובת הציבורית שכל 72 השחקניות מקבלות. הוא לא זמני.
@@ -1342,6 +1342,13 @@ function renderSettings() {
                      data-act="day.net" data-i="${i}" data-net="${n.id}"/>
               <span class="net-chip" style="background:${escH(n.color)};color:${onColor(n.color)}">${escH(n.name)}</span>
             </label>`).join('')}</div></div>
+        <div class="cat-sett-field" style="grid-column:1/-1"><span class="cat-sett-label">מגרש זמין עד שעה (למשל אם אין תאורה — ריק = בלי הגבלה)</span>
+          <div class="net-cuts">${(d.netIds || []).slice().sort((a, b) => a - b).map(netId => {
+            const n = (m.nets || []).find(x => x.id === netId);
+            const cur = (L.blocks || []).find(b => b.kind === 'netcut' && b.day === d.id && b.net === netId)?.until || '';
+            return `<label class="net-cut-row"><span class="net-cut-name">${escH(n?.name || netId)}</span>
+              <input class="text-inp" type="time" value="${escH(cur)}" data-act="board.netCutSet" data-day="${escH(d.id)}" data-net="${netId}"/></label>`;
+          }).join('')}</div></div>
       </div>
       <div class="day-readout">
         <span>חלון <b class="num">${escH(d.startTime)}–${escH(dayEndTime(d))}</b></span>

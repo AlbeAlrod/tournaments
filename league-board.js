@@ -293,6 +293,42 @@ function dropTile(kind, day, slot, net) {
 }
 
 // ============================================================================
+// מגבלת-מגרש (מגרש זמין עד שעה — למשל אין תאורה) — ממומש כחסימות kind:'netcut',
+// כך שהמתזמן מכבד אותן אוטומטית (אילוץ קשיח, בלי לגעת בקוד המתזמן). per-day.
+// ============================================================================
+const hhmmToMin = t => { const [h, m] = (t || '0:0').split(':').map(Number); return (h || 0) * 60 + (m || 0); };
+const netCutBlocks = (day, net) => (L().blocks || []).filter(b => b.kind === 'netcut' && b.day === day && b.net === net);
+function netCutOf(day, net) { const b = netCutBlocks(day, net)[0]; return b ? b.until : null; }
+
+// בונה חסימות netcut ל-(day,net) מהשעה until עד סוף היום (מסיר קודם קיימות).
+// unassignOccupied=true → משחק על תא שנחסם עובר לקופסה; אחרת התא לא ייחסם (דילוג).
+function setNetCutBlocks(day, net, until, unassignOccupied) {
+  L().blocks = (L().blocks || []).filter(b => !(b.kind === 'netcut' && b.day === day && b.net === net));
+  if (!until) return;
+  const dObj = dayById(day), ci = cellIndex(day), cut = hhmmToMin(until);
+  for (let s = 1; s <= dObj.slots; s++) {
+    if (hhmmToMin(slotLabel(dObj, s)) < cut) continue;   // רק סלוטים מ-until והלאה
+    const g = ci.get(s + '|' + net);
+    if (g) { if (unassignOccupied && !g.locked) { g.slot = null; g.net = null; } else continue; }
+    (L().blocks ||= []).push({ id: uid('nc'), day, net, slot: s, kind: 'netcut', until, label: 'עד ' + until });
+  }
+}
+// אחרי שינוי slots — לבנות מחדש חסימות של מגרשים מוגבלים (סלוט חדש אחרי הזמן ייחסם).
+function applyNetCuts(day) {
+  const dObj = dayById(day);
+  for (const n of netsOf(dObj)) { const u = netCutOf(day, n); if (u) setNetCutBlocks(day, n, u, false); }
+}
+// הגדרה מלאה מהלוח/הגדרות: אם יש משחקים תפוסים אחרי השעה — מאשרים פינוי לקופסה.
+function setNetCut(day, net, until) {
+  if (until) {
+    const dObj = dayById(day), cut = hhmmToMin(until);
+    const occ = gamesOf(day).filter(g => g.net === net && g.slot && g.slot <= dObj.slots && hhmmToMin(slotLabel(dObj, g.slot)) >= cut);
+    if (occ.length && !confirm(`יש ${occ.length} משחקים על ${X.netName(net)} מ-${until} והלאה. לפנות אותם לקופסה ולסגור את המגרש בשעות האלה?`)) return;
+  }
+  tryOp(() => { setNetCutBlocks(day, net, until, true); return true; });
+}
+
+// ============================================================================
 // אזהרות (§9)
 // ============================================================================
 const violSig = v => `${v.kind}|${v.team || v.net || ''}|${v.slot || ''}`;
@@ -300,7 +336,7 @@ const violSig = v => `${v.kind}|${v.team || v.net || ''}|${v.slot || ''}`;
 // העדפות מתזמן פנימיות (§6.2) — לא אזהרות §9 של המנהלת. מסוננות מהסרגל כדי שלא
 // יצעק "בעיות" על אופטימיזציה: רצף-קטגוריה, הוגנות מוקדם/מאוחר, קפיצות-רשת,
 // תא-ריק-מוקדם ושעת-סיום (הראשונים by-design §6.3; שעת הסיום מוצגת במונה המגירה §4.6).
-const SCHED_ONLY = new Set(['netJump', 'catReturn', 'fairness', 'emptyEarly', 'lateFinish']);
+const SCHED_ONLY = new Set(['netJump', 'catReturn', 'fairness', 'emptyEarly', 'lateFinish', 'showNotNet1']);
 function classify(v, allowSet) {
   if (SCHED_ONLY.has(v.kind)) return 'skip';
   if (v.kind === 'doubleBooked') return 'block';
@@ -436,11 +472,11 @@ function violGame(v) {
   return null;
 }
 
-// "תקן לי" (§4): פותר את הבעיה ב**מינימום הזזות** ובמינימום שיבוש, בסדר עדיפות
-//   1) הזזה יחידה לתא פנוי (נוגע רק במשחק הפוגע)  2) החלפה עם משחק אחר
-//   3) הזזה לתא תפוס, התפוס לקופסה (רק אם אין אחר).
-// כל אופציה חייבת להסיר את הבעיה בלי ליצור בעיה (block) חדשה; ביניהן — הכי פחות
-// הפרות שנשארות. אחרי הביצוע — **מראה מה נעשה** (fixNote + הבהוב הכרטיסים שזזו).
+// "תקן לי" (§4): פותר את הבעיה לפי **עלות המתזמן המלאה** (§6.2), כדי שלא ייווצרו
+// חורים בלוז (בקשת המשתמשת). מנסה: 1) הזזה לתא פנוי  2) החלפה עם משחק אחר (ניטרלית
+// לחורים) — ובוחר את בעל העלות הכוללת הנמוכה ביותר. אין "bump" (הוא יוצר חור + משחק
+// לא-משובץ). אם אין מהלך יחיד טוב — נופל ל"סדר מחדש" (המתזמן פורק את היום בלי חורים).
+// אחרי הביצוע — **מראה מה נעשה** (fixNote + הבהוב הכרטיסים שזזו).
 function fixViol(index) {
   const v = realProblems()[index]; if (!v) return;
   const day = v.dayId, g = violGame(v);
@@ -450,14 +486,23 @@ function fixViol(index) {
   // §5: תיאור מלא — כל זוג שנגע בו, עם שעת-היעד שלו.
   const pair = x => `${teamName(x.a)} / ${teamName(x.b)}`;
   const spot = (s, n) => `${slotLabel(dayObj, s)} · ${X.netName(n)}`;
-  // אחרי מצב זמני: מספר ההפרות שנשארות, או Infinity אם הבעיה נשארה / נוצר block.
+  // דירוג המהלכים לפי **עלות המתזמן המלאה** (§6.2) — כולל חורים מוקדמים וסיום מאוחר —
+  // כדי שהתיקון יפעל לפי חוקי המתזמן ולא ייצור חורים בלוז (בקשת המשתמשת). עדיין פסול
+  // (Infinity) אם הבעיה המקורית נשארה או אם נוצרה חסימה חדשה.
   const evalState = () => {
-    const viols = dayViolations(day);
-    if (viols.some(x => violSig(x) === target)) return Infinity;
-    if (viols.some(x => x.cls === 'block')) return Infinity;
-    return viols.filter(x => x.cls === 'block' || x.cls === 'soft').length;
+    const { cost } = dayAnalysis(day);
+    const allowSet = allowConsecTeams();
+    let hasTarget = false, hasBlock = false;
+    for (const x of (cost.violations || [])) {
+      const cls = classify(x, allowSet);
+      if (cls === 'skip') continue;
+      if (violSig(x) === target) hasTarget = true;
+      if (cls === 'block') hasBlock = true;
+    }
+    if (hasTarget || hasBlock) return Infinity;
+    return cost.total;   // מזעור העלות הכוללת → מעדיף מהלך בלי חורים / סיום מוקדם
   };
-  const rank = { move: 0, swap: 1, bump: 2 };
+  const rank = { move: 0, swap: 1 };   // שובר-שוויון בלבד; העלות הכוללת מכריעה
   let best = null;
   const consider = c => { if (!best || c.bad < best.bad || (c.bad === best.bad && rank[c.kind] < rank[best.kind])) best = c; };
 
@@ -480,28 +525,14 @@ function fixViol(index) {
     if (bad < Infinity) consider({ kind: 'swap', bad, hId: h.id, gs: H.slot, gn: H.net, hs: G.slot, hn: G.net, flash: [g.id, h.id],
       note: `החלפתי את ${pair(g)} (→ ${spot(H.slot, H.net)}) עם ${pair(h)} (→ ${spot(G.slot, G.net)})` });
   }
-  // 3) bump — רק אם אין הזזה/החלפה נקייה
-  if (!best) {
-    for (let s = 1; s <= dayObj.slots; s++) for (const n of nets) {
-      const occ = ci.get(s + '|' + n);
-      if (!occ || occ.id === g.id || occ.locked) continue;
-      const O = { slot: occ.slot, net: occ.net };
-      g.slot = s; g.net = n; occ.slot = null; occ.net = null;
-      const bad = evalState();
-      g.slot = G.slot; g.net = G.net; occ.slot = O.slot; occ.net = O.net;
-      if (bad < Infinity) consider({ kind: 'bump', bad, gs: s, gn: n, occId: occ.id, flash: [g.id, occ.id],
-        note: `הזזתי את ${pair(g)} ל-${spot(s, n)}, ו${pair(occ)} חזר לקופסה` });
-    }
-  }
-
-  if (!best) { if (confirm('לא נמצא פתרון בהזזה אחת. לסדר את היום מחדש (שומר נעולים)?')) ACT['board.reorderDay'](); return; }
+  // (אין bump — הוא מוציא משחק לקופסה ומשאיר חור. אם אין מהלך יחיד — מסדרים מחדש.)
+  if (!best) { if (confirm('לא נמצא תיקון במהלך יחיד בלי ליצור חור. לסדר את היום מחדש (שומר נעולים)?')) ACT['board.reorderDay'](); return; }
 
   const b = best;
   fixNote = b.note;
   tryOp(() => {
     if (b.kind === 'move') { g.slot = b.gs; g.net = b.gn; }
-    else if (b.kind === 'swap') { const h = X.findGame(b.hId); g.slot = b.gs; g.net = b.gn; h.slot = b.hs; h.net = b.hn; }
-    else { const o = X.findGame(b.occId); o.slot = null; o.net = null; g.slot = b.gs; g.net = b.gn; }
+    else { const h = X.findGame(b.hId); g.slot = b.gs; g.net = b.gn; h.slot = b.hs; h.net = b.hn; }   // swap
     return true;
   });
   setTimeout(() => b.flash.forEach(id => {
@@ -556,9 +587,11 @@ function bcard(g) {
 function renderDayGrid(dayId) {
   const day = dayById(dayId), nets = netsOf(day);
   const ci = cellIndex(dayId), bi = blockIndex(dayId);
-  // כותרת ניטרלית: הרשת כשם טקסט בלבד (הצבע שוחרר לסימון משמעות — בקשת המשתמשת).
-  const head = `<tr><th class="bg-time">שעה</th>${nets.map(n =>
-    `<th class="bg-neth">${escH(X.netName(n))}</th>`).join('')}</tr>`;
+  // כותרת ניטרלית: הרשת כשם טקסט. לחיצה עליה → מגבלת-זמן למגרש (למשל אין תאורה).
+  const head = `<tr><th class="bg-time">שעה</th>${nets.map(n => {
+    const cut = netCutOf(dayId, n);
+    return `<th class="bg-neth"><button class="neth-btn" data-act="board.netCutPrompt" data-net="${n}" data-day="${escH(dayId)}" title="הגדרת שעת סיום למגרש (למשל אם אין תאורה)">${escH(X.netName(n))}${cut ? `<span class="neth-cut">🔦 עד ${escH(cut)}</span>` : ''}</button></th>`;
+  }).join('')}</tr>`;
   const rows = Array.from({ length: day.slots }, (_, i) => {
     const s = i + 1;
     return `<tr><td class="bg-time num">${escH(slotLabel(day, s))}</td>${nets.map(n => cellHtml(dayId, s, n, ci, bi)).join('')}</tr>`;
@@ -570,9 +603,13 @@ function cellHtml(dayId, s, n, ci, bi, firstOfDay) {
   const fod = firstOfDay ? ' first-of-day' : '';
   const key = s + '|' + n;
   const b = bi.get(key);
-  if (b) return `<td class="bcell blocked${fod}" data-cell="${key}" data-day="${escH(dayId)}">
-      <span class="blk-lbl">${escH(b.label || b.kind)}</span>
-      <button class="blk-x" data-act="board.rmBlock" data-id="${escH(b.id)}">×</button></td>`;
+  // חסימת netcut (מגרש סגור בשעה זו) — דהוי, בלי × (מוסירים דרך שעת-המגרש בכותרת);
+  // התווית "עד HH:MM" בכותרת, כאן רק אייקון פנס.
+  if (b) { const cut = b.kind === 'netcut';
+    return `<td class="bcell blocked${cut ? ' netcut' : ''}${fod}" data-cell="${key}" data-day="${escH(dayId)}">
+      <span class="blk-lbl">${cut ? '🔦' : escH(b.label || b.kind)}</span>
+      ${cut ? '' : `<button class="blk-x" data-act="board.rmBlock" data-id="${escH(b.id)}">×</button>`}</td>`;
+  }
   const g = ci.get(key);
   if (g) return `<td class="bcell${fod}" data-cell="${key}" data-day="${escH(dayId)}">${bcard(g)}</td>`;
   // תא פנוי: בחירת משחק → היכן אפשר לשים (🟢/🚫); מיקוד תא → התא הנבחר.
@@ -703,6 +740,8 @@ function render() {
       ${view === 'season'
         ? `<button class="filter-btn" data-act="board.reorderSeason" title="מסדר מחדש את כל הימים; משחקים נעולים 📌 יישארו במקומם">🗓 תזמן מחדש</button>`
         : `<button class="filter-btn" data-act="board.reorderDay">סדר מחדש</button>
+      <button class="filter-btn" data-act="board.addSlot" title="הוסף סלוט בסוף היום — מאריך את שעת הסיום">＋ סלוט</button>
+      <button class="filter-btn" data-act="board.removeSlot" title="הסר את הסלוט האחרון (רק אם ריק)">－ סלוט</button>
       <button class="filter-btn${resultsOpen ? ' on' : ''}" data-act="board.toggleResults">🏐 תוצאות</button>
       <button class="cf-btn" data-act="board.print">🖨 הדפסה</button>`}
     </div>
@@ -742,7 +781,8 @@ function render() {
     </ul>
   </details>`;
 
-  setTimeout(fitGrid, 0);   // אחרי שה-HTML נכנס ל-DOM (§2/§11)
+  setTimeout(fitGrid, 0);     // מיד אחרי שה-HTML נכנס ל-DOM (§2/§11)
+  setTimeout(fitGrid, 160);   // ושוב אחרי שהכרום התחתון (אזהרות/מקרא) התייצב — מונע גירעון-פיקסל
   return `${toolbar}
     <div class="board-main"><div class="board-canvas">${grid}</div>${drawer()}</div>
     ${results}${warnBar()}${guide}`;
@@ -793,6 +833,24 @@ ACT['board.league'] = el => { leagueFilter = el.dataset.cat || null; pick = null
 ACT['board.highlightTeam'] = el => { const t = el.dataset.team; selTeam = selTeam === t ? null : t; pick = null; boardRepaint(); return false; };
 // §4: בחירת משחק-קופסה של הקבוצה → מציג לאן אפשר לשבצו (תאים מוארים).
 ACT['board.pickBoxGame'] = el => { pick = { kind: 'game', id: el.dataset.game }; selTeam = null; boardRepaint(); return false; };
+// מגבלת-מגרש: לחיצה על כותרת המגרש (בלוח) או שדה בהגדרות → שעת סיום למגרש.
+ACT['board.netCutPrompt'] = el => {
+  const day = el.dataset.day, net = +el.dataset.net;
+  const cur = netCutOf(day, net) || '';
+  const val = prompt(`${X.netName(net)} — זמין לשחק עד איזו שעה?\n(למשל 19:15 אם אין תאורה. ריק = בלי הגבלה.)`, cur);
+  if (val === null) return false;
+  const until = val.trim();
+  if (until && !/^\d{1,2}:\d{2}$/.test(until)) { alert('שעה לא תקינה. פורמט HH:MM, למשל 19:15.'); return false; }
+  setNetCut(day, net, until);
+  return false;
+};
+// מהגדרות: שדה שעה (input) שמאציל לאותה לוגיקה. data-net/data-day, value = השעה.
+ACT['board.netCutSet'] = el => {
+  const until = (el.value || '').trim();
+  if (until && !/^\d{1,2}:\d{2}$/.test(until)) return false;
+  setNetCut(el.dataset.day, +el.dataset.net, until);
+  return false;
+};
 // שחזור לתחילת הסשן — בעונה: כל הימים; ביום: היום הנוכחי (§9, מחזר dayStart).
 function restoreDay(d) {
   const snap = dayStart[d]; if (!snap) return;
@@ -830,6 +888,27 @@ ACT['board.reorderSeason'] = () => {
   pushUndo();
   try { const { games } = generateSeason(X.schedInput(), { phases: ['pack'] }); L().games = games; }
   catch (e) { console.error(e); alert('הסידור נכשל: ' + e.message); restore(undoStack.pop()); boardRepaint(); return false; }
+  commit(); return false;
+};
+// §6.3: הוספת/הסרת סלוט ליום הנוכחי — משנה את boardDay.slots ב-meta.days (הפניה
+// חיה מ-regularDays), queueSave שומר את המסמך כולו. שעת הסיום נגזרת מ-slots.
+ACT['board.addSlot'] = () => {
+  const d = dayById(boardDay);
+  d.slots = Math.min(40, (d.slots || 16) + 1);
+  applyNetCuts(boardDay);   // סלוט חדש אחרי מגבלת-מגרש → ייחסם (§ מגבלת-מגרש)
+  commit(); return false;
+};
+ACT['board.removeSlot'] = () => {
+  const d = dayById(boardDay);
+  if ((d.slots || 0) <= 1) return false;
+  const last = d.slots;
+  // לא מסירים סלוט אחרון תפוס (משחק או חסימה ידנית). חסימות netcut של הסלוט הזה יוסרו עמו.
+  if (gamesOf(boardDay).some(g => g.slot === last) ||
+      blocksOf(boardDay).some(b => b.slot === last && b.kind !== 'netcut')) {
+    alert('הסלוט האחרון תפוס — פני אותו לפני ההסרה.'); return false;
+  }
+  d.slots = last - 1;
+  L().blocks = (L().blocks || []).filter(b => !(b.day === boardDay && b.slot === last));
   commit(); return false;
 };
 ACT['board.toggleWarns'] = () => { warnsOpen = !warnsOpen; boardRepaint(); return false; };
