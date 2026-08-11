@@ -146,8 +146,10 @@ function restoreScroll(s) {
     if (v) { void el.scrollHeight; el.scrollTop = v.t; el.scrollLeft = v.l; }
   });
 }
-// רינדור מלא של העמוד ששומר את הגלילה. כל מצב הבחירה/ההדגשה נאפה מחדש ב-render().
-function boardRepaint() { const s = captureScroll(); X.repaint(); restoreScroll(s); fixNote = null; }
+// רינדור מלא ששומר גלילה. חשוב: fitGrid() רץ **לפני** restoreScroll — אחרת הגריד
+// עדיין בגובהו המלא (לא ניתן לגלילה) ושחזור scrollTop מתפספס, והדף/גריד קופץ לראש
+// אחרי שהחסימה נכנסת. סינכרוני במכוון.
+function boardRepaint() { const s = captureScroll(); X.repaint(); fitGrid(); restoreScroll(s); fixNote = null; }
 function commit()       { X.queueSave(); boardRepaint(); }
 
 // הגריד נכנס למסך בלי גלילת-דף (§2/§11): מותחים את גובהו לגובה הזמין בפועל (חלון
@@ -596,14 +598,14 @@ function renderDayGrid(dayId) {
     const s = i + 1;
     return `<tr><td class="bg-time num">${escH(slotLabel(day, s))}</td>${nets.map(n => cellHtml(dayId, s, n, ci, bi)).join('')}</tr>`;
   }).join('');
-  // שורת "הוסף סלוט" בתחתית הגריד — מאריכה את שעות היום בלחיצה (בקשת המשתמשת).
-  // הסלוט החדש מתחיל בשעת הסיום הנוכחית. "－" רק אם הסלוט האחרון ריק.
+  // סרגל "הוסף סלוט" **מתחת** לגריד (לא בתוכו) — תמיד גלוי בתחתית, גם כשהגריד גולל
+  // פנימית (בקשת המשתמשת). מאריך את שעות היום; "－" רק אם הסלוט האחרון ריק.
   const lastEmpty = !gamesOf(dayId).some(g => g.slot === day.slots) && !blocksOf(dayId).some(b => b.slot === day.slots);
-  const addRow = `<tr class="add-slot-row"><td colspan="${nets.length + 1}">
+  const addBar = `<div class="add-slot-bar">
     <button class="add-slot-btn" data-act="board.addSlot" title="מאריך את שעות היום">＋ הוסף סלוט <span class="asr-time">${escH(slotLabel(day, day.slots + 1))}</span></button>
     ${lastEmpty && day.slots > 1 ? `<button class="add-slot-btn rm" data-act="board.removeSlot" title="מקצר את היום — מסיר את הסלוט האחרון הריק">－ הסר אחרון</button>` : ''}
-  </td></tr>`;
-  return `<div class="board-scroll vscroll" data-sk="day"><table class="board-grid day-grid"><thead>${head}</thead><tbody>${rows}${addRow}</tbody></table></div>`;
+  </div>`;
+  return `<div class="board-scroll vscroll" data-sk="day"><table class="board-grid day-grid"><thead>${head}</thead><tbody>${rows}</tbody></table></div>${addBar}`;
 }
 
 function cellHtml(dayId, s, n, ci, bi, firstOfDay) {
