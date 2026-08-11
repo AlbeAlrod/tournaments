@@ -20,7 +20,7 @@ import {
 
 // לוח הגרירה — שלב 5. מודול תצוגה+שליטה שמקבל את המצב החי דרך Board.init().
 // אין לו window.* globals; פעולותיו בקידומת board.* ומוזרקות ל-ACT (ראו start()).
-import Board from './league-board.js?v=5';
+import Board from './league-board.js?v=6';
 
 // ============ זהות הליגה ============
 // ⚠️ המזהה הזה מופיע בכתובת הציבורית שכל 72 השחקניות מקבלות. הוא לא זמני.
@@ -641,6 +641,19 @@ function paint() {
 
   renderSponsorBar();
   focusRestore(f);
+}
+
+// כמו paint(), אבל שומר את מיקום הגלילה (חלון + אזורים פנימיים עם data-sk). כל
+// לחיצה/שינוי מרנדרת מחדש את page-body ומאפסת גלילה לראש — זה מה שגרם לדף "לקפוץ
+// למעלה" בכל פעולה. משמש בכל הפעולות (handle); החלפת טאב נשארת paint() רגיל (עולה
+// לראש במכוון). סינכרוני עם void offsetHeight כדי שהקביעה לא תיחתך לפני layout.
+function paintKeepScroll() {
+  const x = window.scrollX, y = window.scrollY, inner = {};
+  document.querySelectorAll('[data-sk]').forEach(el => inner[el.dataset.sk] = { t: el.scrollTop, l: el.scrollLeft });
+  paint();
+  void document.body.offsetHeight;
+  window.scrollTo(x, y);
+  document.querySelectorAll('[data-sk]').forEach(el => { const v = inner[el.dataset.sk]; if (v) { el.scrollTop = v.t; el.scrollLeft = v.l; } });
 }
 
 // ============ מיתוג ============
@@ -1319,9 +1332,10 @@ function renderSettings() {
     <div class="cat-item">
       <div class="cat-item-head">
         <input class="text-inp" style="flex:1" value="${escH(d.label)}" data-act="day.label" data-i="${i}"/>
-        <label class="toggle-switch" title="${d.published ? 'מפורסם' : 'מוסתר'}">
+        <label class="toggle-switch" title="קובע אם היום מוצג לשחקניות או מוסתר">
           <input type="checkbox"${d.published ? ' checked' : ''} data-act="day.published" data-i="${i}"/>
           <span class="toggle-slider"></span>
+          <span class="toggle-txt">${d.published ? 'מוצג לשחקניות' : 'מוסתר משחקניות'}</span>
         </label>
       </div>
       <div class="cat-settings-grid">
@@ -1828,7 +1842,7 @@ function handle(e, kinds) {
   // פעולות board.* מנהלות שמירה ורינדור בעצמן (מטפל הלוח קורא ל-queueSave/paint
   // רק כשבאמת חל שינוי) — כדי שהחלפת תצוגה או בחירת יום לא יכתבו את המסמך כולו.
   if (!NO_SAVE.has(act) && !act.startsWith('board.')) queueSave();
-  if (!skip) paint();
+  if (!skip) paintKeepScroll();   // שומר מיקום גלילה — הדף לא קופץ למעלה בכל פעולה
 }
 
 document.addEventListener('click',  e => {

@@ -440,6 +440,17 @@ footer { padding: 20px; text-align: center; font-size: 12px;
 .net-cut-row { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; }
 .net-cut-row .text-inp { width: 104px; }
 .net-cut-name { color: var(--text2); }
+/* שורת "הוסף סלוט" בתחתית גריד היום — מאריכה את שעות היום */
+.add-slot-row td { padding: 4px; text-align: center; background: var(--bg3); }
+.add-slot-btn { border: 1px dashed var(--border2); background: var(--bg2); border-radius: 999px; font: inherit;
+  font-size: 12.5px; font-weight: 700; color: var(--text2); padding: 4px 14px; cursor: pointer; margin: 0 4px; }
+.add-slot-btn:hover { background: color-mix(in srgb, var(--place) 20%, var(--bg2)); color: var(--text); border-color: var(--place); }
+.asr-time { font-weight: 600; color: var(--text3); font-size: 11px; }
+/* אייקון שעון בכותרת המגרש — מסמן שאפשר להגדיר שעת סיום */
+.neth-clock { font-size: 10px; opacity: .45; }
+.neth-btn:hover .neth-clock { opacity: 1; }
+/* תווית טקסט למתג "מוצג/מוסתר" בהגדרות */
+.toggle-txt { font-size: 12px; color: var(--text2); margin-inline-start: 8px; white-space: nowrap; }
 /* יעד גרירה חי — טבעת צהובה (אפשר לשים כאן) */
 .drop-hi { outline: 2px solid var(--place); outline-offset: -2px;
   background: color-mix(in srgb, var(--place) 14%, transparent) !important; }

@@ -590,13 +590,20 @@ function renderDayGrid(dayId) {
   // כותרת ניטרלית: הרשת כשם טקסט. לחיצה עליה → מגבלת-זמן למגרש (למשל אין תאורה).
   const head = `<tr><th class="bg-time">שעה</th>${nets.map(n => {
     const cut = netCutOf(dayId, n);
-    return `<th class="bg-neth"><button class="neth-btn" data-act="board.netCutPrompt" data-net="${n}" data-day="${escH(dayId)}" title="הגדרת שעת סיום למגרש (למשל אם אין תאורה)">${escH(X.netName(n))}${cut ? `<span class="neth-cut">🔦 עד ${escH(cut)}</span>` : ''}</button></th>`;
+    return `<th class="bg-neth"><button class="neth-btn" data-act="board.netCutPrompt" data-net="${n}" data-day="${escH(dayId)}" title="הגדרת שעת סיום למגרש (למשל אם אין תאורה)">${escH(X.netName(n))} <span class="neth-clock">⏰</span>${cut ? `<span class="neth-cut">🔦 עד ${escH(cut)}</span>` : ''}</button></th>`;
   }).join('')}</tr>`;
   const rows = Array.from({ length: day.slots }, (_, i) => {
     const s = i + 1;
     return `<tr><td class="bg-time num">${escH(slotLabel(day, s))}</td>${nets.map(n => cellHtml(dayId, s, n, ci, bi)).join('')}</tr>`;
   }).join('');
-  return `<div class="board-scroll vscroll" data-sk="day"><table class="board-grid day-grid"><thead>${head}</thead><tbody>${rows}</tbody></table></div>`;
+  // שורת "הוסף סלוט" בתחתית הגריד — מאריכה את שעות היום בלחיצה (בקשת המשתמשת).
+  // הסלוט החדש מתחיל בשעת הסיום הנוכחית. "－" רק אם הסלוט האחרון ריק.
+  const lastEmpty = !gamesOf(dayId).some(g => g.slot === day.slots) && !blocksOf(dayId).some(b => b.slot === day.slots);
+  const addRow = `<tr class="add-slot-row"><td colspan="${nets.length + 1}">
+    <button class="add-slot-btn" data-act="board.addSlot" title="מאריך את שעות היום">＋ הוסף סלוט <span class="asr-time">${escH(slotLabel(day, day.slots + 1))}</span></button>
+    ${lastEmpty && day.slots > 1 ? `<button class="add-slot-btn rm" data-act="board.removeSlot" title="מקצר את היום — מסיר את הסלוט האחרון הריק">－ הסר אחרון</button>` : ''}
+  </td></tr>`;
+  return `<div class="board-scroll vscroll" data-sk="day"><table class="board-grid day-grid"><thead>${head}</thead><tbody>${rows}${addRow}</tbody></table></div>`;
 }
 
 function cellHtml(dayId, s, n, ci, bi, firstOfDay) {
@@ -740,8 +747,6 @@ function render() {
       ${view === 'season'
         ? `<button class="filter-btn" data-act="board.reorderSeason" title="מסדר מחדש את כל הימים; משחקים נעולים 📌 יישארו במקומם">🗓 תזמן מחדש</button>`
         : `<button class="filter-btn" data-act="board.reorderDay">סדר מחדש</button>
-      <button class="filter-btn" data-act="board.addSlot" title="הוסף סלוט בסוף היום — מאריך את שעת הסיום">＋ סלוט</button>
-      <button class="filter-btn" data-act="board.removeSlot" title="הסר את הסלוט האחרון (רק אם ריק)">－ סלוט</button>
       <button class="filter-btn${resultsOpen ? ' on' : ''}" data-act="board.toggleResults">🏐 תוצאות</button>
       <button class="cf-btn" data-act="board.print">🖨 הדפסה</button>`}
     </div>
