@@ -1,0 +1,84 @@
+<!DOCTYPE html><html lang="he" dir="rtl"><head><meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Seed — טורניר ארוחת שישי (coordinated)</title>
+<style>body{font-family:system-ui,Rubik,Arial;max-width:820px;margin:24px auto;padding:0 16px;line-height:1.5}
+button{font-size:16px;padding:10px 18px;margin:4px 6px 4px 0;border:1px solid #652d92;border-radius:8px;background:#652d92;color:#fff;cursor:pointer}
+button.sec{background:#fff;color:#652d92}
+#log{white-space:pre-wrap;background:#f4f0fa;border:1px solid #d9cdeb;border-radius:8px;padding:12px;margin-top:12px;font-family:ui-monospace,monospace;font-size:13px;min-height:80px}
+code{background:#eee;padding:1px 5px;border-radius:4px}</style></head>
+<body>
+<h1>Seed — טורניר ארוחת שישי</h1>
+<p>כותב doc חדש <b id="tid">fridaydinner</b> עם <code>meta.coordinated=true</code> — 2 קטגוריות באפליקציה
+(<b>תחרותי</b> 14 זוגות · <b>CD</b> 10 זוגות) על רשת מגרשים מתואמת אחת. הבסיס (מלך המגרש) מנוהל ידנית — לא נכתב כאן.<br>
+זורע רק <b>meta + categories + רוסטרים</b>; לחיצה על <b>Build</b> באפליקציה תריץ את המתזמן האמיתי.<br>
+⚠️ doc זרוק לבדיקה — לא נוגע בטורנירים חיים. סיסמאות: admin=<code>fdadmin</code> · master=<code>fdmaster</code> (לשנות לפני אירוע אמיתי).</p>
+<button onclick="seedAll()">▶ Seed / Overwrite</button>
+<button class="sec" onclick="delDoc()">🗑 Delete doc</button>
+<a href="./?t=fridaydinner" target="_blank"><button class="sec" type="button">↗ פתח את הטורניר</button></a>
+<div id="log"></div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
+import { getFirestore, doc, getDoc, setDoc, deleteDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
+const firebaseConfig={apiKey:"AIzaSyA-rPlg0Oau16QcTjD20hDfkyveRSrD8I0",authDomain:"tournaments-33619.firebaseapp.com",projectId:"tournaments-33619",storageBucket:"tournaments-33619.firebasestorage.app",messagingSenderId:"409384565600",appId:"1:409384565600:web:61bd55676343d6035abc05"};
+const db=getFirestore(initializeApp(firebaseConfig));
+
+// ===== CONFIG — edit these; everything regenerates (generic: courts / categories / players) =====
+const T_ID='fridaydinner';
+// תחרותי: 12 זוגות (הדר דלויה/ערן פוס פרשו; מקום 12 ה-TBD לא אויש)
+const COMPETITIVE=['אלאנורה/וולקס','יאנה/מילוש','יובי/עובדי','אלכס/ולריה','יותם/חנה','יוני/יוליה','מארי לאו/מתן שפירא','לימור/אלון פנוש','עדן לוי/סשה קטלן','אניה/פבל','אליסה/אבישי','יונתן/מנו'];
+const CD=['אביב שליט/מאיה','דניאל גרטנר/תומר סלטון','אביב/עופרי בר','דיקלה/שי כהן','תום/דנה בובי','דניאל/זהר','אביבה/דניאל ק.','רני/אילון','בועז כחלון/סיון רופא','אלינה/אולג'];
+
+const COURTS=4;        // total courts available to the APP (after the base frees its court)
+const APP_GAME_MIN=20; // app game length (set to 21, ~20min -> finish ~22:40)
+const APP_POINTS=21;   // set to this many points
+const START='17:00';
+const BASE_PLAYERS=12; // King-of-Court players
+const BASE_GAME_MIN=15;// base game length (to 8, ~15min); base ends START + 15*(players-1)
+
+const catCfg=(numGroups,advPerGroup)=>({courts:COURTS,gameDur:APP_GAME_MIN,breakDur:0,numGroups,advPerGroup,pointsToWin:APP_POINTS,sets:1,pointsThirdSet:15,startTime:START});
+// order matters: LAST category is the finale (closes the evening)
+const categories=[
+  {id:'cd',          name:'CD',      cfg:catCfg(2,4)},
+  {id:'competitive', name:'תחרותי',  cfg:catCfg(4,2)},
+];
+const rosters={cd:CD, competitive:COMPETITIVE};
+
+const meta={
+  name:'טורניר ארוחת שישי',
+  coordinated:true, sport:'volleyball',
+  startTime:START,
+  base:{players:BASE_PLAYERS, slotMin:BASE_GAME_MIN, sharesCourt:true},
+  blockFinaleUntilPoolsDone:true,
+  breaks:[{atTime:'19:00', minutes:20}],  // הפסקת ארוחת שישי על כל המגרשים
+  dinnerBreakNote:'ארוחת שישי',
+  primaryColor:'#652d92', secondaryColor:'#7a3fb0',
+  logoUrl:'', regNote:'', sponsorLogos:[], groupColors:[], bgColor:'',
+  phase:'registration', regOpen:false, showRegistered:false,
+  adminPassword:'fdadmin', masterPassword:'fdmaster',
+};
+
+const state={};
+categories.forEach(c=>{ state[c.id]={roster:rosters[c.id]||[], groups:[], sched:[], ko:[]}; });
+const PAYLOAD={meta, categories, state};
+
+const log=m=>{const el=document.getElementById('log');el.textContent+=m+'\n';el.scrollTop=el.scrollHeight;};
+window.seedAll=async function(){
+  document.getElementById('log').textContent='';
+  log('▶ Seeding "'+T_ID+'"…');
+  try{
+    const snap=await getDoc(doc(db,'tournaments',T_ID));
+    if(snap.exists()&&!confirm('"'+T_ID+'" קיים. לדרוס?')){log('✗ בוטל');return;}
+    await setDoc(doc(db,'tournaments',T_ID),{...PAYLOAD,updatedAt:serverTimestamp()});
+    log('✓ נכתב. קטגוריות: '+categories.map(c=>c.name+' ('+(rosters[c.id]||[]).length+')').join(' · '));
+    log('  courts='+COURTS+'  app-game='+APP_GAME_MIN+'min  base-game='+BASE_GAME_MIN+'min  start='+START+'  base='+BASE_PLAYERS+' players');
+    log('✓ פתח: '+location.origin+location.pathname.replace(/seed-fridaydinner\.html$/,'')+'?t='+T_ID);
+    log('  התחבר master='+meta.masterPassword+' ואז Build.');
+  }catch(e){log('✗ '+e.message);console.error(e);}
+};
+window.delDoc=async function(){
+  if(!confirm('למחוק את "'+T_ID+'"?'))return;
+  try{await deleteDoc(doc(db,'tournaments',T_ID));log('✓ נמחק');}catch(e){log('✗ '+e.message);}
+};
+log('מוכן. לחץ Seed.');
+</script></body></html>

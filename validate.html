@@ -1,0 +1,740 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>בדיקת לוז — VolleyLab</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Rubik:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --primary:#652d92; --primary2:#7a3fb0; --primary3:#9160c8;
+  --bg:#f4f2f7; --card:#fff; --ink:#1d1626; --muted:#6b6377; --line:#e7e2ee;
+  --pass:#1a8a55; --passbg:#e6f6ee; --warn:#a86a00; --warnbg:#fff4e0;
+  --fail:#c22b3f; --failbg:#fdeaec; --info:#3a5ea8; --infobg:#eaf0fb;
+  --radius:16px; --shadow:0 1px 2px rgba(29,22,38,.05), 0 8px 24px rgba(29,22,38,.06);
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font-family:'Rubik',system-ui,-apple-system,'Segoe UI',sans-serif;
+  font-size:15px;line-height:1.55;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1080px;margin:0 auto;padding:24px 18px 80px}
+
+header.top{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:22px}
+.brand{font-weight:700;font-size:21px;letter-spacing:-.2px}
+.brand span{color:var(--primary)}
+.tid{font-size:13px;color:var(--muted);background:#fff;border:1px solid var(--line);
+  border-radius:999px;padding:4px 12px}
+.top .grow{flex:1}
+button.act{font-family:inherit;font-size:14px;font-weight:500;cursor:pointer;
+  border:1px solid var(--line);background:#fff;color:var(--ink);
+  border-radius:10px;padding:8px 14px;transition:.15s}
+button.act:hover{border-color:var(--primary3);color:var(--primary)}
+button.act.primary{background:var(--primary);border-color:var(--primary);color:#fff}
+button.act.primary:hover{background:var(--primary2);color:#fff}
+
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+  box-shadow:var(--shadow);padding:20px 22px;margin-bottom:16px}
+.card h2{margin:0 0 4px;font-size:16px;font-weight:600}
+.card .sub{color:var(--muted);font-size:13px;margin-bottom:14px}
+
+/* verdict banner */
+.verdict{border-radius:var(--radius);padding:24px 26px;margin-bottom:18px;
+  box-shadow:var(--shadow);border:1px solid transparent}
+.verdict .big{font-size:26px;font-weight:700;letter-spacing:-.4px;margin-bottom:6px}
+.verdict .line{font-size:14px;opacity:.9}
+.verdict.pass{background:var(--passbg);border-color:#bfe6d3;color:#0f5c39}
+.verdict.warn{background:var(--warnbg);border-color:#f1dcb0;color:#7a4d00}
+.verdict.fail{background:var(--failbg);border-color:#f3c4cb;color:#8f1f2e}
+
+/* meta strip */
+.strip{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:18px}
+.kpi{flex:1 1 150px;background:#fff;border:1px solid var(--line);border-radius:14px;
+  padding:14px 16px;box-shadow:var(--shadow)}
+.kpi .k{font-size:12px;color:var(--muted);margin-bottom:3px}
+.kpi .v{font-size:20px;font-weight:600;letter-spacing:-.3px}
+.kpi .v small{font-size:12px;font-weight:400;color:var(--muted)}
+
+/* rule rows */
+.rule{border:1px solid var(--line);border-radius:14px;margin-bottom:10px;overflow:hidden;background:#fff}
+.rule > summary{list-style:none;cursor:pointer;padding:14px 16px;display:flex;
+  align-items:flex-start;gap:12px;user-select:none}
+.rule > summary::-webkit-details-marker{display:none}
+.rule[open] > summary{border-bottom:1px solid var(--line)}
+.chip{flex:none;font-size:11.5px;font-weight:600;border-radius:999px;padding:3px 10px;
+  letter-spacing:.2px;margin-top:2px;white-space:nowrap}
+.chip.pass{background:var(--passbg);color:var(--pass)}
+.chip.warn{background:var(--warnbg);color:var(--warn)}
+.chip.fail{background:var(--failbg);color:var(--fail)}
+.chip.info{background:var(--infobg);color:var(--info)}
+.rule .rt{flex:1;min-width:0}
+.rule .rt .name{display:block;font-weight:600;font-size:14.5px}
+.rule .rt .desc{display:block;font-size:13px;color:var(--muted);margin-top:2px}
+.rule .body{padding:12px 16px 16px;font-size:13.5px}
+.rule .body ul{margin:8px 0 0;padding-inline-start:20px}
+.rule .body li{margin-bottom:4px}
+.rule .body code{background:#f4f2f7;border-radius:5px;padding:1px 5px;font-size:12.5px;
+  font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.caret{flex:none;color:var(--muted);transition:.15s;margin-top:3px}
+.rule[open] .caret{transform:rotate(90deg)}
+
+/* grid */
+.gridwrap{overflow-x:auto;padding-bottom:6px}
+table.grid{border-collapse:separate;border-spacing:3px;font-size:12px;min-width:100%}
+table.grid th{font-weight:500;color:var(--muted);font-size:11.5px;padding:2px 6px;white-space:nowrap}
+table.grid td{padding:0}
+.cell{border-radius:9px;padding:7px 9px;width:168px;min-height:48px;overflow:hidden;
+  display:flex;flex-direction:column;justify-content:center;gap:2px;border:1px solid transparent}
+.cell .c1,.cell .c2{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cell .c1{font-weight:600;font-size:11.5px;line-height:1.3}
+.cell .c2{font-size:10.5px;opacity:.75;line-height:1.25}
+.cell.empty{background:#f7f5fa;border-color:var(--line)}
+.cell.clash{outline:2px solid var(--fail);outline-offset:-2px}
+.slotlbl{font-variant-numeric:tabular-nums;color:var(--muted);font-size:11.5px;
+  white-space:nowrap;padding-inline-end:8px;text-align:end}
+.legend{display:flex;gap:12px;flex-wrap:wrap;margin-top:12px;font-size:12.5px;color:var(--muted)}
+.legend i{display:inline-block;width:11px;height:11px;border-radius:4px;margin-inline-end:5px;
+  vertical-align:-1px}
+
+table.tbl{width:100%;border-collapse:collapse;font-size:13px}
+table.tbl th{text-align:start;font-weight:500;color:var(--muted);font-size:12px;
+  border-bottom:1px solid var(--line);padding:7px 8px}
+table.tbl td{padding:7px 8px;border-bottom:1px solid var(--line);
+  font-variant-numeric:tabular-nums}
+table.tbl tr:last-child td{border-bottom:0}
+
+.err{background:var(--failbg);border:1px solid #f3c4cb;color:#8f1f2e;
+  border-radius:12px;padding:16px 18px}
+.loading{text-align:center;color:var(--muted);padding:60px 0}
+.foot{color:var(--muted);font-size:12px;text-align:center;margin-top:26px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="brand">בדיקת <span>לוז</span></div>
+    <div class="tid" id="tid-chip">—</div>
+    <div class="grow"></div>
+    <button class="act" id="btn-copy">העתק דו״ח</button>
+    <button class="act primary" id="btn-reload">רענן</button>
+  </header>
+  <div id="out"><div class="loading">טוען נתונים…</div></div>
+  <div class="foot">כלי קריאה-בלבד. אינו כותב דבר ל-Firestore.</div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
+import { getFirestore, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyA-rPlg0Oau16QcTjD20hDfkyveRSrD8I0",
+  authDomain: "tournaments-33619.firebaseapp.com",
+  projectId: "tournaments-33619",
+  storageBucket: "tournaments-33619.firebasestorage.app",
+  messagingSenderId: "409384565600",
+  appId: "1:409384565600:web:61bd55676343d6035abc05"
+};
+const db = getFirestore(initializeApp(firebaseConfig));
+
+const tId = new URLSearchParams(location.search).get('t') || '';
+document.getElementById('tid-chip').textContent = tId || 'ללא ?t=';
+
+const DEF_CAT_CFG = { courts:2, gameDur:30, breakDur:0, numGroups:2, advPerGroup:2, startTime:'08:00' };
+const t2m = t => { const [h,m]=(t||'00:00').split(':').map(Number); return h*60+m; };
+const m2t = m => `${String(Math.floor(m/60)%24).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
+const esc = s => String(s??'').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+// Hebrew reads badly with a bare "1" before a plural noun
+const cnt = (n, one, many) => n === 1 ? one : `${n} ${many}`;
+const koFromFB = obj => !obj ? [] :
+  Object.keys(obj).sort((a,b)=>parseInt(a.slice(1))-parseInt(b.slice(1))).map(k=>obj[k]);
+
+// ═════════════════════════ MODEL ═════════════════════════
+// Flattens the tournament doc into one list of scheduled games across all
+// categories, which is what every rule below is checked against.
+function buildModel(data){
+  const meta = data.meta || {};
+  const categories = data.categories || [];
+  const state = {};
+  Object.entries(data.state || {}).forEach(([cid, cs]) => {
+    state[cid] = { roster:cs.roster||[], groups:cs.groups||[], sched:cs.sched||[], ko:koFromFB(cs.ko) };
+  });
+
+  const cfg0 = (categories[0] && categories[0].cfg) || DEF_CAT_CFG;
+  const COURTS = Math.max(2, ...categories.map(c => (c.cfg||DEF_CAT_CFG).courts || 2));
+  const SLOT   = (cfg0.gameDur || 20) + (cfg0.breakDur || 0);
+  const START  = t2m(meta.startTime || cfg0.startTime || '17:00');
+
+  const games = [];
+  categories.forEach((cat, ci) => {
+    const cs = state[cat.id]; if (!cs) return;
+    (cs.sched || []).forEach(g => {
+      const third = !!g.isThirdPlace || g.gi === -1;
+      games.push({ catId:cat.id, catName:cat.name||cat.id, ci,
+        kind: third ? 'third' : 'pool',
+        gi:g.gi, gn:g.gn, a:g.a, b:g.b, court:g.court, si:g.si, time:g.time });
+    });
+    (cs.ko || []).forEach((round, ri) => (round||[]).forEach((g, gi) => {
+      if (!g || g.isBye) return;
+      games.push({ catId:cat.id, catName:cat.name||cat.id, ci,
+        kind: g.isThirdPlace ? 'third' : 'ko', ri, gi,
+        a:g.a, b:g.b, seedA:g.seedA, seedB:g.seedB, court:g.court, si:g.si, time:g.time });
+    }));
+  });
+
+  const scheduled = games.filter(g => Number.isFinite(g.si) && Number.isFinite(g.court));
+  const orphans   = games.filter(g => !Number.isFinite(g.si) || !Number.isFinite(g.court));
+  const maxSi = scheduled.length ? Math.max(...scheduled.map(g=>g.si)) : -1;
+
+  // pool-game participation per pair, keyed catId~name (pairs are per-category)
+  const teamSlots = {};            // "cat~name" -> Set(si)  — pool games only (real names)
+  const catKoSlots = {};           // catId -> Set(si) of every KO/3rd slot
+  const koRoundSlots = {};         // catId -> {ri: Set(si)} — a pair plays ONE slot per round
+  scheduled.forEach(g => {
+    if (g.kind === 'pool') {
+      [g.a, g.b].forEach(n => {
+        const k = `${g.catId}~${n}`;
+        (teamSlots[k] = teamSlots[k] || new Set()).add(g.si);
+      });
+    } else {
+      (catKoSlots[g.catId] = catKoSlots[g.catId] || new Set()).add(g.si);
+      const rr = koRoundSlots[g.catId] = koRoundSlots[g.catId] || {};
+      // the 3rd-place match is the alternative to the final: same round for a pair
+      const ri = g.kind === 'third' ? '_last' : g.ri;
+      (rr[ri] = rr[ri] || new Set()).add(g.si);
+    }
+  });
+  // fold the 3rd-place slots into the final round — a pair plays one or the other
+  Object.values(koRoundSlots).forEach(rr => {
+    if (!rr._last) return;
+    const ris = Object.keys(rr).filter(k => k !== '_last').map(Number);
+    if (ris.length){ const lastRi = Math.max(...ris); rr._last.forEach(s => rr[lastRi].add(s)); }
+    delete rr._last;
+  });
+
+  // actual stored time per slot (reflects any breaks the scheduler applied)
+  const siTime = {};
+  scheduled.forEach(g => { if (g.time && siTime[g.si] === undefined) siTime[g.si] = g.time; });
+  const breaks = (meta.breaks || []).map(b => ({ at:t2m(b.atTime), min:b.minutes||0 })).sort((a,b)=>a.at-b.at);
+
+  return { meta, categories, state, COURTS, SLOT, START, games, scheduled, orphans,
+           maxSi, teamSlots, catKoSlots, koRoundSlots, siTime, breaks,
+           tName: meta.name || tId };
+}
+
+// Extra minutes a break pushes a game that would (un-broken) start at baseMin.
+function breakOffset(M, baseMin){ let off=0; (M.breaks||[]).forEach(b=>{ if(baseMin>=b.at) off+=b.min; }); return off; }
+// Prefer the ACTUAL stored time; fall back to a break-aware computed time for
+// hypothetical slots (e.g. the theoretical optimum, which has no stored game).
+const slotTime = (M, si) => (M.siTime && M.siTime[si] !== undefined)
+  ? M.siTime[si]
+  : m2t(M.START + si * M.SLOT + breakOffset(M, M.START + si * M.SLOT));
+const endOf = (M, si) => m2t(t2m(slotTime(M, si)) + M.SLOT);
+const catOf = (M, id) => M.categories.find(c => c.id === id);
+const pairLabel = k => k.split('~').slice(1).join('~');
+
+// longest run of consecutive slot indices, with the run itself
+function maxRun(slots){
+  const s = [...new Set(slots)].sort((a,b)=>a-b);
+  let best = [], cur = [];
+  for (const v of s){
+    if (cur.length && v === cur[cur.length-1] + 1) cur.push(v);
+    else cur = [v];
+    if (cur.length > best.length) best = [...cur];
+  }
+  return best;
+}
+
+// Worst case for one pair: its pool slots are fixed, but in the knockout it plays
+// exactly ONE slot per round (a round can be spread over several slots when there
+// are more games than courts). Walk the rounds in order and keep, for each slot the
+// pair could be in, the longest consecutive run ending there.
+function worstRun(poolSlots, roundSlots){
+  const P = new Set(poolSlots);
+  const runEndingAt = s => { let n = 0; while (P.has(s - n)) n++; return n; };
+  let best = maxRun(poolSlots);                       // pool-only run
+  let cur = null;                                     // slot -> {len, path[]}
+  const ris = Object.keys(roundSlots).map(Number).sort((a,b)=>a-b);
+  for (const ri of ris){
+    const next = new Map();
+    for (const s of [...roundSlots[ri]].sort((a,b)=>a-b)){
+      let prev = cur ? cur.get(s-1) : null;
+      let path, len;
+      if (prev){ len = prev.len + 1; path = [...prev.path, s]; }
+      else {
+        const back = runEndingAt(s-1);
+        len = back + 1;
+        path = [...Array(back)].map((_,i)=>s-back+i).concat([s]);
+      }
+      next.set(s, {len, path});
+      if (len > best.length) best = path;
+    }
+    cur = next;
+    if (!cur.size) break;
+  }
+  return best;
+}
+
+// ═════════════════════════ THE 7 RULES ═════════════════════════
+// Each returns {status, summary, details[]}. status: pass | warn | fail | info
+const RULES = [
+{
+  n:1, name:'הפינאלה סוגרת את הערב (הקטגוריה האחרונה)',
+  desc:'המשחק האחרון על המגרש חייב להיות הגמר של הקטגוריה האחרונה ברשימה.',
+  run(M){
+    if (!M.categories.length) return {status:'fail', summary:'אין קטגוריות.', details:[]};
+    const finale = M.categories[M.categories.length-1];
+    const cs = M.state[finale.id] || {};
+    const koLen = (cs.ko||[]).length;
+    const last = M.scheduled.filter(g => g.si === M.maxSi);
+    const d = [];
+    const endT = endOf(M, M.maxSi);
+    d.push(`קטגוריית הפינאלה (האחרונה ברשימה) = <b>${esc(finale.name||finale.id)}</b>.`);
+    d.push(`הסבב האחרון הוא סבב ${M.maxSi+1}, מתחיל ב-<code>${slotTime(M,M.maxSi)}</code> ומסתיים בסביבות <code>${endT}</code>, ובו ${last.length} משחקים.`);
+
+    const foreign = last.filter(g => g.catId !== finale.id);
+    const hasFinal = last.some(g => g.kind === 'ko' && g.ri === koLen-1);
+    const hasThird = last.some(g => g.kind === 'third' && g.catId === finale.id);
+    last.forEach(g => d.push(`&nbsp;&nbsp;· ${esc(g.catName)} — ${gameName(M,g)} — מגרש ${g.court}`));
+
+    if (foreign.length)
+      return {status:'fail', summary:`הערב לא נסגר בפינאלה: בסבב האחרון יש ${foreign.length} משחקים מקטגוריות אחרות (${[...new Set(foreign.map(g=>g.catName))].join(', ')}).`, details:d};
+    if (!hasFinal)
+      return {status:'fail', summary:'הגמר של קטגוריית הפינאלה אינו במשחק האחרון.', details:d};
+    d.push(hasThird ? 'משחק המקום ה-3 רץ במקביל לגמר — תקין.'
+                    : 'שים לב: אין משחק מקום 3 במקביל לגמר.');
+    return {status:'pass', summary:`הערב נסגר בגמר של ${finale.name||finale.id}, ${slotTime(M,M.maxSi)}–${endT}.`, details:d};
+  }
+},
+{
+  n:2, name:'מקסימום 3 משחקים ברצף לזוג',
+  desc:'נבדק גם במקרה הגרוע — זוג שעולה עד הגמר משחק את כל סבבי הנוק-אאוט של הקטגוריה שלו.',
+  run(M){
+    const d = [], hardFails = [], worstFails = [];
+    let worstLen = 0;
+    Object.entries(M.teamSlots).forEach(([key, set]) => {
+      const catId = key.split('~')[0];
+      const poolRun = maxRun([...set]);
+      // worst case: this pair advances through every KO round of its category
+      const wc = worstRun([...set], M.koRoundSlots[catId] || {});
+      worstLen = Math.max(worstLen, wc.length);
+      if (poolRun.length > 3)
+        hardFails.push(`<b>${esc(pairLabel(key))}</b> (${esc(catOf(M,catId)?.name||catId)}) — ${poolRun.length} משחקי בתים ברצף: סבבים ${poolRun.map(s=>slotTime(M,s)).join(' → ')}`);
+      else if (wc.length > 3)
+        worstFails.push(`<b>${esc(pairLabel(key))}</b> (${esc(catOf(M,catId)?.name||catId)}) — עד ${wc.length} ברצף אם תעלה עד הסוף: ${wc.map(s=>slotTime(M,s)).join(' → ')}`);
+    });
+    d.push(`נבדקו ${Object.keys(M.teamSlots).length} זוגות. הרצף הארוך ביותר במקרה הגרוע: <b>${worstLen}</b> משחקים.`);
+    if (hardFails.length){ d.push('<b>הפרות ודאיות (משחקי בתים בלבד):</b>'); hardFails.forEach(x=>d.push('· '+x)); }
+    if (worstFails.length){ d.push('<b>הפרות במקרה הגרוע (בתים + נוק-אאוט רצוף):</b>'); worstFails.forEach(x=>d.push('· '+x)); }
+    if (hardFails.length) return {status:'fail', summary:`${cnt(hardFails.length,'זוג אחד משחק','זוגות משחקים')} יותר מ-3 ברצף כבר בשלב הבתים.`, details:d};
+    if (worstFails.length) return {status:'fail', summary:`${cnt(worstFails.length,'זוג אחד עלול','זוגות עלולים')} לשחק ${worstLen} ברצף אם יעלו בנוק-אאוט.`, details:d};
+    return {status:'pass', summary:`אף זוג לא יעבור 3 משחקים ברצף, גם לא במסלול עד הגמר.`, details:d};
+  }
+},
+{
+  n:3, name:'אף זוג לא משחק בשני מגרשים באותו זמן',
+  desc:'בתוך אותו סבב, שם של זוג לא יכול להופיע פעמיים באותה קטגוריה.',
+  run(M){
+    const bySlot = {}, d = [], bad = [];
+    M.scheduled.forEach(g => (bySlot[g.si] = bySlot[g.si] || []).push(g));
+    Object.entries(bySlot).forEach(([si, gs]) => {
+      const seen = {};
+      gs.filter(g => g.kind === 'pool').forEach(g => [g.a,g.b].forEach(n => {
+        const k = `${g.catId}~${n}`;
+        if (seen[k]) bad.push(`<b>${esc(n)}</b> (${esc(g.catName)}) מופיע פעמיים בסבב <code>${slotTime(M,+si)}</code> — מגרשים ${seen[k]} ו-${g.court}`);
+        else seen[k] = g.court;
+      }));
+      // a category running pool + KO in the same slot can double-book an advancing pair
+      const cats = {};
+      gs.forEach(g => (cats[g.catId] = cats[g.catId] || new Set()).add(g.kind));
+      Object.entries(cats).forEach(([cid, kinds]) => {
+        if (kinds.has('pool') && (kinds.has('ko') || kinds.has('third')))
+          bad.push(`קטגוריה <b>${esc(catOf(M,cid)?.name||cid)}</b> מריצה בתים ונוק-אאוט באותו סבב <code>${slotTime(M,+si)}</code> — זוג שעולה עלול להיות משובץ פעמיים`);
+      });
+    });
+    d.push(`נבדקו ${Object.keys(bySlot).length} סבבים.`);
+    bad.forEach(x => d.push('· ' + x));
+    return bad.length
+      ? {status:'fail', summary:`${bad.length} התנגשויות של זוג עם עצמו.`, details:d}
+      : {status:'pass', summary:'אין אף זוג שמשובץ לשני מגרשים באותו זמן.', details:d};
+  }
+},
+{
+  n:4, name:'אפס התנגשויות מגרש/שעה בין הקטגוריות',
+  desc:'רשת אחת משותפת: כל צירוף (סבב, מגרש) חייב להיות תפוס פעם אחת לכל היותר.',
+  run(M){
+    const slotCourt = {}, d = [], clashes = [], oob = [];
+    M.scheduled.forEach(g => {
+      const k = `${g.si}|${g.court}`;
+      if (slotCourt[k]) clashes.push(
+        `סבב <code>${slotTime(M,g.si)}</code> מגרש ${g.court}: ${esc(slotCourt[k].catName)} ${gameName(M,slotCourt[k])} מול ${esc(g.catName)} ${gameName(M,g)}`);
+      else slotCourt[k] = g;
+      if (g.court < 1 || g.court > M.COURTS)
+        oob.push(`${esc(g.catName)} ${gameName(M,g)} משובץ למגרש ${g.court} — מחוץ לטווח 1–${M.COURTS}`);
+    });
+    d.push(`${M.scheduled.length} משחקים משובצים על ${M.COURTS} מגרשים, ${M.maxSi+1} סבבים.`);
+    if (M.orphans.length) d.push(`<b>${M.orphans.length} משחקים ללא שיבוץ מגרש/שעה כלל</b> — ${M.orphans.slice(0,6).map(g=>esc(g.catName)+' '+gameName(M,g)).join(' · ')}${M.orphans.length>6?' …':''}`);
+    clashes.forEach(x => d.push('· ' + x));
+    oob.forEach(x => d.push('· ' + x));
+    if (clashes.length || oob.length)
+      return {status:'fail', summary:`${clashes.length} התנגשויות מגרש/שעה${oob.length?`, ${oob.length} מגרשים מחוץ לטווח`:''}.`, details:d};
+    if (M.orphans.length)
+      return {status:'fail', summary:`${M.orphans.length} משחקים לא שובצו לזמן/מגרש.`, details:d};
+    return {status:'pass', summary:'רשת נקייה — כל משבצת מגרש/שעה תפוסה פעם אחת לכל היותר.', details:d};
+  }
+},
+{
+  n:5, name:'בלוקים קומפקטיים — המתנה נמוכה',
+  desc:'היעד: פער של סבב אחד בין משחקים (~20–40 דק׳). 3 סבבי המתנה ומעלה = בעיה.',
+  run(M){
+    const rows = [], d = [];
+    let worst = 0, worstWho = '';
+    Object.entries(M.teamSlots).forEach(([key, set]) => {
+      const s = [...set].sort((a,b)=>a-b);
+      let mx = 0;
+      for (let i=0;i<s.length-1;i++){ const idle = s[i+1]-s[i]-1; if (idle > mx) mx = idle; }
+      // the wait between the last pool game and the category's first KO round
+      const ko = [...(M.catKoSlots[key.split('~')[0]] || new Set())].sort((a,b)=>a-b);
+      if (ko.length && s.length){ const idle = ko[0] - s[s.length-1] - 1; if (idle > mx) mx = idle; }
+      rows.push({ key, mx });
+      if (mx > worst){ worst = mx; worstWho = pairLabel(key); }
+    });
+    const hist = {};
+    rows.forEach(r => hist[r.mx] = (hist[r.mx]||0)+1);
+    d.push(`המתנה מקסימלית: <b>${cnt(worst,'סבב ריק אחד','סבבים ריקים')} = ${worst*M.SLOT} דק׳</b> (${esc(worstWho)}).`);
+    d.push('התפלגות ההמתנה המקסימלית לזוג:');
+    Object.keys(hist).sort((a,b)=>a-b).forEach(k =>
+      d.push(`&nbsp;&nbsp;· ${cnt(+k,'סבב ריק אחד','סבבים ריקים')} (${k*M.SLOT} דק׳) — ${cnt(hist[k],'זוג אחד','זוגות')}`));
+    const bad = rows.filter(r => r.mx >= 3).sort((a,b)=>b.mx-a.mx);
+    if (bad.length){
+      d.push('<b>זוגות עם המתנה של 3 סבבים ומעלה:</b>');
+      bad.slice(0,25).forEach(r => d.push(`· ${esc(pairLabel(r.key))} — ${r.mx*M.SLOT} דק׳`));
+      if (bad.length>25) d.push(`… ועוד ${bad.length-25}`);
+    }
+    if (worst >= 3) return {status:'warn', summary:`${cnt(bad.length,'זוג אחד ממתין','זוגות ממתינים')} ${3*M.SLOT} דק׳ או יותר (מקסימום ${worst*M.SLOT} דק׳).`, details:d};
+    return {status:'pass', summary:`ההמתנה המקסימלית היא ${worst*M.SLOT} דק׳ — בלוקים קומפקטיים.`, details:d};
+  }
+},
+{
+  n:6, name:'בתים לפני נוק-אאוט, עולים 2 מכל בית',
+  desc:'כל משחקי הבתים של קטגוריה לפני הנוק-אאוט שלה; סבבי הנוק-אאוט לפי הסדר; מקום 3 במקביל לגמר.',
+  run(M){
+    const d = [], bad = [], notes = [];
+    M.categories.forEach(cat => {
+      const cs = M.state[cat.id]; if (!cs) return;
+      const pool = M.scheduled.filter(g => g.catId===cat.id && g.kind==='pool');
+      const ko   = M.scheduled.filter(g => g.catId===cat.id && g.kind==='ko');
+      const third= M.scheduled.filter(g => g.catId===cat.id && g.kind==='third');
+      const cfg = cat.cfg || DEF_CAT_CFG;
+      const nm = esc(cat.name||cat.id);
+      if (!pool.length) return;
+
+      // every pool is a complete round robin
+      const expected = (cs.groups||[]).reduce((s,g)=>s + (g.teams||[]).length*((g.teams||[]).length-1)/2, 0);
+      if (pool.length !== expected)
+        bad.push(`${nm}: ${pool.length} משחקי בתים בפועל מול ${expected} צפויים (ליגה מלאה בכל בית).`);
+      d.push(`<b>${nm}</b> — ${(cs.groups||[]).length} בתים (${(cs.groups||[]).map(g=>(g.teams||[]).length).join('/')} זוגות), ${pool.length} משחקי בתים, ${ko.length} נוק-אאוט${third.length?' + מקום 3':''}, עולים ${cfg.advPerGroup} מכל בית.`);
+
+      if (ko.length){
+        const lastPool = Math.max(...pool.map(g=>g.si));
+        const firstKo  = Math.min(...ko.map(g=>g.si));
+        if (firstKo <= lastPool)
+          bad.push(`${nm}: הנוק-אאוט מתחיל בסבב <code>${slotTime(M,firstKo)}</code> אך יש עוד משחקי בתים עד <code>${slotTime(M,lastPool)}</code>.`);
+        // rounds strictly ordered
+        const bySi = {};
+        ko.forEach(g => (bySi[g.ri] = bySi[g.ri] || []).push(g.si));
+        const ris = Object.keys(bySi).map(Number).sort((a,b)=>a-b);
+        for (let i=0;i<ris.length-1;i++){
+          if (Math.max(...bySi[ris[i]]) >= Math.min(...bySi[ris[i+1]]))
+            bad.push(`${nm}: סבב נוק-אאוט ${ris[i]+1} אינו מסתיים לפני סבב ${ris[i+1]+1}.`);
+        }
+        // bracket size matches the number of qualifiers — byes occupy a slot too
+        const seeds = (cfg.advPerGroup||0) * (cs.groups||[]).length;
+        let bs = 1; while (bs < seeds) bs *= 2;
+        const r0all = (cs.ko[0]||[]).filter(Boolean).length;
+        const byes = (cs.ko[0]||[]).filter(g=>g && g.isBye).length;
+        if (seeds && r0all !== bs/2)
+          bad.push(`${nm}: ${seeds} עולים → בראקט של ${bs}, אך בסבב הראשון ${r0all} משבצות במקום ${bs/2}.`);
+        if (byes) d.push(`&nbsp;&nbsp;· ${nm}: ${byes} מעברים אוטומטיים (bye) בסבב הראשון.`);
+      }
+      if (third.length && ko.length){
+        const finalRi = Math.max(...ko.map(g=>g.ri));
+        const finalSi = ko.filter(g=>g.ri===finalRi).map(g=>g.si)[0];
+        if (third[0].si !== finalSi)
+          notes.push(`${nm}: מקום 3 בסבב <code>${slotTime(M,third[0].si)}</code> ולא במקביל לגמר (<code>${slotTime(M,finalSi)}</code>) — מאריך את הערב שלא לצורך.`);
+      }
+    });
+    bad.forEach(x => d.push('· ' + x));
+    notes.forEach(x => d.push('· ' + x));
+    if (bad.length) return {status:'fail', summary:`${bad.length} בעיות במבנה השלבים.`, details:d};
+    if (notes.length) return {status:'warn', summary:`המבנה תקין, אך משחק מקום 3 לא רץ במקביל לגמר.`, details:d};
+    return {status:'pass', summary:'מבנה השלבים תקין בכל הקטגוריות.', details:d};
+  }
+},
+{
+  n:7, name:'הצלבות — QF1×QF4 ו-QF2×QF3',
+  desc:'זריעת רבע הגמר לא מפגישה זוגות מאותו בית, וחצי הגמר מצליב 1×4 / 2×3.',
+  run(M){
+    const d = [], bad = [];
+    let checked = 0;
+    M.categories.forEach(cat => {
+      const cs = M.state[cat.id]; if (!cs || !(cs.ko||[]).length) return;
+      const nm = esc(cat.name||cat.id);
+      const r0 = (cs.ko[0]||[]).filter(g=>g && !g.isBye);
+      if (!r0.length) return;
+      checked++;
+      d.push(`<b>${nm}</b> — סבב ראשון: ${r0.map(g=>`${esc(g.seedA||g.a)}×${esc(g.seedB||g.b)}`).join(' · ')}`);
+      // no same-pool matchup in the opening round
+      r0.forEach((g,i) => {
+        const sa = g.seedA, sb = g.seedB;
+        if (sa && sb && /^[A-Z]\d+$/.test(sa) && /^[A-Z]\d+$/.test(sb) && sa[0] === sb[0])
+          bad.push(`${nm}: משחק ${i+1} מפגיש ${esc(sa)} מול ${esc(sb)} — אותו בית כבר בסבב הראשון.`);
+      });
+      // seeds[i] vs seeds[bs-1-i] — the app's mirrored bracket
+      const seeds = r0.flatMap(g => [g.seedA, g.seedB]).filter(Boolean);
+      if (seeds.length === r0.length*2){
+        const order = r0.map(g=>g.seedA).concat([...r0].reverse().map(g=>g.seedB));
+        const ranks = order.map(s => parseInt(s.slice(1)) || 0);
+        const half = ranks.slice(0, ranks.length/2), rest = ranks.slice(ranks.length/2);
+        if (half.some(r=>r!==1) || rest.some(r=>r!==Math.max(...ranks)))
+          d.push(`&nbsp;&nbsp;· זריעה: ראשי בתים מול מקומות שניים בסדר מראה — ${esc(order.join(', '))}`);
+      }
+      // SF must pull QF1×QF4 and QF2×QF3
+      if (r0.length === 4 && cs.ko[1]){
+        const sf = cs.ko[1].filter(g=>g && !g.isThirdPlace);
+        const tag = g => (g.seedA && g.seedB) ? `${g.seedA}/${g.seedB}` : null;
+        const qf = r0.map(tag);
+        if (sf.length === 2 && qf.every(Boolean)){
+          const want = [[qf[0],qf[3]],[qf[1],qf[2]]];
+          sf.forEach((g,i) => {
+            const got = [g.a, g.b];
+            const ok = (got[0]===want[i][0] && got[1]===want[i][1]) || (got[0]===want[i][1] && got[1]===want[i][0]);
+            if (!ok && got.every(x => /\//.test(String(x))))
+              bad.push(`${nm}: חצי גמר ${i+1} = ${esc(got.join(' × '))}, מצופה ${esc(want[i].join(' × '))} (הצלבה).`);
+          });
+          d.push(`&nbsp;&nbsp;· חצי גמר: ${sf.map(g=>`${esc(g.a)} × ${esc(g.b)}`).join(' · ')}`);
+        } else if (sf.length === 2){
+          d.push('&nbsp;&nbsp;· חצי הגמר כבר מולא בשמות זוכים — ההצלבה לא ניתנת לאימות מהנתונים.');
+        }
+      } else if (r0.length === 2){
+        d.push('&nbsp;&nbsp;· 4 עולים בלבד — חצי גמר ישיר, אין רבע גמר ואין הצלבה.');
+      }
+    });
+    if (!checked) return {status:'info', summary:'אין בראקט נוק-אאוט לבדיקה.', details:d};
+    bad.forEach(x => d.push('· ' + x));
+    return bad.length ? {status:'fail', summary:`${bad.length} בעיות זריעה/הצלבה.`, details:d}
+                      : {status:'pass', summary:'הזריעה נקייה: אין מפגש מאותו בית ברבע הגמר, וההצלבה 1×4 / 2×3 מתקיימת.', details:d};
+  }
+}];
+
+function gameName(M, g){
+  if (g.kind === 'pool') return `בית ${g.gn||''} · ${esc(g.a)} – ${esc(g.b)}`;
+  if (g.kind === 'third') return 'מקום 3';
+  const koLen = (M.state[g.catId]?.ko || []).length;
+  const fromEnd = koLen - 1 - g.ri;
+  const label = fromEnd===0 ? 'גמר' : fromEnd===1 ? `חצי גמר ${g.gi+1}` :
+                fromEnd===2 ? `רבע גמר ${g.gi+1}` : `שמינית ${g.gi+1}`;
+  return label;
+}
+
+// ═════════════════════════ OPTIMALITY ═════════════════════════
+// Lower bound: everything except the finale's knockout has to fit on the courts,
+// and then the finale's knockout rounds run one after another as a tail.
+function optimality(M){
+  const total = M.scheduled.length;
+  const finale = M.categories[M.categories.length-1];
+  const finaleKo = M.scheduled.filter(g => g.catId===finale?.id && g.kind!=='pool');
+  const koRounds = new Set(M.scheduled.filter(g=>g.catId===finale?.id && g.kind==='ko').map(g=>g.ri)).size;
+  const packed = Math.ceil((total - finaleKo.length) / M.COURTS);
+  const tailBound = packed + koRounds;
+  const trivial = Math.ceil(total / M.COURTS);
+  const lower = Math.max(tailBound, trivial);
+  const actual = M.maxSi + 1;
+  return { total, courts:M.COURTS, finaleName:finale?.name||finale?.id||'—',
+           finaleKo:finaleKo.length, koRounds, packed, trivial, lower, actual,
+           gap: actual - lower,
+           endTime: endOf(M, M.maxSi),
+           bestEnd: m2t(M.START + (lower-1)*M.SLOT + M.SLOT + breakOffset(M, M.START + (lower-1)*M.SLOT)) };
+}
+
+// ═════════════════════════ RENDER ═════════════════════════
+const CATCOLORS = ['#652d92','#0f7b6c','#b5651d','#2f5da8','#a02b6d','#5c6b12'];
+function tint(hex, a){ const n=parseInt(hex.slice(1),16);
+  return `rgba(${(n>>16)&255},${(n>>8)&255},${n&255},${a})`; }
+
+function render(M){
+  const results = RULES.map(r => ({ ...r, res: r.run(M) }));
+  const opt = optimality(M);
+  const fails = results.filter(r => r.res.status === 'fail').length;
+  const warns = results.filter(r => r.res.status === 'warn').length;
+
+  const vClass = fails ? 'fail' : warns ? 'warn' : 'pass';
+  const vTitle = fails ? 'הלוז אינו תקין'
+               : warns ? 'הלוז תקין — עם הסתייגות'
+                       : 'הלוז תקין';
+  const optLine = opt.gap <= 0
+      ? `אורך הלוז <b>אופטימלי</b> — ${opt.actual} סבבים, בדיוק החסם התחתון. סיום ${opt.endTime}.`
+      : `אורך הלוז <b>${cnt(opt.gap,'סבב אחד','סבבים')} מעל האופטימום</b> — ${opt.actual} במקום ${opt.lower}. סיום ${opt.endTime} במקום ${opt.bestEnd} תיאורטי.`;
+  const failTxt = fails === 1 ? 'חוק אחד נכשל' : `${fails} חוקים נכשלים`;
+  const warnTxt = warns === 1 ? 'אזהרה אחת' : `${warns} אזהרות`;
+
+  const html = `
+  <div class="verdict ${vClass}">
+    <div class="big">${vTitle}</div>
+    <div class="line">${fails ? failTxt : '7/7 חוקים עוברים'}${warns?` · ${warnTxt}`:''} · ${optLine}</div>
+  </div>
+
+  <div class="strip">
+    <div class="kpi"><div class="k">טורניר</div><div class="v" style="font-size:16px">${esc(M.tName)}</div></div>
+    <div class="kpi"><div class="k">משחקים</div><div class="v">${opt.total} <small>סה״כ</small></div></div>
+    <div class="kpi"><div class="k">מגרשים</div><div class="v">${M.COURTS}</div></div>
+    <div class="kpi"><div class="k">סבבים</div><div class="v">${opt.actual} <small>× ${M.SLOT} דק׳</small></div></div>
+    <div class="kpi"><div class="k">התחלה → סיום</div><div class="v" style="font-size:17px">${m2t(M.START)} → ${opt.endTime}</div></div>
+  </div>
+
+  <div class="card">
+    <h2>שבעת החוקים</h2>
+    <div class="sub">לחיצה על שורה פותחת את הפירוט.</div>
+    ${results.map(r => `
+      <details class="rule"${r.res.status!=='pass'?' open':''}>
+        <summary>
+          <span class="chip ${r.res.status}">${
+            r.res.status==='pass'?'עובר':r.res.status==='warn'?'אזהרה':r.res.status==='fail'?'נכשל':'מידע'}</span>
+          <span class="rt">
+            <span class="name">${r.n}. ${esc(r.name)}</span>
+            <span class="desc">${r.res.summary}</span>
+          </span>
+          <span class="caret">›</span>
+        </summary>
+        <div class="body">
+          <div style="color:var(--muted);margin-bottom:6px">${esc(r.desc)}</div>
+          ${r.res.details.length ? `<ul>${r.res.details.map(x=>`<li>${x}</li>`).join('')}</ul>` : ''}
+        </div>
+      </details>`).join('')}
+  </div>
+
+  <div class="card">
+    <h2>אופטימליות</h2>
+    <div class="sub">החסם התחתון: כל המשחקים חוץ מהנוק-אאוט של קטגוריית הפינאלה חייבים להיכנס למגרשים, ואחריהם זנב סבבי הנוק-אאוט של הפינאלה.</div>
+    <table class="tbl">
+      <tr><th>סה״כ משחקים</th><td>${opt.total}</td></tr>
+      <tr><th>נוק-אאוט של ${esc(opt.finaleName)} (הפינאלה)</th><td>${opt.finaleKo} משחקים ב-${opt.koRounds} סבבים</td></tr>
+      <tr><th>שאר המשחקים ÷ ${opt.courts} מגרשים</th><td>${opt.total - opt.finaleKo} ÷ ${opt.courts} = ${opt.packed} סבבים</td></tr>
+      <tr><th>חסם תחתון = ${opt.packed} + ${opt.koRounds}</th><td><b>${opt.lower} סבבים</b> (סיום ${opt.bestEnd})</td></tr>
+      <tr><th>בפועל</th><td><b>${opt.actual} סבבים</b> (סיום ${opt.endTime}) — ${opt.gap<=0?'אופטימלי':`${opt.gap} מעל`}</td></tr>
+    </table>
+  </div>
+
+  ${renderGrid(M)}
+  ${renderPerCat(M)}`;
+
+  document.getElementById('out').innerHTML = html;
+  window.__report = textReport(M, results, opt);
+}
+
+function renderGrid(M){
+  const cell = {};
+  M.scheduled.forEach(g => {
+    const k = `${g.si}|${g.court}`;
+    (cell[k] = cell[k] || []).push(g);
+  });
+  let rows = '';
+  for (let si = 0; si <= M.maxSi; si++){
+    let tds = '';
+    for (let c = 1; c <= M.COURTS; c++){
+      const gs = cell[`${si}|${c}`] || [];
+      if (!gs.length){ tds += `<td><div class="cell empty"></div></td>`; continue; }
+      const g = gs[0], col = CATCOLORS[g.ci % CATCOLORS.length];
+      const tip = `${g.catName} · ${String(g.a)} – ${String(g.b)}`;
+      tds += `<td><div class="cell${gs.length>1?' clash':''}" title="${esc(tip)}"
+        style="background:${tint(col,.10)};border-color:${tint(col,.28)}">
+        <div class="c1" style="color:${col}">${g.kind==='pool'?`בית ${esc(g.gn||'')}`:gameName(M,g)}${gs.length>1?` ⚠︎ ×${gs.length}`:''}</div>
+        <div class="c2">${esc(g.a)} – ${esc(g.b)}</div></div></td>`;
+    }
+    rows += `<tr><td class="slotlbl">${slotTime(M,si)}</td>${tds}</tr>`;
+  }
+  const heads = Array.from({length:M.COURTS},(_,i)=>`<th>מגרש ${i+1}</th>`).join('');
+  return `<div class="card">
+    <h2>רשת המגרשים</h2>
+    <div class="sub">כל שורה = סבב, כל עמודה = מגרש. מסגרת אדומה = כפל שיבוץ.</div>
+    <div class="gridwrap"><table class="grid"><tr><th></th>${heads}</tr>${rows}</table></div>
+    <div class="legend">${M.categories.map((c,i)=>
+      `<span><i style="background:${CATCOLORS[i%CATCOLORS.length]}"></i>${esc(c.name||c.id)}</span>`).join('')}</div>
+  </div>`;
+}
+
+function renderPerCat(M){
+  const rows = M.categories.map(cat => {
+    const gs = M.scheduled.filter(g => g.catId === cat.id);
+    if (!gs.length) return '';
+    const cs = M.state[cat.id] || {};
+    const first = Math.min(...gs.map(g=>g.si)), last = Math.max(...gs.map(g=>g.si));
+    const pool = gs.filter(g=>g.kind==='pool').length;
+    return `<tr>
+      <td>${esc(cat.name||cat.id)}</td>
+      <td>${(cs.roster||[]).length}</td>
+      <td>${(cs.groups||[]).length} (${(cs.groups||[]).map(g=>(g.teams||[]).length).join('/')})</td>
+      <td>${pool}</td>
+      <td>${gs.length - pool}</td>
+      <td>${slotTime(M,first)} – ${endOf(M,last)}</td>
+    </tr>`;
+  }).join('');
+  return `<div class="card">
+    <h2>לפי קטגוריה</h2>
+    <table class="tbl">
+      <tr><th>קטגוריה</th><th>זוגות</th><th>בתים</th><th>משחקי בתים</th><th>נוק-אאוט</th><th>חלון זמן</th></tr>
+      ${rows}
+    </table>
+  </div>`;
+}
+
+function textReport(M, results, opt){
+  const L = [];
+  L.push(`בדיקת לוז — ${M.tName} (${tId})`);
+  L.push(`${opt.total} משחקים · ${M.COURTS} מגרשים · ${opt.actual} סבבים · ${m2t(M.START)}–${opt.endTime}`);
+  L.push('');
+  results.forEach(r => {
+    const mark = {pass:'✓',warn:'!',fail:'✗',info:'·'}[r.res.status];
+    L.push(`${mark} ${r.n}. ${r.name} — ${r.res.summary.replace(/<[^>]+>/g,'')}`);
+  });
+  L.push('');
+  L.push(`חסם תחתון ${opt.lower} סבבים (סיום ${opt.bestEnd}); בפועל ${opt.actual} (${opt.gap<=0?'אופטימלי':opt.gap+' מעל'}).`);
+  return L.join('\n');
+}
+
+// ═════════════════════════ BOOT ═════════════════════════
+async function load(){
+  const out = document.getElementById('out');
+  out.innerHTML = '<div class="loading">טוען נתונים…</div>';
+  if (!tId){
+    out.innerHTML = `<div class="err"><b>חסר מזהה טורניר.</b><br>הוסף <code>?t=&lt;id&gt;</code> לכתובת, למשל <code>validate.html?t=volleylab5</code>.</div>`;
+    return;
+  }
+  try{
+    const snap = await getDoc(doc(db, 'tournaments', tId));
+    if (!snap.exists()){
+      out.innerHTML = `<div class="err"><b>הטורניר <code>${esc(tId)}</code> לא נמצא.</b></div>`;
+      return;
+    }
+    const M = buildModel(snap.data());
+    if (!M.scheduled.length && !M.orphans.length){
+      out.innerHTML = `<div class="err"><b>אין לוז לבדוק.</b><br>הטורניר <code>${esc(tId)}</code> עדיין לא נבנה (אין משחקים).</div>`;
+      return;
+    }
+    render(M);
+  }catch(e){
+    out.innerHTML = `<div class="err"><b>שגיאה בטעינה:</b><br>${esc(e.message||e)}</div>`;
+  }
+}
+document.getElementById('btn-reload').onclick = load;
+document.getElementById('btn-copy').onclick = async () => {
+  if (!window.__report) return;
+  try{ await navigator.clipboard.writeText(window.__report);
+    const b = document.getElementById('btn-copy'); const t = b.textContent;
+    b.textContent = 'הועתק ✓'; setTimeout(()=>b.textContent=t, 1500);
+  }catch{ alert(window.__report); }
+};
+load();
+</script>
+</body>
+</html>

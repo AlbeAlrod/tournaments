@@ -997,7 +997,13 @@ function coordCfg(){
   const c0 = (categories[0] && categories[0].cfg) || DEF_CAT_CFG;
   const slot = (c0.gameDur||20) + (c0.breakDur||0);
   const start = t2m(meta.startTime || c0.startTime || '17:00');
-  return { COURTS:courts, SLOT:slot, START:start };
+  // Optional: a manual side-court (e.g. "King of the Court") reserves ONE court
+  // for baseSlot*(players-1) minutes, then frees it back to the app. Convert that
+  // duration into APP rounds (the base game length can differ from the app's).
+  const b = meta.base || null;
+  const baseDurMin = (b && b.sharesCourt && (b.players|0) > 1) ? ((b.slotMin||slot) * (b.players - 1)) : 0;
+  const baseRounds = baseDurMin > 0 ? Math.ceil(baseDurMin / slot) : 0;
+  return { COURTS:courts, SLOT:slot, START:start, BASE_ROUNDS:baseRounds };
 }
 function buildCoordinatedGroups(){
   categories.forEach(cat=>{
@@ -1014,7 +1020,9 @@ function buildCoordinatedGroups(){
   });
 }
 function generateCoordinatedSchedule(){
-  const { COURTS, SLOT, START } = coordCfg();
+  const { COURTS, SLOT, START, BASE_ROUNDS } = coordCfg();
+  // Courts available to the app in round r (a reserved side-court frees at BASE_ROUNDS).
+  const courtsAt = r => (r < BASE_ROUNDS ? Math.max(2, COURTS-1) : COURTS);
   const cats = categories.filter(c => state[c.id] && (state[c.id].groups||[]).length);
   if(!cats.length) return;
   const finaleCat = cats[cats.length-1].id;
@@ -1056,11 +1064,21 @@ function generateCoordinatedSchedule(){
   const byId=Object.fromEntries(games.map(g=>[g.id,g])); const teamRounds={};
   const played=t=>teamRounds[t]||new Set();
   let guard=0;
+  const poolPending=cid=>games.some(g=>g.catId===cid&&g.kind==='pool'&&rem.has(g.id));
   while(rem.size && guard++<500){
     const r=rounds.length;
-    const cand=[...rem].map(id=>byId[id]).filter(g=>ready(g,done)&&!isFinaleLast(g));
+    const courtsThisRound=courtsAt(r);
+    // Optional block-scheduling: don't pull the finale category forward while an
+    // earlier category still has unplayed pool games (avoids isolating a finale
+    // pair with a lone early game -> long waiting gap). Opt-in via meta flag.
+    const gateFinale = meta.blockFinaleUntilPoolsDone &&
+      cats.some(c=>c.id!==finaleCat && poolPending(c.id));
+    const cand=[...rem].map(id=>byId[id]).filter(g=>ready(g,done)&&!isFinaleLast(g)
+      && !(gateFinale && g.catId===finaleCat));
     if(!cand.length){
-      const fin=[...rem].map(id=>byId[id]).filter(g=>ready(g,done));
+      // Only the finale's closing games (final + 3rd) are left for their own round.
+      // (Restrict to finaleLast so a gated finale can't dump its pool games here.)
+      const fin=[...rem].map(id=>byId[id]).filter(g=>ready(g,done)&&isFinaleLast(g)).slice(0,courtsThisRound);
       if(fin.length){rounds.push(fin.map(g=>g.id)); fin.forEach(g=>{done.add(g.id);rem.delete(g.id);}); continue;}
       rounds.push([]); if(rounds.length>200) break; continue;
     }
@@ -1075,7 +1093,7 @@ function generateCoordinatedSchedule(){
     });
     const chosen=[], usedTeams=new Set(), seenKO=new Set();
     for(const g of cand){
-      if(chosen.length>=COURTS) break;
+      if(chosen.length>=courtsThisRound) break;
       if(g.kind==='pool'){
         if(g.teams.some(t=>usedTeams.has(t))) continue;
         if(g.teams.some(t=>played(t).has(r-1)&&played(t).has(r-2))) continue;
@@ -1084,16 +1102,24 @@ function generateCoordinatedSchedule(){
       else {
         const sk=`${g.catId}:${g.ri}`; if(seenKO.has(sk)) continue; seenKO.add(sk);
         const stage=(koRoundIds[sk]||[]).map(id=>byId[id]).filter(x=>rem.has(x.id)&&ready(x,done)&&!isFinaleLast(x));
-        if(chosen.length+stage.length>COURTS) continue;
-        stage.forEach(x=>chosen.push(x));
+        // Place as many of this KO stage as fit; the rest wait for the next round.
+        // ready() keeps the following KO round gated until ALL of this one is done,
+        // so splitting a large stage (e.g. a 4-game QF on 3 courts) stays correct.
+        const free=courtsThisRound-chosen.length;
+        stage.slice(0,Math.max(0,free)).forEach(x=>chosen.push(x));
       }
     }
     if(!chosen.length){rounds.push([]); continue;}
     rounds.push(chosen.map(g=>g.id));
     chosen.forEach(g=>{done.add(g.id);rem.delete(g.id); if(g.kind==='pool')g.teams.forEach(t=>{(teamRounds[t]=teamRounds[t]||new Set()).add(r);});});
   }
+  // Global breaks (e.g. a Friday-dinner pause on ALL courts): any round whose base
+  // time is at/after a break start is pushed later by that break's minutes. Base and
+  // app shift equally, so the court-reservation math (in round indices) is unaffected.
+  const brs = (meta.breaks||[]).map(b=>({at:t2m(b.atTime), min:b.minutes||0})).sort((a,b)=>a.at-b.at);
+  const roundTime = r => { let t=START+r*SLOT; for(const b of brs) if(t>=b.at) t+=b.min; return t; };
   cats.forEach(c=>{ state[c.id].sched=[]; state[c.id].ko=(koStruct[c.id]||[]).map(()=>[]); });
-  rounds.forEach((ids,r)=>{ const time=m2t(START+r*SLOT);
+  rounds.forEach((ids,r)=>{ const time=m2t(roundTime(r));
     ids.forEach((id,ix)=>{ const g=byId[id], court=ix+1;
       if(g.kind==='pool') state[g.catId].sched.push({catId:g.catId,gi:g.gi,gn:g.gn,a:g.a,b:g.b,sa:'',sb:'',court,si:r,time});
       else if(g.kind==='ko3p') state[g.catId].sched.push({...g.ref,court,si:r,time});
@@ -1886,7 +1912,18 @@ function renderScheduleContent() {
   const byTime = {};
   filtered.forEach(g => { const k=g.time||'00:00'; if(!byTime[k])byTime[k]=[]; byTime[k].push(g); });
   el.innerHTML = '';
+  // Global breaks (e.g. Friday-dinner) shown as their own marker block, in time order.
+  const brs = (meta.breaks||[]).map(b=>({at:t2m(b.atTime), min:b.minutes||0, done:false})).sort((a,b)=>a.at-b.at);
+  const dinnerNote = meta.dinnerBreakNote || 'הפסקה';
   Object.keys(byTime).sort((a,b)=>t2m(a)-t2m(b)).forEach(time => {
+    brs.forEach(b=>{ if(!b.done && t2m(time) >= b.at){ b.done=true;
+      const bl=document.createElement('div'); bl.className='tblock';
+      bl.innerHTML=`<div class="thdr"><span class="tlbl">${m2t(b.at)}</span><div class="tline"></div></div>`+
+        `<div style="margin:6px 0 2px;padding:11px 14px;border:1.5px dashed var(--primary,#652d92);border-radius:12px;`+
+        `background:color-mix(in srgb,var(--primary,#652d92) 7%,transparent);font-weight:600;color:var(--primary,#652d92);display:flex;gap:8px;align-items:center">`+
+        `<span style="font-size:18px">🍽️</span><span>${escH(dinnerNote)} — הפסקה ${b.min} דק׳ · ${m2t(b.at)}–${m2t(b.at+b.min)} · כל המגרשים</span></div>`;
+      el.appendChild(bl);
+    }});
     const games = byTime[time];
     const block = document.createElement('div');
     block.className='tblock';
