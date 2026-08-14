@@ -11,7 +11,7 @@ code{background:#eee;padding:1px 5px;border-radius:4px}</style></head>
 <p>כותב doc חדש <b id="tid">fridaydinner</b> עם <code>meta.coordinated=true</code> — 2 קטגוריות באפליקציה
 (<b>תחרותי</b> 14 זוגות · <b>CD</b> 10 זוגות) על רשת מגרשים מתואמת אחת. הבסיס (מלך המגרש) מנוהל ידנית — לא נכתב כאן.<br>
 זורע רק <b>meta + categories + רוסטרים</b>; לחיצה על <b>Build</b> באפליקציה תריץ את המתזמן האמיתי.<br>
-⚠️ doc זרוק לבדיקה — לא נוגע בטורנירים חיים. סיסמאות: admin=<code>fdadmin</code> · master=<code>fdmaster</code> (לשנות לפני אירוע אמיתי).</p>
+⚠️ סיסמאות: admin=<code>level1</code> · master=<code>level2</code> (לשנות לפני אירוע אמיתי).</p>
 <button onclick="seedAll()">▶ Seed / Overwrite</button>
 <button class="sec" onclick="delDoc()">🗑 Delete doc</button>
 <a href="./?t=fridaydinner" target="_blank"><button class="sec" type="button">↗ פתח את הטורניר</button></a>
@@ -25,15 +25,16 @@ const db=getFirestore(initializeApp(firebaseConfig));
 
 // ===== CONFIG — edit these; everything regenerates (generic: courts / categories / players) =====
 const T_ID='fridaydinner';
-// תחרותי: 12 זוגות (הדר דלויה/ערן פוס פרשו; מקום 12 ה-TBD לא אויש)
-const COMPETITIVE=['אלאנורה/וולקס','יאנה/מילוש','יובי/עובדי','אלכס/ולריה','יותם/חנה','יוני/יוליה','מארי לאו/מתן שפירא','לימור/אלון פנוש','עדן לוי/סשה קטלן','אניה/פבל','אליסה/אבישי','יונתן/מנו'];
-const CD=['אביב שליט/מאיה','דניאל גרטנר/תומר סלטון','אביב/עופרי בר','דיקלה/שי כהן','תום/דנה בובי','דניאל/זהר','אביבה/דניאל ק.','רני/אילון','בועז כחלון/סיון רופא','אלינה/אולג'];
+// תחרותי: 12 זוגות, סדר מעורבב (הגרלה, לא לפי סדר הרישום)
+const COMPETITIVE=['יונתן/מנו','אליסה/אבישי','יוני/יוליה','אלכס/ולריה','עדן לוי/סשה קטלן','אניה/פבל','אלאנורה/וולקס','יותם/חנה','יובי/עובדי','מארי לאו/מתן שפירא','יאנה/מילוש','לימור/אלון פנוש'];
+// CD: 10 זוגות, סדר מעורבב
+const CD=['בועז כחלון/סיון רופא','רני/אילון','דיקלה/שי כהן','תום/דנה בובי','דניאל גרטנר/תומר סלטון','דניאל/זהר','אביב שליט/מאיה','אביבה/דניאל ק.','אביב/עופרי בר','אלינה/אולג'];
 
 const COURTS=4;        // total courts available to the APP (after the base frees its court)
-const APP_GAME_MIN=20; // app game length (set to 21, ~20min -> finish ~22:40)
+const APP_GAME_MIN=20; // app game length (set to 21, ~20min)
 const APP_POINTS=21;   // set to this many points
 const START='17:00';
-const BASE_PLAYERS=12; // King-of-Court players
+const BASE_PLAYERS=12; // King-of-Court players (base court frees at START + 15*(players-1) + break)
 const BASE_GAME_MIN=15;// base game length (to 8, ~15min); base ends START + 15*(players-1)
 
 const catCfg=(numGroups,advPerGroup)=>({courts:COURTS,gameDur:APP_GAME_MIN,breakDur:0,numGroups,advPerGroup,pointsToWin:APP_POINTS,sets:1,pointsThirdSet:15,startTime:START});
@@ -55,7 +56,7 @@ const meta={
   primaryColor:'#652d92', secondaryColor:'#7a3fb0',
   logoUrl:'', regNote:'', sponsorLogos:[], groupColors:[], bgColor:'',
   phase:'registration', regOpen:false, showRegistered:false,
-  adminPassword:'fdadmin', masterPassword:'fdmaster',
+  adminPassword:'level1', masterPassword:'level2',
 };
 
 const state={};
