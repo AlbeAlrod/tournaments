@@ -137,7 +137,7 @@ function recompute(){
 
   const R=N-1;                        // rounds = players-1  (user's rule)
   // Friday-dinner break on ALL courts (the base court included) — shift rounds at/after it.
-  const BRK_AT='19:00', BRK_MIN=20, brkAt=t2m(BRK_AT);
+  const BRK_AT='19:40', BRK_MIN=20, brkAt=t2m(BRK_AT);
   const brk=(R>0 && t2m(start)+gameMin*R>brkAt)?BRK_MIN:0;
   const rt=r=>{ let t=t2m(start)+r*gameMin; if(t>=brkAt) t+=brk; return t; };
   const endM=(R>0?rt(R-1)+gameMin:t2m(start));
