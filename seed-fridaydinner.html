@@ -30,11 +30,11 @@ const COMPETITIVE=['יונתן/מנו','אליסה/אבישי','יוני/יול�
 // CD: 10 זוגות, סדר מעורבב
 const CD=['בועז כחלון/סיון רופא','רני/אילון','דיקלה/שי כהן','תום/דנה בובי','דניאל גרטנר/תומר סלטון','דניאל/זהר','אביב שליט/מאיה','אביבה/דניאל ק.','אביב/עופרי בר','אלינה/אולג'];
 
-const COURTS=4;        // total courts available to the APP (after the base frees its court)
+const COURTS=6;        // total courts for the APP tournament (both categories in parallel)
 const APP_GAME_MIN=20; // app game length (set to 21, ~20min)
 const APP_POINTS=21;   // set to this many points
-const START='17:00';
-const BASE_PLAYERS=12; // King-of-Court players (base court frees at START + 15*(players-1) + break)
+const START='17:30';
+const BASE_PLAYERS=12; // King-of-Court players (base is manual, runs LATE on courts freed during the KO)
 const BASE_GAME_MIN=15;// base game length (to 8, ~15min); base ends START + 15*(players-1)
 
 const catCfg=(numGroups,advPerGroup)=>({courts:COURTS,gameDur:APP_GAME_MIN,breakDur:0,numGroups,advPerGroup,pointsToWin:APP_POINTS,sets:1,pointsThirdSet:15,startTime:START});
@@ -49,9 +49,10 @@ const meta={
   name:'טורניר ארוחת שישי',
   coordinated:true, sport:'volleyball',
   startTime:START,
-  base:{players:BASE_PLAYERS, slotMin:BASE_GAME_MIN, sharesCourt:true},
-  blockFinaleUntilPoolsDone:true,
-  breaks:[{atTime:'19:40', minutes:20}],  // הפסקת ארוחת שישי על כל המגרשים (בסיום הבסיס ~19:45)
+  base:{players:BASE_PLAYERS, slotMin:BASE_GAME_MIN, sharesCourt:false}, // base is manual/late, doesn't reserve an app court
+  parallelCategories:true,   // תחרותי + CD run together from the start (no blocks, no forced finale)
+  allPoolsBeforeKO:true,     // every knockout waits until ALL pools (both categories) are done
+  breakBeforeKO:20,          // Friday dinner: 20-min pause exactly between the pools and the knockout
   dinnerBreakNote:'ארוחת שישי',
   primaryColor:'#652d92', secondaryColor:'#7a3fb0',
   logoUrl:'', regNote:'', sponsorLogos:[], groupColors:[], bgColor:'',

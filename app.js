@@ -1026,6 +1026,8 @@ function generateCoordinatedSchedule(){
   const cats = categories.filter(c => state[c.id] && (state[c.id].groups||[]).length);
   if(!cats.length) return;
   const finaleCat = cats[cats.length-1].id;
+  const parallel = !!meta.parallelCategories;     // all categories run together, no forced finale
+  const allPoolsFirst = !!meta.allPoolsBeforeKO;  // gate EVERY knockout round until ALL pools (all cats) are done
   const games=[], koStruct={};
   cats.forEach((cat,ci)=>{
     const groups=state[cat.id].groups; const poolIds=[];
@@ -1051,14 +1053,16 @@ function generateCoordinatedSchedule(){
   });
   const koRoundIds={};
   games.forEach(g=>{ if(g.kind==='ko')(koRoundIds[`${g.catId}:${g.ri}`]=koRoundIds[`${g.catId}:${g.ri}`]||[]).push(g.id); });
+  const allPoolIds = games.filter(g=>g.kind==='pool').map(g=>g.id);
   const ready=(g,done)=>{
     if(g.kind==='pool') return true;
+    if(allPoolsFirst && !allPoolIds.every(id=>done.has(id))) return false; // all pools first
     if(g.kind==='ko3p') return (koRoundIds[`${g.catId}:${g.sfRound}`]||[]).every(id=>done.has(id));
     if(!g.poolIds.every(id=>done.has(id))) return false;
     if(g.ri===0) return true;
     return (koRoundIds[`${g.catId}:${g.ri-1}`]||[]).every(id=>done.has(id));
   };
-  const isFinaleLast=g=>g.catId===finaleCat && ((g.kind==='ko'&&g.lastRound)||g.kind==='ko3p');
+  const isFinaleLast=g=> !parallel && g.catId===finaleCat && ((g.kind==='ko'&&g.lastRound)||g.kind==='ko3p');
   const rankKind=g=>g.kind==='pool'?1:0, koOrder=g=>g.kind==='ko3p'?99:(g.kind==='ko'?g.ri:0);
   const rounds=[], done=new Set(); let rem=new Set(games.map(g=>g.id));
   const byId=Object.fromEntries(games.map(g=>[g.id,g])); const teamRounds={};
@@ -1083,7 +1087,7 @@ function generateCoordinatedSchedule(){
       rounds.push([]); if(rounds.length>200) break; continue;
     }
     const lastPlayed=t=>{const s=played(t); return s.size?Math.max(...s):-99;};
-    const phase=g=>g.catId===finaleCat?1:0;
+    const phase=g=> parallel ? 0 : (g.catId===finaleCat?1:0);
     cand.sort((x,y)=>{
       if(phase(x)!==phase(y)) return phase(x)-phase(y);
       const kx=rankKind(x),ky=rankKind(y); if(kx!==ky) return kx-ky;
@@ -1112,6 +1116,14 @@ function generateCoordinatedSchedule(){
     if(!chosen.length){rounds.push([]); continue;}
     rounds.push(chosen.map(g=>g.id));
     chosen.forEach(g=>{done.add(g.id);rem.delete(g.id); if(g.kind==='pool')g.teams.forEach(t=>{(teamRounds[t]=teamRounds[t]||new Set()).add(r);});});
+  }
+  // Dinner exactly at the pool->knockout boundary: all pools done -> break -> KO.
+  // Computes the concrete time and writes it into meta.breaks so the board + print
+  // sheets show the marker (persisted by the pushToCloud that follows a build).
+  if(meta.breakBeforeKO){
+    let P=-1;
+    for(let r=0;r<rounds.length;r++){ if(rounds[r].some(id=>byId[id]&&byId[id].kind!=='pool')){ P=r; break; } }
+    meta.breaks = (P>0) ? [{atTime:m2t(START+P*SLOT), minutes:meta.breakBeforeKO}] : [];
   }
   // Global breaks (e.g. a Friday-dinner pause on ALL courts): any round whose base
   // time is at/after a break start is pushed later by that break's minutes. Base and
