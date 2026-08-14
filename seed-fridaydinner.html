@@ -49,7 +49,7 @@ const meta={
   name:'טורניר ארוחת שישי',
   coordinated:true, sport:'volleyball',
   startTime:START,
-  base:{players:BASE_PLAYERS, slotMin:BASE_GAME_MIN, sharesCourt:false}, // base is manual/late, doesn't reserve an app court
+  base:{players:BASE_PLAYERS, slotMin:BASE_GAME_MIN, sharesCourt:true}, // base runs PARALLEL from the start on 1 of the courts; app uses the rest
   parallelCategories:true,   // תחרותי + CD run together from the start (no blocks, no forced finale)
   allPoolsBeforeKO:true,     // every knockout waits until ALL pools (both categories) are done
   breakBeforeKO:20,          // Friday dinner: 20-min pause exactly between the pools and the knockout

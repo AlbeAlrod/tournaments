@@ -72,8 +72,8 @@ table{width:100%;border-collapse:collapse}
   <div class="row">
     <div class="fld"><label>מספר שחקנים</label><input id="in-players" type="number" min="4" max="24" value="12"></div>
     <div class="fld"><label>דקות למשחק (עד 8)</label><input id="in-game" type="number" min="6" max="30" value="15"></div>
-    <div class="fld"><label>שעת התחלה</label><input id="in-start" type="time" value="20:10"></div>
-    <div class="fld"><label>סיום האפליקציה (ליישור)</label><input id="in-append" type="time" value="21:30"></div>
+    <div class="fld"><label>שעת התחלה</label><input id="in-start" type="time" value="17:30"></div>
+    <div class="fld"><label>סיום האפליקציה (ליישור)</label><input id="in-append" type="time" value="21:50"></div>
     <button class="btn" onclick="recompute()">חשב מחדש</button>
     <button class="btn sec" onclick="window.print()">הדפס דף A4</button>
   </div>
@@ -137,7 +137,7 @@ function recompute(){
 
   const R=N-1;                        // rounds = players-1  (user's rule)
   // Friday-dinner break on ALL courts (the base court included) — shift rounds at/after it.
-  const BRK_AT='19:40', BRK_MIN=20, brkAt=t2m(BRK_AT);
+  const BRK_AT='20:10', BRK_MIN=20, brkAt=t2m(BRK_AT);
   const brk=(R>0 && t2m(start)<brkAt && t2m(start)+gameMin*R>brkAt)?BRK_MIN:0;
   const rt=r=>{ let t=t2m(start)+r*gameMin; if(t>=brkAt) t+=brk; return t; };
   const endM=(R>0?rt(R-1)+gameMin:t2m(start));
