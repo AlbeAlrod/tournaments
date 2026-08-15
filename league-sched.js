@@ -54,7 +54,7 @@ export const gameKey = (cat, a, b, leg) =>
   `${cat}|${a < b ? a + '|' + b : b + '|' + a}|${leg}`;
 
 // ============================================================================
-// §6.2 — משקלי פונקציית העלות
+// §6.2 — משקלי פונקציית העלות (טבלת העלות המעודכנת)
 // ============================================================================
 //
 // "∞" מיוצג כמספר סופי גדול, במכוון. אינסוף אמיתי היה הופך כל מצב לא־חוקי
@@ -62,30 +62,39 @@ export const gameKey = (cat, a, b, leg) =>
 // ל-2. hard=1e6 גדול בסדר גודל מכל סכום רך אפשרי ולכן שומר על הסדר: כל הפרה
 // קשיחה גוברת על כל צירוף של הפרות רכות.
 //
-// סדר העדיפויות הרך (בקשת המשתמשת): קודם כול **לעולם לא לשחק פעמיים ברצף**,
-// ואז **להמתין כמה שפחות**. לכן backToBack=50000 — נמוך מ-hard אבל גבוה מכל
-// קנס המתנה אפשרי, כך שהמתזמן לעולם לא "יקנה" צמצום המתנה במחיר רצף. קנס
-// ההמתנה ריבועי (ראו evalDay): המתנה של סלוט אחד = אידיאל (0), ומעבר לזה
-// הקנס גדל ריבועית כדי לשבור קודם את הזנבות הארוכים. span ירד ל-2 כי המשתמשת
-// אמרה שלא חייבות להגיע ביחד — עדיף מקצב צמוד לכל קבוצה על פני חלון משותף קצר.
+// ⚠️ עדכון §6.2: שיפוט (5.2/5.3) ושאו-על-רשת-1 **ירדו מקשיח לרך**. אילוץ קשיח
+//    נשאר רק לארבעה: קבוצה בשני משחקים באותו סלוט, שתי קבוצות על אותו תא, תא
+//    חסום, וחלון זמינות. כל השאר רך והמתזמן ממטב את הסכום.
+//
+// המשקלים הם **נקודות פתיחה** (§6.2/§6.3): אחרי יצירת לוז מסתכלים על אורך
+// היום / רצפים / חורים / המתנות ומכווננים. סדר הטבלה — מהחשוב לפחות:
 export const WEIGHTS = {
-  hard:       1_000_000,   // חמשת האילוצים הקשיחים של §6.2 + רשת קבועה (החלטה 4)
-  backToBack: 50_000,      // קבוצה בשני סלוטים רצופים — היעד הקשיח של החלטה 3
-  // ליגה עם allowConsecutive (החלטת המשתמשת: רק ליגה ב׳) מקבלת קנס רצף נמוך.
-  // כוונן ל-1000: **בין** עלות המתנה של 3 סלוטים (480) לבין 4 סלוטים (1080), כך
-  // שהמתזמן מעדיף המתנה של 3 על פני רצף, אבל מעדיף רצף על פני המתנה של 4+. נמדד:
-  // ~4 רצפים בעונה בליגה ב׳ (מדי פעם ממש), המתנה מקס׳ יורדת ל-3, שואו וליגה א׳
-  // נשארות 0 רצף. מעל 1080 הרצף לא נוצל וההמתנות של 4 חוזרות.
-  backToBackSoft: 1_000,
-  gamesOver:  200,         // יותר מהמכסה העליונה ביום
-  gamesUnder: 200,         // פחות מהמכסה התחתונה ביום
-  longWait:   120,         // מקדם ההמתנה — מוכפל ריבועית ב-(עודף הסלוטים)²
-  // מעבר בין ליגות בתוך אותה רשת (החלטת המשתמשת: בלי קפיצות). 400 עם 10 הרצות
-  // (ראו packDay) נותן גם רשתות נקיות (אף רשת לא קופצת יותר מפעמיים) וגם המתנה
-  // נמוכה (w3 ≈ הבסיס) — יותר הרצות מוצאות סידור טוב בשני הצירים בלי להעדיף אחד.
-  netJump:    400,
-  span:       2,           // טווח הנוכחות של הקבוצה ביום — נמוך במכוון
-  emptyCell:  5            // תא ריק
+  hard:        1_000_000,   // ארבעת האילוצים הקשיחים של §6.2
+
+  // ── רצף ──
+  // ליגה ב׳ (allowConsecutive): 2 משחקים ברצף = מותר, עלות 0 (streakLiga2Pair);
+  // מהמשחק ה-3 ברצף = 5000. שאו / ליגה א׳: כל רצף (כבר מהזוג) = 1000 (רך — היה קשיח).
+  // streakLiga2Pair הוא **כפתור הכיוונון** ל"כמה נדיר יהיה רצף בליגה ב׳": 0 =
+  // §6.2 כלשונה (רצף שכיח, ~15/מחזור, לוז הכי הדוק); 100 = נדיר (~9/עונה); 200 →
+  // ~4/עונה. נבחר **100** (החלטת המשתמשת 25.7): רצף ליגה ב׳ נדיר, במחיר זעום —
+  // 4 חורים נוספים ומחזור 1 ב-22:20 במקום 22:00. שאו/א׳ נשארות 0 רצף.
+  streakLiga2:     5_000,
+  streakLiga2Pair:   100,
+  streak:          1_000,
+
+  noReferee:       800,   // אין שופטת (5.2/5.3) — רך, היה קשיח
+  linkedOverlap:   800,   // קבוצה רשומה כפול (שאו+ליגה) משובצת צפוף — פעיל רק אם סומן (§6.3)
+  catReturn:       500,   // רצף קטגוריה לא נקי על רשת — קטגוריה חוזרת אחרי שעזבה (א׳→ב׳→א׳)
+  wait4:           300,   // המתנה של 4+ סלוטים בין משחקי קבוצה
+  gamesOver:       200,   // יותר מהמכסה העליונה ביום
+  gamesUnder:      200,   // פחות מהמכסה התחתונה ביום
+  showNotNet1:     150,   // שאו לא על הרשת המועדפת (רך בינוני, לא חובה)
+  lateFinish:      100,   // × מרחק — סיום מאוחר: היום נגמר אחרי המינימום התאורטי
+  emptyEarly:       40,   // × מוקדמוּת — חור בסלוט מוקדם (חורים צריכים להתרכז בסוף)
+  fairness:         40,   // הוגנות מוקדם/מאוחר — קבוצה שמקבלת שוב את הסלוט הראשון/אחרון (חוצה-ימים)
+  wait3:            30,   // המתנה של 3 סלוטים (1–2 = אידיאלי, עלות 0)
+  span:             10,   // טווח הנוכחות של הקבוצה ביום
+  netSpread:        10    // קפיצות רשת — קבוצה על הרבה רשתות שונות באותו יום
 };
 
 // ============================================================================
@@ -325,8 +334,13 @@ export function availWindow(day, av) {
 // עומדות שעה. לכן נשמרת האריזה המאוזנת: קצב שמצמצם המתנה, עם ~4 תאים ריקים.
 //
 // הליגות נארזות קדימה לפי הסדר; g(S)+g(S+1) ≤ ⌊N/2⌋ (אי-רצף) מייצר את הקצב.
-export function planSlotCounts(ctx) {
+export function planSlotCounts(ctx, opts = {}) {
   const S = ctx.slots;
+  // ליגות במקביל (בקשת המשתמשת 25.7): במקום לארוז כל ליגה קדימה בבלוק-זמן משלה
+  // (שגרם לליגה א׳ מוקדם וליגה ב׳ מאוחר — לא ביחד), מפזרים כל ליגה **על פני כל
+  // היום** בקצב אחיד (משחקיה שנותרו ÷ הסלוטים שנותרו). כך שתיהן נוכחות בכל סלוט
+  // ורצות במקביל — כולן ביחד בחוף. שאו (fixedNet) נשאר ~1/סלוט מוקדם.
+  const spread = opts.spreadLeagues !== false;   // ברירת מחדל: במקביל
   const free = [];       // free[s-1] = Set של רשתות פנויות בסלוט s
   for (let s = 1; s <= S; s++)
     free.push(new Set(ctx.netIds.filter(n => !ctx.blocked.has(s + '|' + n))));
@@ -353,17 +367,25 @@ export function planSlotCounts(ctx) {
     let prev = 0;
     for (let s = 1; s <= S; s++) {
       const already = lk.get(s) || 0;
-      const allowed = cat.fixedNet
-        ? (free[s - 1].has(cat.fixedNet) ? 1 : 0)
-        : free[s - 1].size;
+      // §6.2: שאו כבר לא **נעול** לרשת המועדפת — זו העדפה רכה (150). כדי לשמור
+      // על חלון-השאו הנקי והמוקדם (§4.3) הוא עדיין נארז ~1/סלוט, אבל אם הרשת
+      // המועדפת תפוסה הוא כן מקבל רשת אחרת (במקום להיחסם כמו קודם).
+      let allowed = cat.fixedNet ? (free[s - 1].size ? 1 : 0) : free[s - 1].size;
+      // ליגות במקביל: מגבילים כל ליגה גדולה ל~חצי הרשתות בסלוט, כך ששתי הליגות
+      // חולקות את הרשתות ורצות במקביל (כולן ביחד), בלי שאחת תתפוס את כל הרשתות
+      // מוקדם. חצי-רשתות (ולא פיזור על כל היום) שומר על חלון דחוס להמתנות קצרות.
+      if (spread && !cat.fixedNet) {
+        allowed = Math.min(allowed, Math.max(1, Math.round(ctx.netIds.length / 2)));
+      }
       const take = Math.max(0, Math.min(allowed, pairCap - prev - already, remaining));
       p[s - 1] = already + take;
       prev = p[s - 1];
       remaining -= take;
 
       if (take > 0) {
-        // רק המספרים חשובים כאן; הרשת האמיתית נבחרת ב-greedyFill.
-        const nets = cat.fixedNet ? [cat.fixedNet] : [...free[s - 1]];
+        // רק המספרים חשובים כאן; הרשת האמיתית נבחרת ב-greedyFill. הרשת המועדפת
+        // נמחקת ראשונה כך שהיא תישאר לשאו כשאפשר.
+        const nets = orderNets([...free[s - 1]], cat.fixedNet);
         for (let i = 0; i < take && i < nets.length; i++) free[s - 1].delete(nets[i]);
       }
     }
@@ -376,6 +398,11 @@ export function planSlotCounts(ctx) {
 
 const catOrder = ctx => [...ctx.cats].sort((a, b) =>
   (a.fixedNet ? 0 : 1) - (b.fixedNet ? 0 : 1) || (a.order || 0) - (b.order || 0));
+
+// סדר רשתות עם הרשת המועדפת (אם יש) בראש — כך שאו מקבל אותה קודם, אבל שאר
+// הרשתות זמינות לו כשהמועדפת תפוסה. בלי רשת מועדפת הסדר נשמר כמו שהוא.
+const orderNets = (list, pref) =>
+  pref ? [...list].sort((a, b) => (a === pref ? 0 : 1) - (b === pref ? 0 : 1)) : list;
 
 // ============================================================================
 // המבנים המהירים — נבנים פעם אחת לכל ctx ומשמשים את כל הערכות העלות
@@ -432,19 +459,37 @@ function scratch(ctx) {
     teamGames[gA[i]].push(i); teamGames[gB[i]].push(i);
   }
 
-  // משקל הרצף לכל קבוצה — ליגה עם allowConsecutive (ליגה ב׳) מקבלת קנס רך
-  const b2bW = new Int32Array(T).fill(WEIGHTS.backToBack);
+  // דגל "רצף מותר" לכל קבוצה — ליגה עם allowConsecutive (ליגה ב׳) בלבד. הרצף
+  // שלה מטופל אחרת (זוג חינם, 3+ = streakLiga2); לשאר הליגות כל רצף = streak.
+  const allowConsec = new Uint8Array(T);
   for (const c of ctx.cats) {
     if (!c.allowConsecutive) continue;
-    for (const t of c.teams || []) { const i = ti.get(t); if (i != null) b2bW[i] = WEIGHTS.backToBackSoft; }
+    for (const t of c.teams || []) { const i = ti.get(t); if (i != null) allowConsec[i] = 1; }
+  }
+
+  // הוגנות מוקדם/מאוחר (§6.2, חוצה-ימים): כמה ימים קודם כבר קיבלה הקבוצה סלוט
+  // קיצון (ראשון/אחרון). מוזרק מבחוץ ע"י generateSeason; ריק בקריאה בודדת.
+  const fairPrior = new Int32Array(T);
+  for (const [t, k] of Object.entries(ctx.extremesPrior || {})) {
+    const i = ti.get(t); if (i != null) fairPrior[i] = k | 0;
+  }
+
+  // קישור "רשום כפול" (§6.3): זוגות אינדקסים ששייכים לאותה קבוצה פיזית
+  // (שאו+ליגה). פעיל רק אם המנהלת סימנה (ctx.linked); ריק כברירת מחדל.
+  const linked = [];
+  for (const [a, b] of ctx.linked || []) {
+    const ia = ti.get(a), ib = ti.get(b);
+    if (ia != null && ib != null) linked.push([ia, ib]);
   }
 
   return ctx._s = {
-    teams, ti, T, S, nets, N, netPos, blocked, availFrom, availTo, lo, hi, b2bW,
+    teams, ti, T, S, nets, N, netPos, blocked, availFrom, availTo, lo, hi,
+    allowConsec, fairPrior, linked,
     G, gA, gB, gFixedNet, gCat, gLocked, teamGames,
-    tc:      new Int32Array(T * (S + 2)),      // קבוצה × סלוט
-    cc:      new Int32Array((S + 2) * N),      // סלוט × רשת — כמה משחקים
-    cellCat: new Int32Array((S + 2) * N)       // סלוט × רשת — איזו ליגה (לקוהרנטיות)
+    tc:       new Int32Array(T * (S + 2)),      // קבוצה × סלוט
+    cc:       new Int32Array((S + 2) * N),      // סלוט × רשת — כמה משחקים
+    cellCat:  new Int32Array((S + 2) * N),      // סלוט × רשת — איזו ליגה (לקוהרנטיות)
+    teamNets: new Int32Array(T)                 // קבוצה → מסכת ביטים של הרשתות ששיחקה בהן (netSpread)
   };
 }
 
@@ -461,9 +506,10 @@ export function emptyPlacement(ctx) {
 // collect=true מוסיף את רשימת ההפרות, וזו הצורה שמזינה את סרגל האזהרות (§9).
 function evalDay(pl, ctx, collect) {
   const s = scratch(ctx), W = WEIGHTS;
-  const { T, S, N, tc, cc, cellCat, blocked, availFrom, availTo, lo, hi, gA, gB, gFixedNet, gCat } = s;
+  const { T, S, N, tc, cc, cellCat, blocked, availFrom, availTo, lo, hi,
+          gA, gB, gFixedNet, gCat, allowConsec, fairPrior, teamNets } = s;
 
-  tc.fill(0); cc.fill(0); cellCat.fill(0);
+  tc.fill(0); cc.fill(0); cellCat.fill(0); teamNets.fill(0);
   let lastSlot = 0, placed = 0;
 
   for (let i = 0; i < s.G; i++) {
@@ -471,18 +517,24 @@ function evalDay(pl, ctx, collect) {
     placed++;
     if (slot > lastSlot) lastSlot = slot;
     const np = s.netPos.get(pl.net[i]);
-    if (np != null) { cc[slot * N + np]++; cellCat[slot * N + np] = gCat[i]; }
+    if (np != null) {
+      cc[slot * N + np]++; cellCat[slot * N + np] = gCat[i];
+      if (np < 31) { const bit = 1 << np; teamNets[gA[i]] |= bit; teamNets[gB[i]] |= bit; }
+    }
     tc[gA[i] * (S + 2) + slot]++;
     tc[gB[i] * (S + 2) + slot]++;
   }
 
-  let hard = 0, backToBack = 0, gamesOver = 0, gamesUnder = 0, longWait = 0, span = 0, netJump = 0;
+  let hard = 0, streak = 0, gamesOver = 0, gamesUnder = 0, wait = 0, span = 0,
+      catReturn = 0, noReferee = 0, showNet = 0, lateFinish = 0, emptyEarly = 0,
+      fairness = 0, netSpread = 0, linkedOverlap = 0;
   const V = collect ? [] : null;
 
-  // ── לפי קבוצה: הקשיח "פעמיים באותו סלוט" והרך כולו, במעבר אחד ──
+  // ── לפי קבוצה: הקשיח "פעמיים באותו סלוט", הרצף, ההמתנה, המכסה, הטווח,
+  //    ההוגנות ופיזור-הרשתות — הכול במעבר אחד ──
   for (let t = 0; t < T; t++) {
     const base = t * (S + 2);
-    let prev = 0, first = 0, last = 0, n = 0;
+    let prev = 0, first = 0, last = 0, n = 0, run = 0;
     for (let sl = 1; sl <= S; sl++) {
       const c = tc[base + sl];
       if (!c) continue;
@@ -501,19 +553,33 @@ function evalDay(pl, ctx, collect) {
       if (prev) {
         const gap = sl - prev;
         if (gap === 1) {
-          const bw = s.b2bW[t];   // ליגה ב׳ (allowConsecutive) — קנס רך; השאר קשיח
-          backToBack += bw;
-          if (V) V.push({ kind:'backToBack', cost:bw, slot:prev, team:s.teams[t],
-                          text:`${s.teams[t]} משחקת פעמיים ברצף` });
-        } else if (gap - 1 > 1) {
-          // המתנה של סלוט אחד (gap=2) היא האידיאל — אפס קנס. מעבר לזה הקנס
-          // **ריבועי** ב"עודף" (gap-2): המתנה של 9 סלוטים כואבת פי 49 מהמתנה
-          // של 2, כך שהמתזמן שובר קודם את הזנבות הארוכים ולא מפזר קנס אחיד.
-          const excess = gap - 2;
-          const c2 = W.longWait * excess * excess;
-          longWait += c2;
-          if (V) V.push({ kind:'longWait', cost:c2, slot:prev, team:s.teams[t],
-                          text:`${s.teams[t]} ממתינה ${gap - 1} סלוטים` });
+          // run = מספר המעברים-ברצף הרצופים עד כה. run==1 → זוג (משחק שני ברצף);
+          // run>=2 → המשחק ה-3 ומעלה. ליגה ב׳: הזוג חינם, מהשלישי 5000. שאר
+          // הליגות: כל מעבר-רצף = 1000 (רך).
+          run++;
+          // ליגה ב׳: זוג (run==1) → streakLiga2Pair (0 כברירת מחדל); משחק 3+
+          // (run>=2) → streakLiga2. שאר הליגות → streak על כל רצף.
+          const cst = allowConsec[t] ? (run >= 2 ? W.streakLiga2 : W.streakLiga2Pair) : W.streak;
+          if (cst) {
+            streak += cst;
+            if (V) V.push({ kind:'backToBack', cost:cst, slot:prev, team:s.teams[t],
+                            text: !allowConsec[t] ? `${s.teams[t]} משחקת פעמיים ברצף`
+                                 : run >= 2        ? `${s.teams[t]} משחקת 3 פעמים ברצף`
+                                                   : `${s.teams[t]} משחקת פעמיים ברצף (ליגה ב׳)` });
+          }
+        } else {
+          run = 0;
+          const w = gap - 1;   // מספר הסלוטים הריקים בין שני המשחקים
+          // המתנה 1–2 = אידיאלי (0). 3 = 30. 4+ = 300.
+          if (w === 3) {
+            wait += W.wait3;
+            if (V) V.push({ kind:'longWait', cost:W.wait3, slot:prev, team:s.teams[t],
+                            text:`${s.teams[t]} ממתינה 3 סלוטים` });
+          } else if (w >= 4) {
+            wait += W.wait4;
+            if (V) V.push({ kind:'longWait', cost:W.wait4, slot:prev, team:s.teams[t],
+                            text:`${s.teams[t]} ממתינה ${w} סלוטים` });
+          }
         }
       }
       prev = sl; last = sl;
@@ -530,6 +596,16 @@ function evalDay(pl, ctx, collect) {
         if (V) V.push({ kind:'tooFew', cost:c, team:s.teams[t],
                         text:`${s.teams[t]} — ${n} משחקים בלבד ביום (המינימום ${lo[t]})` });
       }
+      // הוגנות מוקדם/מאוחר (חוצה-ימים): קבוצה בסלוט הראשון (17:00) או בסלוט
+      // האחרון של היום, שכבר קיבלה סלוט קיצון בימים קודמים.
+      if (fairPrior[t] && (first === 1 || last === lastSlot)) {
+        const c = W.fairness * fairPrior[t]; fairness += c;
+        if (V) V.push({ kind:'fairness', cost:c, team:s.teams[t],
+                        text:`${s.teams[t]} שוב בסלוט ה${first === 1 ? 'ראשון' : 'אחרון'} של היום` });
+      }
+      // פיזור רשתות: קבוצה על יותר מרשת אחת ביום (רצוי פחות, לא חובה).
+      let bits = teamNets[t], cnt = 0; while (bits) { bits &= bits - 1; cnt++; }
+      if (cnt > 1) netSpread += W.netSpread * (cnt - 1);
     } else if (lo[t] > 0) {
       const c = W.gamesUnder * lo[t]; gamesUnder += c;
       if (V) V.push({ kind:'noGames', cost:c, team:s.teams[t],
@@ -537,7 +613,7 @@ function evalDay(pl, ctx, collect) {
     }
   }
 
-  // ── לפי תא: שני משחקים על אותו תא, תא חסום, ותא ריק ──
+  // ── לפי תא: שני משחקים על אותו תא (קשיח), תא חסום (קשיח), וחור מוקדם ──
   let empties = 0;
   for (let sl = 1; sl <= S; sl++) {
     for (let k = 0; k < N; k++) {
@@ -552,50 +628,92 @@ function evalDay(pl, ctx, collect) {
         if (V) V.push({ kind:'blockedCell', cost:W.hard*c, slot:sl, net:s.nets[k],
                         text:'משחק על תא שסומן כחסום' });
       }
-      if (!c && !blocked[idx] && sl <= lastSlot) empties++;
+      if (!c && !blocked[idx] && sl <= lastSlot) {
+        empties++;
+        // מוקדמוּת = כמה רחוק מסוף היום. חור בסלוט האחרון = 0 (חינם); מוקדם
+        // יותר יקר יותר — כך החורים נדחפים להתרכז בסוף (לליגה שלישית).
+        const early = lastSlot - sl;
+        if (early > 0) {
+          const c2 = W.emptyEarly * early; emptyEarly += c2;
+          if (V) V.push({ kind:'emptyEarly', cost:c2, slot:sl, net:s.nets[k],
+                          text:`תא ריק בסלוט מוקדם (${sl})` });
+        }
+      }
     }
   }
 
-  // ── לפי משחק: אין שופטת (5.2/5.3), ורשת קבועה (החלטה 4) ──
-  // האילוץ של השופטת חל רק אם באמת יש משחק על אותה רשת בסלוט הבא — אחרת אין
-  // את מי לשפוט. הוא מופר כששתי הקבוצות של המשחק הנוכחי משחקות ב-S+1.
+  // ── סיום מאוחר: היום נגמר אחרי המינימום התאורטי (⌈משחקים/רשתות⌉). דוחף את
+  //    המשחקים האמיתיים לסלוטים המוקדמים ואת החורים לסוף. 100 × מרחק. ──
+  if (placed) {
+    const minSlots = Math.ceil(placed / N);
+    const dist = lastSlot - minSlots;
+    if (dist > 0) {
+      lateFinish = W.lateFinish * dist;
+      if (V) V.push({ kind:'lateFinish', cost:lateFinish, slot:lastSlot,
+                      text:`היום נגמר ${dist} ${dist === 1 ? 'סלוט' : 'סלוטים'} אחרי המינימום התאורטי` });
+    }
+  }
+
+  // ── לפי משחק: אין שופטת (5.2/5.3 — רך), ושאו לא על הרשת המועדפת (רך) ──
+  // השופטת: מופר רק אם יש משחק על אותה רשת ב-S+1 (יש את מי לשפוט) ושתי הקבוצות
+  // של המשחק הנוכחי משחקות ב-S+1 (אין מי שיישאר לשפוט).
   for (let i = 0; i < s.G; i++) {
     const sl = pl.slot[i]; if (!sl) continue;
     const net = pl.net[i], np = s.netPos.get(net);
     if (gFixedNet[i] && net !== gFixedNet[i]) {
-      hard += W.hard;
-      if (V) V.push({ kind:'wrongNet', cost:W.hard, slot:sl, net, key:ctx.games[i].key,
-                      text:'משחק של ליגה עם רשת קבועה שובץ לרשת אחרת' });
+      showNet += W.showNotNet1;
+      if (V) V.push({ kind:'showNotNet1', cost:W.showNotNet1, slot:sl, net, key:ctx.games[i].key,
+                      text:'שאו לא על הרשת המועדפת' });
     }
     if (np != null && sl < S && cc[(sl + 1) * N + np] > 0
         && tc[gA[i] * (S + 2) + sl + 1] > 0 && tc[gB[i] * (S + 2) + sl + 1] > 0) {
-      hard += W.hard;
-      if (V) V.push({ kind:'noReferee', cost:W.hard, slot:sl, net, key:ctx.games[i].key,
+      noReferee += W.noReferee;
+      if (V) V.push({ kind:'noReferee', cost:W.noReferee, slot:sl, net, key:ctx.games[i].key,
                       text:'שתי הקבוצות ממשיכות לסלוט הבא — אין מי שישפוט' });
     }
   }
 
-  // ── קוהרנטיות רשת (החלטת המשתמשת): כל רשת מארחת ליגה ברצף, בלי לקפוץ בין
-  // ליגות מסלוט לסלוט. עוברים על כל עמודת רשת וסופרים מעבר בין ליגות שונות
-  // בתאים תפוסים עוקבים. מעבר אחד (למשל שואו→ליגה, או א׳→ב׳) טבעי; הלוך-ושוב
-  // הוא מה שנענש. המשקל מתחת להמתנה — קוהרנטיות לא באה על חשבון המתנה.
-  for (let k = 0; k < N; k++) {
-    let prevCat = 0;
+  // ── קבוצה רשומה כפול (§6.3): פעיל רק אם המנהלת סימנה קישור. משחק של צד אחד
+  //    בסלוט sl, בזמן שהצד השני משחק באותו סלוט או בסלוט צמוד = חפיפה/צפיפות. ──
+  for (const [ia, ib] of s.linked) {
     for (let sl = 1; sl <= S; sl++) {
-      const cat = cellCat[sl * N + k];
-      if (!cat) continue;
-      if (prevCat && cat !== prevCat) {
-        netJump += W.netJump;
-        if (V) V.push({ kind:'netJump', cost:W.netJump, slot:sl, net:s.nets[k],
-                        text:`רשת ${s.nets[k]} קופצת בין ליגות בסלוט ${sl}` });
+      if (!tc[ia * (S + 2) + sl]) continue;
+      const clash = tc[ib * (S + 2) + sl]
+                  + (sl > 1 ? tc[ib * (S + 2) + sl - 1] : 0)
+                  + (sl < S ? tc[ib * (S + 2) + sl + 1] : 0);
+      if (clash) {
+        linkedOverlap += W.linkedOverlap;
+        if (V) V.push({ kind:'linkedOverlap', cost:W.linkedOverlap, slot:sl, team:s.teams[ia],
+                        text:'קבוצה רשומה כפול משובצת צפוף/חופף' });
       }
-      prevCat = cat;
     }
   }
 
-  const emptyCell = W.emptyCell * empties;
-  const breakdown = { hard, backToBack, gamesOver, gamesUnder, longWait, netJump, span, emptyCell };
-  const total = hard + backToBack + gamesOver + gamesUnder + longWait + netJump + span + emptyCell;
+  // ── רצף קטגוריה לא נקי על רשת: קטגוריה שחוזרת אחרי שעזבה (א׳→ב׳→א׳). מעבר
+  //    בודד (א׳→ב׳) נקי וחינמי; רק חזרה נענשת. תאים ריקים אינם שוברים רצף. ──
+  for (let k = 0; k < N; k++) {
+    let prevCat = 0, seen = 0;
+    for (let sl = 1; sl <= S; sl++) {
+      const cat = cellCat[sl * N + k];
+      if (!cat) continue;
+      if (cat !== prevCat) {
+        const bit = cat < 31 ? (1 << cat) : 0;
+        if (bit && (seen & bit)) {
+          catReturn += W.catReturn;
+          if (V) V.push({ kind:'catReturn', cost:W.catReturn, slot:sl, net:s.nets[k],
+                          text:`רשת ${s.nets[k]} חוזרת לקטגוריה שכבר עזבה` });
+        }
+        seen |= bit;
+        prevCat = cat;
+      }
+    }
+  }
+
+  const breakdown = { hard, backToBack: streak, gamesOver, gamesUnder, longWait: wait,
+                      catReturn, noReferee, showNotNet1: showNet, lateFinish,
+                      emptyCell: emptyEarly, fairness, span, netSpread, linkedOverlap };
+  const total = hard + streak + gamesOver + gamesUnder + wait + catReturn + noReferee
+              + showNet + lateFinish + emptyEarly + fairness + span + netSpread + linkedOverlap;
   return collect
     ? { total, breakdown, violations: V, lastSlot, empties, placed, hard }
     : total;
@@ -683,9 +801,8 @@ function greedyFill(ctx, plan, rng) {
         pairCap - prevN - nowN
       );
 
-      const nets = cat.fixedNet
-        ? (freeNets(s).includes(cat.fixedNet) ? [cat.fixedNet] : [])
-        : freeNets(s);
+      // §6.2: הרשת המועדפת (שאו→1) בראש, אבל שאר הרשתות זמינות כשהיא תפוסה.
+      const nets = orderNets(freeNets(s), cat.fixedNet);
       const chosen = pickSlotGames(list, s, Math.min(want, nets.length));
       chosen.forEach((g, i) => { put(g, s, nets[i]); list.splice(list.indexOf(g), 1); });
 
@@ -762,7 +879,8 @@ function placeLeftovers(ctx, pl, leftovers) {
 
   for (const g of leftovers) {
     const i = idxOf.get(g.key);
-    const fixed = s.gFixedNet[i];
+    // §6.2: אין יותר רשת קשיחה — כל רשת פנויה מותרת, וההעדפה הרכה (showNotNet1)
+    // כבר משוקללת ב-evalDay, כך שהתא הזול ביותר יעדיף ממילא את הרשת המועדפת.
     let bestCost = Infinity, bestSlot = 0, bestNet = 0;
 
     const taken = new Set();
@@ -770,7 +888,6 @@ function placeLeftovers(ctx, pl, leftovers) {
 
     for (let sl = 1; sl <= ctx.slots; sl++) {
       for (const net of ctx.netIds) {
-        if (fixed && net !== fixed) continue;
         if (taken.has(sl + '|' + net) || ctx.blocked.has(sl + '|' + net)) continue;
         pl.slot[i] = sl; pl.net[i] = net;
         const c = evalDay(pl, ctx, false);
@@ -874,7 +991,8 @@ function candidates(ctx, pl, s, occ) {
     for (let sl = 1; sl <= S; sl++) {
       const c = tc[base + sl]; if (!c) continue;
       if (c > 1 || sl < availFrom[t] || sl > availTo[t]) bad = true;
-      if (prev && (sl - prev === 1 || sl - prev > 2)) bad = true;
+      // מועמד להזזה: רצף (gap=1) או המתנה נענשת (gap≥4 = 3+ סלוטים; 1–2 חינם).
+      if (prev && (sl - prev === 1 || sl - prev > 3)) bad = true;
       prev = sl; n += c;
     }
     if (bad || n > hi[t] || n < lo[t]) addTeam(t);
@@ -921,7 +1039,7 @@ export function packDay(ctx, opts = {}) {
   // ל-~8ש לעונה, והמקרה האמיתי עדיין מספיק להריץ את כל ה-10.
   const dayBudgetMs = opts.dayBudgetMs ?? 2200;
   const t0 = Date.now();
-  const { plan, overflow } = planSlotCounts(ctx);
+  const { plan, overflow } = planSlotCounts(ctx, opts);
   let best = null;
 
   for (let i = 0; i < restarts; i++) {
@@ -1021,6 +1139,9 @@ export function buildDayContext(input, day, dayGames, bounds) {
     slots: day.slots, slotMin: day.slotMin,
     netIds: [...(day.netIds || [])].sort((a, b) => a - b),
     cats, games: dayGames, blocked, avail,
+    // קישורי "רשום כפול" (§6.3) — פעיל רק אם המנהלת סימנה. אין כרגע מקור נתונים
+    // במודל (§5 נעול), ולכן ריק עד שיתווסף. generateSeason מזריק extremesPrior.
+    linked: input.links || [],
     bounds: Object.fromEntries([...present].map(t => [t, bounds?.[t] || { lo: 0, hi: Infinity }]))
   };
 }
@@ -1130,6 +1251,11 @@ export function generateSeason(input, opts = {}) {
 
     const only = opts.onlyDays ? new Set(opts.onlyDays) : null;   // §8.6
 
+    // הוגנות מוקדם/מאוחר (§6.2, חוצה-ימים): צוברים כמה ימים כבר קיבלה כל קבוצה
+    // סלוט קיצון (ראשון/אחרון). הימים מעובדים לפי הסדר הכרונולוגי, כך שיום מאוחר
+    // "יודע" מי כבר נדחק לקצה ומעדיף לא לחזור עליה. דטרמיניסטי (נגזר מאריזה קודמת).
+    const extremesPrior = {};
+
     for (const day of days) {
       const dayGames = games.filter(g => g.day === day.id);
       if (!dayGames.length) { report.days[day.id] = { label: day.label, games: 0 }; continue; }
@@ -1142,6 +1268,7 @@ export function generateSeason(input, opts = {}) {
       }
 
       const ctx = buildDayContext(input, day, dayGames, bounds);
+      ctx.extremesPrior = extremesPrior;
       const res = packDay(ctx, opts);
 
       dayGames.forEach(g => {
@@ -1149,6 +1276,14 @@ export function generateSeason(input, opts = {}) {
         g.slot = p ? p.slot : null;
         g.net  = p ? p.net  : null;
       });
+
+      // עדכון מונה הקיצון לימים הבאים: מי שיחק בסלוט הראשון או בסלוט האחרון של היום
+      let dayLast = 0;
+      for (const g of dayGames) if (g.slot && g.slot > dayLast) dayLast = g.slot;
+      const extreme = new Set();
+      for (const g of dayGames)
+        if (g.slot === 1 || g.slot === dayLast) { extreme.add(g.a); extreme.add(g.b); }
+      for (const t of extreme) extremesPrior[t] = (extremesPrior[t] || 0) + 1;
 
       report.days[day.id] = {
         label: day.label, games: dayGames.length,
