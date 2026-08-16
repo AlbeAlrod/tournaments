@@ -21,6 +21,7 @@ import {
 // לוח הגרירה — שלב 5. מודול תצוגה+שליטה שמקבל את המצב החי דרך Board.init().
 // אין לו window.* globals; פעולותיו בקידומת board.* ומוזרקות ל-ACT (ראו start()).
 import Board from './league-board.js?v=7';
+import KO from './league-ko.js?v=1';
 
 // ============ זהות הליגה ============
 // ⚠️ המזהה הזה מופיע בכתובת הציבורית שכל 72 השחקניות מקבלות. הוא לא זמני.
@@ -637,6 +638,7 @@ function paint() {
     : page === 'status'    ? renderStatus()
     : page === 'standings' ? renderStandings()
     : page === 'schedule'  ? Board.render()
+    : page === 'ko'        ? KO.render()
     : renderPlaceholder(target);
 
   renderSponsorBar();
@@ -853,6 +855,13 @@ const NET_NAME  = id => (L.meta.nets || []).find(n => n.id === id)?.name  || ('�
 const NET_COLOR = id => (L.meta.nets || []).find(n => n.id === id)?.color || '#888888';
 const CAT_NAME  = id => L.categories.find(c => c.id === id)?.name || id;
 const TEAM_NAME = id => findTeam(id)?.team.name || id;
+
+// חיווט שלב 7 (פיינל פור + הצלבה). מוצב כאן, אחרי CAT_NAME/TEAM_NAME, כדי
+// שלא ליפול ל-TDZ של ה-const-ים (הם לא hoisted). paint()/queueSave/rankStandings/
+// validSet הן function declarations ולכן מותרות. הפעולות של המודול נושאות data-ko
+// עם מאזין משלו — לא דרך handle() — כדי שהחלפת לשונית לא תכתוב את המסמך.
+KO.init({ getL: () => L, queueSave, repaint: paint, rankStandings,
+          teamName: TEAM_NAME, catName: CAT_NAME, validSet });
 
 function renderSched() {
   const st = schedState();
