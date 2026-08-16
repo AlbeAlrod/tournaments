@@ -16,11 +16,11 @@ import {
 // והוא מקבל תמונת מצב ומחזיר משחקים ודוח. ראו league-sched.js.
 import {
   generateSeason, buildDayContext, dayCost, dayLength, slotLabel
-} from './league-sched.js?v=6';
+} from './league-sched.js?v=7';
 
 // לוח הגרירה — שלב 5. מודול תצוגה+שליטה שמקבל את המצב החי דרך Board.init().
 // אין לו window.* globals; פעולותיו בקידומת board.* ומוזרקות ל-ACT (ראו start()).
-import Board from './league-board.js?v=8';
+import Board from './league-board.js?v=9';
 import KO from './league-ko.js?v=1';
 
 // ============ זהות הליגה ============
@@ -894,10 +894,10 @@ function renderSched() {
   <div class="sett-section">
     <div class="sett-section-title">הרצה</div>
     <div class="sched-actions">
-      <button class="cf-btn" data-act="sched.all"${busy}>הכל — א׳ + ב׳ + ג׳</button>
-      <button class="filter-btn" data-act="sched.rr"${busy}>א׳ · מחזורי RR</button>
-      <button class="filter-btn" data-act="sched.days"${busy}${st.rr ? '' : ' disabled'}>ב׳ · חלוקה לימים</button>
-      <button class="filter-btn" data-act="sched.pack"${busy}${st.days ? '' : ' disabled'}>ג׳ · אריזה + תיקון</button>
+      <button class="cf-btn" data-act="sched.all"${busy}>צור לוז מלא</button>
+      <button class="filter-btn" data-act="sched.rr"${busy}>קבע מי נגד מי</button>
+      <button class="filter-btn" data-act="sched.days"${busy}${st.rr ? '' : ' disabled'}>חלק לימים</button>
+      <button class="filter-btn" data-act="sched.pack"${busy}${st.days ? '' : ' disabled'}>סדר בגרייד</button>
       <button class="team-del sched-clear" data-act="sched.clear"${busy}>מחיקת הלוז</button>
     </div>
     <div class="sched-state">

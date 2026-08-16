@@ -1033,6 +1033,53 @@ function candidates(ctx, pl, s, occ) {
   return [...out];
 }
 
+// ── פאס דחיסת חורים סופי (תיקון באג 25.7) ──
+// פאס התיקון מוגבל ברדיוס וברשימת מועמדים, ולכן החמיץ מהלכים שמושכים משחק מאוחר
+// אל תא ריק מוקדם — נשארו "חורים באמצע" שאפשר היה למלא. כאן סורקים כל תא ריק
+// מהמוקדם למאוחר, ומושכים אליו את המשחק **המאוחר ביותר** שאפשר בלי להעלות את
+// העלות הכוללת. מכיוון שהעלות כוללת רצף (≥1000), המתנה (מדורגת) וסיום, התנאי
+// c ≤ cur מבטיח שאף לוק לא נשבר — לא נוצר רצף שאו/א׳, המתנה לא גדלה והיום לא
+// מתארך — והחור פשוט נדחף לזנב. כל מהלך מזיז חור לסלוט מאוחר יותר, ולכן מתכנס.
+function compactHoles(ctx, pl) {
+  const s = scratch(ctx);
+  const S = ctx.slots, N = s.N;
+  let cur = evalDay(pl, ctx, false);
+  const occ = new Int32Array((S + 2) * N);
+
+  for (let guard = 0; guard < 1000; guard++) {
+    let lastSlot = 0;
+    for (let i = 0; i < s.G; i++) if (pl.slot[i] > lastSlot) lastSlot = pl.slot[i];
+    occ.fill(0);
+    for (let i = 0; i < s.G; i++) if (pl.slot[i]) occ[pl.slot[i] * N + s.netPos.get(pl.net[i])] = i + 1;
+
+    let did = false;
+    for (let sl = 1; sl < lastSlot && !did; sl++) {
+      for (let k = 0; k < N && !did; k++) {
+        if (occ[sl * N + k] || s.blocked[sl * N + k]) continue;   // תפוס או חסום
+        const net = s.nets[k];
+        // המשחק המאוחר ביותר שאפשר למשוך לכאן בלי להעלות עלות
+        let bestJ = -1, bestSrc = sl;
+        for (let j = 0; j < s.G; j++) {
+          const js = pl.slot[j];
+          if (js <= bestSrc || s.gLocked[j]) continue;            // רק משחק מאוחר מהחור, והמאוחר ביותר
+          const os = js, on = pl.net[j];
+          pl.slot[j] = sl; pl.net[j] = net;
+          const c = evalDay(pl, ctx, false);
+          pl.slot[j] = os; pl.net[j] = on;
+          if (c <= cur) { bestJ = j; bestSrc = js; }
+        }
+        if (bestJ >= 0) {
+          pl.slot[bestJ] = sl; pl.net[bestJ] = net;
+          cur = evalDay(pl, ctx, false);
+          did = true;
+        }
+      }
+    }
+    if (!did) break;
+  }
+  return pl;
+}
+
 // ── האריזה המלאה ליום אחד ──
 // כמה הרצות עם זרעים שונים, והטובה מנצחת. הזרעים קבועים, ולכן שתי הרצות של
 // אותו קלט נותנות אותו לוז בדיוק.
@@ -1061,6 +1108,12 @@ export function packDay(ctx, opts = {}) {
       best = { score, pl: r.pl, unplaced, moves: r.moves, seed: i };
     if (i >= 2 && Date.now() - t0 > dayBudgetMs) break;
   }
+
+  // דחיסת חורים לזנב (תיקון באג 25.7): פאס אחרון על הלוז הנבחר בלבד — מבטיח
+  // שאין תא ריק שאפשר למלא במשחק מאוחר בלי להעלות עלות (ולכן בלי לשבור לוק).
+  // רץ פעם אחת (לא לכל הרצה) — זול, ודטרמיניסטי. במקרה המקבילי הוא בד"כ no-op
+  // כי האריזה כבר מרכזת חורים בזנב, אבל הוא רשת-ביטחון לרוסטרים אחרים.
+  compactHoles(ctx, best.pl);
 
   const cost = evalDay(best.pl, ctx, true);
   const place = placementToMap(best.pl, ctx);
