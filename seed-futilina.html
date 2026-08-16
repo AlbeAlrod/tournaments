@@ -1,0 +1,280 @@
+<!DOCTYPE html><html lang="he" dir="rtl"><head><meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Seed — ליגת קיץ פוצ׳ילינה 2026</title>
+<style>
+body{font-family:system-ui,Rubik,Arial;max-width:900px;margin:24px auto;padding:0 16px;line-height:1.55;color:#000B19}
+h1{margin:0 0 4px;font-size:24px}
+h1 .dot{display:inline-block;width:14px;height:14px;border-radius:50%;background:#EE2BC1;margin-inline-end:8px}
+.sub{color:#556;margin:0 0 16px}
+button{font-size:16px;padding:10px 18px;margin:4px 6px 4px 0;border:1px solid #EE2BC1;border-radius:8px;background:#EE2BC1;color:#fff;cursor:pointer}
+button.sec{background:#fff;color:#0775ED;border-color:#0775ED}
+button:disabled{opacity:.5;cursor:not-allowed}
+#log{white-space:pre-wrap;background:#fdf3fb;border:1px solid #f3c9ea;border-radius:8px;padding:12px;margin-top:12px;
+     font-family:ui-monospace,SFMono-Regular,monospace;font-size:13px;min-height:90px;direction:ltr;text-align:left}
+code{background:#eef1f4;padding:1px 5px;border-radius:4px}
+.warn{background:#fffbe6;border:1px solid #DAFF00;border-radius:8px;padding:10px 12px;margin:12px 0}
+table{border-collapse:collapse;margin:10px 0;font-size:14px}
+td,th{border:1px solid #dde3ea;padding:4px 10px;text-align:right}
+.sw{display:inline-block;width:13px;height:13px;border-radius:3px;border:1px solid #0002;vertical-align:-2px;margin-inline-end:6px}
+</style></head>
+<body>
+
+<h1><span class="dot"></span>Seed — ליגת קיץ פוצ׳ילינה 2026</h1>
+<p class="sub">כותב את <b>הגדרות הליגה</b> (meta · nets · days · categories · formats) למסמך Firestore.
+לפי §5.1 / §2.1 / §2.6 / §15.1 של <code>SPEC-futilina-league-2026.md</code>.</p>
+
+<div class="warn">
+⚠️ <b>יעד הכתיבה: <code id="tid">futilina-seedtest</code></b> — מסמך בדיקה זמני.<br>
+המסמך האמיתי <code>futilina-2026</code> <b>ייווצר מאוחר יותר</b>, כשהרוסטר מוכן (אחרי 12.8) — §5.3.
+הקובץ הזה חוסם כתיבה אליו בקוד; לשחרור, יש לשנות את <code>ALLOW_REAL_DOC</code> ידנית.<br>
+<b>אין כאן roster ואין games</b> — הם נוספים אחרי ההרשמה.
+</div>
+
+<button onclick="seedAll()">▶ Seed / Overwrite</button>
+<button class="sec" onclick="verifyDoc()">🔍 בדיקה — קרא ואמת</button>
+<a id="open-link" href="./league.html?l=futilina-seedtest" target="_blank"><button class="sec" type="button">↗ פתח את הליגה</button></a>
+<div id="log"></div>
+
+<h3>מה נכתב</h3>
+<table>
+  <tr><th>meta</th><td>שם · mode:'league' · צבעי מותג · scoring · tieBreak · showPastDays · font</td></tr>
+  <tr><th>nets</th><td>
+    <span class="sw" style="background:#EE2BC1"></span>#EE2BC1 ·
+    <span class="sw" style="background:#DAFF00"></span>#DAFF00 ·
+    <span class="sw" style="background:#0775ED"></span>#0775ED ·
+    <span class="sw" style="background:#000B19"></span>#000B19</td></tr>
+  <tr><th>days</th><td>מחזור 1 (22.8) · 2 (29.8) · 3 (5.9) · 4 (12.9) · פיינל פור (19.9) ·
+      משחקי הצלבה (מועד טרם נקבע, <code>date:null</code>) — כולם published:false</td></tr>
+  <tr><th>categories</th><td>שואו (rr:2, מגרש קבוע 1) · ליגה ראשונה (rr:1) · ליגה שנייה (rr:1, allowConsecutive)</td></tr>
+  <tr><th>formats</th><td>§2.6 — סדיר 18 · חצי ב׳ 21 ללא תקרה · גמר הטוב מ-3 (18/18/15)</td></tr>
+  <tr><th>ריק בכוונה</th><td>players · roster · availability · attendance · games · blocks · ko · crossover</td></tr>
+</table>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
+import { getFirestore, doc, getDoc, setDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
+const firebaseConfig={apiKey:"AIzaSyA-rPlg0Oau16QcTjD20hDfkyveRSrD8I0",authDomain:"tournaments-33619.firebaseapp.com",projectId:"tournaments-33619",storageBucket:"tournaments-33619.firebasestorage.app",messagingSenderId:"409384565600",appId:"1:409384565600:web:61bd55676343d6035abc05"};
+const db=getFirestore(initializeApp(firebaseConfig));
+
+// ============================================================================
+// יעד — §5.3
+// ============================================================================
+// מסמך הבדיקה הזמני. המסמך האמיתי futilina-2026 נוצר רק כשהרוסטר מוכן
+// (הוא כבר נוצר בטעות פעם אחת ונמחק ב-25.7), ולכן הוא חסום כאן במפורש.
+const T_ID           = 'futilina-seedtest';
+const REAL_DOC       = 'futilina-2026';
+const ALLOW_REAL_DOC = false;   // ⚠️ להעביר ל-true רק כשבאמת מקימים את הליגה האמיתית
+
+// ============================================================================
+// נתוני המותג — §15.1 (הפלטה התקבלה 24.7.2026, Pantone)
+// ============================================================================
+// לבן הוא רקע הדף, ולכן ארבעת הצבעים שאינם לבן הם ארבע הרשתות.
+// המגנטה משמשת גם כצבע הראשי וגם כמסך הטעינה הוורוד.
+const NET_COLORS = ['#EE2BC1', '#DAFF00', '#0775ED', '#000B19'];  // 807C · 809C · 2173C · כהה
+const NET_NAMES  = ['מגרש 1', 'מגרש 2', 'מגרש 3', 'מגרש 4'];      // הצבע מזהה, המספר הוא השם
+const BRAND_PINK      = '#EE2BC1';
+const BRAND_PRIMARY   = '#EE2BC1';
+const BRAND_SECONDARY = '#0775ED';
+
+// ============================================================================
+// ימים — §2.1 + §4.3
+// ============================================================================
+const BEACH = 'חוף בוגרשוב, תל אביב';
+// 16 סלוטים × 20 דקות = 5:20 → 17:00–22:20 (§4.3). 4 רשתות = 64 תאים.
+const DAY_BASE = { beach:BEACH, startTime:'17:00', slotMin:20, slots:16,
+                   netIds:[1,2,3,4], published:false };
+
+// יום ההצלבה (3.11.6) — מועד מיוחד אחרי הפיינל פור, טרם נקבע ולכן date:null.
+// כלול, כדי שהמסמך יהיה זהה ל-defaultDays() ב-league.js ולמודל §5.1.
+const INCLUDE_CROSS = true;
+
+const clone = o => JSON.parse(JSON.stringify(o));
+
+function buildDays() {
+  const days = [
+    { id:'r1', label:'מחזור 1',   date:'2026-08-22', ...clone(DAY_BASE) },
+    { id:'r2', label:'מחזור 2',   date:'2026-08-29', ...clone(DAY_BASE) },
+    { id:'r3', label:'מחזור 3',   date:'2026-09-05', ...clone(DAY_BASE) },
+    { id:'r4', label:'מחזור 4',   date:'2026-09-12', ...clone(DAY_BASE) },
+    { id:'ff', label:'פיינל פור', date:'2026-09-19', ...clone(DAY_BASE) },
+  ];
+  if (INCLUDE_CROSS)
+    days.push({ id:'cross', label:'משחקי הצלבה', date:null, ...clone(DAY_BASE) });
+  return days;
+}
+
+// ============================================================================
+// פורמטים — §2.6
+// ============================================================================
+// by:2 = הארכה עד הפרש 2. cap = תקרה קשה (3.5). cap:null = ללא תקרה.
+const F_SET18 = { sets:1, to:18, by:2, cap:25 };            // 3.5 — ליגה סדירה + מקום 3-4
+const F_BO3   = { sets:3, to:18, third:15, by:2, cap:25 };  // 3.9.4 / 3.9.6 — הטוב מ-3
+const F_SET21 = { sets:1, to:21, by:2, cap:null };          // 3.9.5 — חצי גמר ליגה ב׳
+
+// ============================================================================
+// המסמך — §5.1
+// ============================================================================
+function buildDoc() {
+  return {
+    meta: {
+      mode: 'league',                  // כך admin.html ממשיך להציג את הליגה ברשימה
+      name: 'ליגת קיץ פוצ׳ילינה 2026',
+      logoUrl: '',                     // §15.2 — הלוגו טרם התקבל
+      primaryColor:   BRAND_PRIMARY,
+      secondaryColor: BRAND_SECONDARY,
+      loadingColor:   BRAND_PINK,      // מסך הטעינה הוורוד
+      font: 'Rubik',                   // Barlow הוא לטיני בלבד — לא מתאים לעברית
+      sponsorLogos: [],                // §15.3 — טרם התקבלו
+
+      // אין Firebase Auth — ההרשאות נאכפות בדפדפן. הסיסמאות נקבעות בעמוד
+      // ההגדרות (הן נשמרות כ-hash), לא כאן. ראו SECURITY.md.
+      adminPasswordHash: '',
+      managerPasswordHash: '',
+
+      nets: NET_COLORS.map((color, i) => ({ id:i+1, name:NET_NAMES[i], color })),
+
+      days: buildDays(),
+
+      showPastDays: true,
+      tieBreak: ['pts','diff','h2h'],   // 3.10 — נעול, לא ניתן לשינוי
+
+      // ניקוד — 3.7 + מקרים יוצאי דופן בסעיף 6.
+      // ⚠️ unfinished = 1.5 (6.2) — הערך היחיד שאינו שלם, ולכן כל חישוב
+      // הנקודות חייב להיות עשרוני.
+      scoring: {
+        win: 2,             // 3.7.1
+        loss: 1,            // 3.7.2
+        techLoss: 0,        // 3.7.3
+        unfinished: 1.5,    // 6.2 — לשתי הקבוצות, הפרש 0
+        walkoverFor: 18,    // 6.3.1 / 6.3.2 / 6.1.2
+        walkoverAgainst: 10
+      }
+    },
+
+    categories: [
+      { id:'show',  name:'ליגת שואו',   rr:2, order:1, fixedNet:1 },  // RR כפול, מגרש קבוע
+      { id:'liga1', name:'ליגה ראשונה', rr:1, order:2 },              // 3.4 — RR יחיד
+      // רק ליגה ב׳ מתירה שני משחקים ברצף (נדיר) — מוצא למתזמן במקום המתנה ארוכה.
+      { id:'liga2', name:'ליגה שנייה',  rr:1, order:3, allowConsecutive:true }
+    ],
+
+    formats: {
+      show:  { regular:clone(F_SET18), sf:clone(F_BO3),   third:clone(F_SET18), final:clone(F_BO3) },
+      liga1: { regular:clone(F_SET18), sf:clone(F_BO3),   third:clone(F_SET18), final:clone(F_BO3) },
+      liga2: { regular:clone(F_SET18), sf:clone(F_SET21), third:clone(F_SET18), final:clone(F_BO3) }
+    },
+
+    // כל אלה ריקים בכוונה — הרוסטר נסגר אחרי ההרשמה (12.8) והלוז נוצר
+    // אחריו במתזמן. זריעה שלהם כאן הייתה מייצרת נתונים שיידרסו.
+    players:      {},
+    roster:       { show:[], liga1:[], liga2:[] },
+    availability: {},
+    attendance:   {},
+    games:        [],
+    blocks:       [],
+    ko: {
+      show:  { sfSlotChoice:null, sf:[], third:null, final:null, substitutions:[] },
+      liga1: { sfSlotChoice:null, sf:[], third:null, final:null, substitutions:[] },
+      liga2: { sfSlotChoice:null, sf:[], third:null, final:null, substitutions:[] }
+    },
+    crossover: []
+  };
+}
+
+// ============================================================================
+// UI
+// ============================================================================
+document.getElementById('tid').textContent = T_ID;
+document.getElementById('open-link').href  = './league.html?l=' + T_ID;
+
+const logEl = document.getElementById('log');
+const log = m => { logEl.textContent += m + '\n'; logEl.scrollTop = logEl.scrollHeight; };
+
+function guardTarget() {
+  if (T_ID === REAL_DOC && !ALLOW_REAL_DOC) {
+    log('✗ חסום: T_ID מצביע על המסמך האמיתי "' + REAL_DOC + '".');
+    log('  המסמך האמיתי נוצר רק כשהרוסטר מוכן (§5.3). לשחרור: ALLOW_REAL_DOC=true.');
+    return false;
+  }
+  return true;
+}
+
+window.seedAll = async function () {
+  logEl.textContent = '';
+  if (!guardTarget()) return;
+  const D = buildDoc();
+  log('▶ כותב "' + T_ID + '"…');
+  try {
+    const snap = await getDoc(doc(db, 'tournaments', T_ID));
+    if (snap.exists() && !confirm('"' + T_ID + '" כבר קיים. לדרוס אותו לגמרי?')) {
+      log('✗ בוטל'); return;
+    }
+    // בלי merge — כמו flushSave ב-league.js. merge היה משאיר שדות ישנים
+    // מזריעה קודמת (למשל יום שהוסר) ומחזיר אותם בטעינה הבאה.
+    await setDoc(doc(db, 'tournaments', T_ID), { ...D, updatedAt: serverTimestamp() });
+    log('✓ נכתב.');
+    log('  nets:       ' + D.meta.nets.map(n => n.name + ' ' + n.color).join(' · '));
+    log('  days:       ' + D.meta.days.map(d => d.label + ' ' + (d.date || '—')).join(' · '));
+    log('  יום:        ' + D.meta.days[0].slots + ' סלוטים × ' + D.meta.days[0].slotMin +
+        ' דק׳ מ-' + D.meta.days[0].startTime + ' · ' + D.meta.days[0].beach);
+    log('  categories: ' + D.categories.map(c => c.name + ' (rr:' + c.rr + ')').join(' · '));
+    log('  roster/games ריקים — יתווספו אחרי ההרשמה.');
+    log('✓ פתח: ' + location.origin + location.pathname.replace(/seed-futilina\.html$/, '') +
+        'league.html?l=' + T_ID);
+  } catch (e) { log('✗ ' + e.message); console.error(e); }
+};
+
+// אימות — קורא את מה שבאמת יושב ב-Firestore ומשווה מול המפרט.
+window.verifyDoc = async function () {
+  logEl.textContent = '';
+  log('🔍 קורא "' + T_ID + '"…');
+  try {
+    const snap = await getDoc(doc(db, 'tournaments', T_ID));
+    if (!snap.exists()) { log('✗ המסמך לא קיים. הרץ Seed.'); return; }
+    const d = snap.data(), m = d.meta || {};
+    let bad = 0;
+    const ck = (ok, label) => { log((ok ? '  ✓ ' : '  ✗ ') + label); if (!ok) bad++; };
+
+    ck(m.mode === 'league', "meta.mode = 'league'");
+    ck(m.name === 'ליגת קיץ פוצ׳ילינה 2026', 'meta.name');
+    ck(m.primaryColor === BRAND_PRIMARY && m.secondaryColor === BRAND_SECONDARY &&
+       m.loadingColor === BRAND_PINK, 'brand colors (§15.1)');
+    ck(Array.isArray(m.nets) && m.nets.length === 4 &&
+       m.nets.every((n, i) => n.id === i + 1 && n.color === NET_COLORS[i]), '4 nets + colors');
+    const days = m.days || [];
+    ck(days.length === (INCLUDE_CROSS ? 6 : 5), 'days count = ' + days.length);
+    ck(days.every(x => x.beach === BEACH && x.startTime === '17:00' &&
+                       x.slotMin === 20 && x.slots === 16 &&
+                       JSON.stringify(x.netIds) === '[1,2,3,4]'), 'day shape (§4.3)');
+    ck(days.every(x => x.published === false), 'published:false בכל הימים');
+    ck(days.slice(0, 5).map(x => x.date).join(',') ===
+       '2026-08-22,2026-08-29,2026-09-05,2026-09-12,2026-09-19', 'dates (§2.1)');
+    ck(JSON.stringify(m.tieBreak) === '["pts","diff","h2h"]', 'tieBreak (3.10)');
+    ck(m.scoring?.win === 2 && m.scoring?.loss === 1 && m.scoring?.techLoss === 0 &&
+       m.scoring?.unfinished === 1.5, 'scoring (3.7 + 6.2)');
+    ck(m.showPastDays === true, 'showPastDays');
+
+    const cats = d.categories || [];
+    ck(cats.length === 3 && cats.map(c => c.id).join(',') === 'show,liga1,liga2', 'categories');
+    ck(cats[0]?.rr === 2 && cats[0]?.fixedNet === 1, 'show: rr=2, fixedNet=1');
+    ck(cats[1]?.rr === 1 && !cats[1]?.allowConsecutive, 'liga1: rr=1, ללא רצף');
+    ck(cats[2]?.rr === 1 && cats[2]?.allowConsecutive === true, 'liga2: rr=1, allowConsecutive');
+    ck(cats.map(c => c.order).join(',') === '1,2,3', 'order 1,2,3');
+
+    const f = d.formats || {};
+    ck(f.liga2?.sf?.to === 21 && f.liga2?.sf?.cap === null, 'liga2.sf = מערכה עד 21 ללא תקרה (3.9.5)');
+    ck(f.liga1?.sf?.sets === 3 && f.liga1?.sf?.third === 15, 'liga1.sf = הטוב מ-3 (3.9.4)');
+    ck(['show', 'liga1', 'liga2'].every(k => f[k]?.regular?.to === 18 && f[k]?.regular?.cap === 25),
+       'regular = מערכה עד 18, תקרה 25 (3.5)');
+    ck(['show', 'liga1', 'liga2'].every(k => f[k]?.final?.sets === 3), 'final = הטוב מ-3 (3.9.6)');
+
+    const empty = ['games', 'blocks', 'crossover'].every(k => (d[k] || []).length === 0) &&
+                  ['show', 'liga1', 'liga2'].every(k => (d.roster?.[k] || []).length === 0);
+    ck(empty, 'roster/games/blocks ריקים');
+
+    log(bad ? '\n✗ ' + bad + ' בדיקות נכשלו' : '\n✓ הכל תקין — ' + T_ID + ' תואם למפרט.');
+  } catch (e) { log('✗ ' + e.message); console.error(e); }
+};
+
+log('מוכן. יעד: ' + T_ID + (T_ID === REAL_DOC ? '  ⚠️ המסמך האמיתי!' : '  (מסמך בדיקה)'));
+</script></body></html>
