@@ -86,7 +86,17 @@ export const WEIGHTS = {
   streak:        100_000,
 
   noReferee:       800,   // אין שופטת (5.2/5.3) — רך, היה קשיח
-  linkedOverlap:   800,   // קבוצה רשומה כפול (שאו+ליגה) משובצת צפוף — פעיל רק אם סומן (§6.3)
+
+  // ── שחקנית משותפת לשתי קבוצות (§5.4, שלב 2) ──
+  // input.links = זוגות קבוצות שחולקות שחקנית (נקבע ברוסטר, §5.4 שלב 1).
+  // **מקביל** (אותו סלוט) = אילוץ **קשיח** תמיד, ולכן אין לו משקל משלו — הוא
+  // נספר תחת `hard`. שחקנית לא יכולה להיות בשני מקומות; זוג או שלישייה לא
+  // משנה, האילוץ הוא ברמת הקבוצה (החלטת המשתמשת).
+  // **רצף** (סלוטים עוקבים) = אזהרה רכה: 6–7 משחקים בערב זה כבר הרבה, אבל זה
+  // אפשרי. גבוה בטבלה (מעל רצף-קטגוריה 500 והמתנה 300), אך **מתחת ל-lateFinish
+  // (2000)** במכוון — סיום מוקדם נשאר המטרה העליונה (הלוק של 25.7), והאזהרה
+  // הזאת לא קונה לוז ארוך יותר. נמדד: 800 עומד בכל הלוקים; ראו יומן §5.4 שלב 2.
+  linkedAdjacent:  800,
   catReturn:       500,   // רצף קטגוריה לא נקי על רשת — קטגוריה חוזרת אחרי שעזבה (א׳→ב׳→א׳)
   wait4:           300,   // המתנה של 4+ סלוטים בין משחקי קבוצה
   gamesOver:       200,   // יותר מהמכסה העליונה ביום
@@ -479,17 +489,34 @@ function scratch(ctx) {
     const i = ti.get(t); if (i != null) fairPrior[i] = k | 0;
   }
 
-  // קישור "רשום כפול" (§6.3): זוגות אינדקסים ששייכים לאותה קבוצה פיזית
-  // (שאו+ליגה). פעיל רק אם המנהלת סימנה (ctx.linked); ריק כברירת מחדל.
+  // ── קבוצות שחולקות שחקנית (§5.4) ──
+  // ctx.linked = זוגות מזהי קבוצות שיש להן שחקנית משותפת (נקבע ברוסטר).
+  // שתי צורות, כי שני צרכנים שונים: `linked` (זוגות אינדקסים) לפונקציית העלות,
+  // ו-`partners` (רשימת שכנות לכל אינדקס) לבדיקות הנקודתיות באריזה — שם השאלה
+  // תמיד "מי אסור לי בסלוט הזה?" ולא "עברי על כל הזוגות".
+  // ⚠️ קבוצה יכולה לחלוק שחקניות עם **יותר מקבוצה אחת** (שלישייה שבה שתי
+  // שחקניות שונות משחקות כל אחת בליגה אחרת), ולכן זו רשימה ולא שדה יחיד.
+  // ⚠️ הזוגות **ממוינים ומנורמלים** (min,max ואז מיון), מאותה סיבה ש-gameKey
+  // ממוין: הצד שנקרא a הוא שרירותי. פאס התיקון סורק מועמדים בסדר הכנסתם, ולכן
+  // בלי הנרמול אותו רוסטר בדיוק היה נותן לוז אחר רק כי הרוסטר החזיר את הזוג
+  // בכיוון ההפוך (נמדד: 16 משחקים בתא אחר, ואפילו עלות שונה).
   const linked = [];
+  const partners = Array.from({ length: T }, () => []);
+  const seenPair = new Set();
   for (const [a, b] of ctx.linked || []) {
-    const ia = ti.get(a), ib = ti.get(b);
-    if (ia != null && ib != null) linked.push([ia, ib]);
+    const x = ti.get(a), y = ti.get(b);
+    if (x == null || y == null || x === y) continue;
+    const ia = Math.min(x, y), ib = Math.max(x, y), k = ia + '|' + ib;
+    if (seenPair.has(k)) continue;                    // זוג כפול בקלט — פעם אחת
+    seenPair.add(k);
+    linked.push([ia, ib]);
   }
+  linked.sort((p, q) => p[0] - q[0] || p[1] - q[1]);
+  for (const [ia, ib] of linked) { partners[ia].push(ib); partners[ib].push(ia); }
 
   return ctx._s = {
     teams, ti, T, S, nets, N, netPos, blocked, availFrom, availTo, lo, hi,
-    allowConsec, fairPrior, linked,
+    allowConsec, fairPrior, linked, partners,
     G, gA, gB, gFixedNet, gCat, gLocked, teamGames,
     tc:       new Int32Array(T * (S + 2)),      // קבוצה × סלוט
     cc:       new Int32Array((S + 2) * N),      // סלוט × רשת — כמה משחקים
@@ -532,7 +559,7 @@ function evalDay(pl, ctx, collect) {
 
   let hard = 0, streak = 0, gamesOver = 0, gamesUnder = 0, wait = 0, span = 0,
       catReturn = 0, noReferee = 0, showNet = 0, lateFinish = 0, emptyEarly = 0,
-      fairness = 0, netSpread = 0, linkedOverlap = 0;
+      fairness = 0, netSpread = 0, linkedAdjacent = 0;
   const V = collect ? [] : null;
 
   // ── לפי קבוצה: הקשיח "פעמיים באותו סלוט", הרצף, ההמתנה, המכסה, הטווח,
@@ -682,18 +709,31 @@ function evalDay(pl, ctx, collect) {
     }
   }
 
-  // ── קבוצה רשומה כפול (§6.3): פעיל רק אם המנהלת סימנה קישור. משחק של צד אחד
-  //    בסלוט sl, בזמן שהצד השני משחק באותו סלוט או בסלוט צמוד = חפיפה/צפיפות. ──
+  // ── שתי קבוצות שחולקות שחקנית (§5.4) ──
+  //    מקביל (אותו סלוט) = **קשיח**: השחקנית לא יכולה להיות בשני מקומות. לא
+  //    משנה אם היא זוג או שלישייה — האילוץ הוא ברמת הקבוצה, כי הרכב המשחק
+  //    נקבע רק על החוף (החלטת המשתמשת).
+  //    רצף (סלוט צמוד) = **אזהרה רכה**: אפשרי, אבל 6–7 משחקים בערב זה הרבה.
   for (const [ia, ib] of s.linked) {
     for (let sl = 1; sl <= S; sl++) {
-      if (!tc[ia * (S + 2) + sl]) continue;
-      const clash = tc[ib * (S + 2) + sl]
-                  + (sl > 1 ? tc[ib * (S + 2) + sl - 1] : 0)
-                  + (sl < S ? tc[ib * (S + 2) + sl + 1] : 0);
-      if (clash) {
-        linkedOverlap += W.linkedOverlap;
-        if (V) V.push({ kind:'linkedOverlap', cost:W.linkedOverlap, slot:sl, team:s.teams[ia],
-                        text:'קבוצה רשומה כפול משובצת צפוף/חופף' });
+      const na = tc[ia * (S + 2) + sl];
+      if (!na) continue;
+      const nb = tc[ib * (S + 2) + sl];
+      if (nb) {
+        const c = W.hard * Math.min(na, nb);
+        hard += c;
+        if (V) V.push({ kind:'sharedPlayerSameSlot', cost:c, slot:sl, team:s.teams[ia],
+                        other:s.teams[ib],
+                        text:`${s.teams[ia]} ו-${s.teams[ib]} חולקות שחקנית ומשובצות באותו סלוט` });
+      }
+      const adj = (sl > 1 ? tc[ib * (S + 2) + sl - 1] : 0)
+                + (sl < S ? tc[ib * (S + 2) + sl + 1] : 0);
+      if (adj) {
+        const c = W.linkedAdjacent * adj;
+        linkedAdjacent += c;
+        if (V) V.push({ kind:'sharedPlayerAdjacent', cost:c, slot:sl, team:s.teams[ia],
+                        other:s.teams[ib],
+                        text:`${s.teams[ia]} ו-${s.teams[ib]} חולקות שחקנית ומשחקות בסלוטים עוקבים` });
       }
     }
   }
@@ -720,9 +760,9 @@ function evalDay(pl, ctx, collect) {
 
   const breakdown = { hard, backToBack: streak, gamesOver, gamesUnder, longWait: wait,
                       catReturn, noReferee, showNotNet1: showNet, lateFinish,
-                      emptyCell: emptyEarly, fairness, span, netSpread, linkedOverlap };
+                      emptyCell: emptyEarly, fairness, span, netSpread, linkedAdjacent };
   const total = hard + streak + gamesOver + gamesUnder + wait + catReturn + noReferee
-              + showNet + lateFinish + emptyEarly + fairness + span + netSpread + linkedOverlap;
+              + showNet + lateFinish + emptyEarly + fairness + span + netSpread + linkedAdjacent;
   return collect
     ? { total, breakdown, violations: V, lastSlot, empties, placed, hard }
     : total;
@@ -790,6 +830,25 @@ function greedyFill(ctx, plan, rng) {
   const inWindow = (t, s) => { const w = ctx.avail[t]; return !w || (s >= w.from && s <= w.to); };
   const freeNets = s => ctx.netIds.filter(n => !ctx.blocked.has(s + '|' + n) && !cellUsed.has(s + '|' + n));
 
+  // §5.4 — קבוצות שחולקות שחקנית לא יכולות להיות באותו סלוט (קשיח). האריזה
+  // מכבדת את זה **מראש** ולא משאירה את זה לפאס התיקון: משחק שנארז על שותפה
+  // הוא הפרה קשיחה, ופאס התיקון מתקן הפרה אחת בכל פעם ובתוך רדיוס — כלומר
+  // הוא לא מובטח לנקות אותן. מונע במקום לתקן.
+  const partnerIds = new Map();
+  const linkPair = (a, b) => {
+    if (!partnerIds.has(a)) partnerIds.set(a, new Set());
+    partnerIds.get(a).add(b);
+  };
+  for (const [a, b] of ctx.linked || []) { if (a !== b) { linkPair(a, b); linkPair(b, a); } }
+  const partnersOf = t => partnerIds.get(t);
+  // האם לקבוצה t יש שותפה בתוך קבוצת-קבוצות נתונה (סלוט תפוס, או בחירה חלקית)
+  const linkBusy = (t, set) => {
+    const ps = partnersOf(t);
+    if (!ps) return false;
+    for (const p of ps) if (set.has(p)) return true;
+    return false;
+  };
+
   const ordered = catOrder(ctx);
   const deficit = {};
   for (const cat of ordered) deficit[cat.id] = 0;
@@ -827,6 +886,8 @@ function greedyFill(ctx, plan, rng) {
   // אי־רצף — הוא מה שמייצר את הקצב 4-3-4-3, ראו הערת planSlotCounts.
   function eligible(g, s) {
     if (slotTeams[s].has(g.a) || slotTeams[s].has(g.b)) return false;
+    // §5.4 — שותפה (קבוצה שחולקת שחקנית) כבר משחקת בסלוט הזה: קשיח
+    if (linkBusy(g.a, slotTeams[s]) || linkBusy(g.b, slotTeams[s])) return false;
     if (!inWindow(g.a, s) || !inWindow(g.b, s)) return false;
     if (slotTeams[s - 1]?.has(g.a) || slotTeams[s - 1]?.has(g.b)) return false;
     if (slotTeams[s + 1]?.has(g.a) || slotTeams[s + 1]?.has(g.b)) return false;  // נעולים שקדימה
@@ -864,6 +925,10 @@ function greedyFill(ctx, plan, rng) {
       for (let i = start; i < scored.length; i++) {
         const g = scored[i];
         if (used.has(g.a) || used.has(g.b)) continue;
+        // §5.4: eligible() בדק מול הסלוט **כפי שהיה**; כאן בודקים גם מול הבחירה
+        // החלקית של אותה קריאה, אחרת שתי קבוצות שחולקות שחקנית היו יכולות
+        // להיבחר יחד לאותו סלוט בתוך אותו batch.
+        if (linkBusy(g.a, used) || linkBusy(g.b, used)) continue;
         used.add(g.a); used.add(g.b); cur.push(g);
         if (rec(i + 1)) return true;
         cur.pop(); used.delete(g.a); used.delete(g.b);
@@ -1008,6 +1073,20 @@ function candidates(ctx, pl, s, occ) {
     if (bad || n > hi[t] || n < lo[t]) addTeam(t);
   }
 
+  // §5.4 — זוג קבוצות שחולקות שחקנית ומשובצות באותו סלוט (קשיח) או בסלוטים
+  // עוקבים (רך): שני הצדדים מועמדים להזזה. בלי זה פאס התיקון לא "רואה" את
+  // ההפרה אלא במקרה, כי אף אחד מהמסננים האחרים לא נוגע בה.
+  for (const [ia, ib] of s.linked) {
+    let bad = false;
+    for (let sl = 1; sl <= S && !bad; sl++) {
+      if (!tc[ia * (S + 2) + sl]) continue;
+      if (tc[ib * (S + 2) + sl]
+          || (sl > 1 && tc[ib * (S + 2) + sl - 1])
+          || (sl < S && tc[ib * (S + 2) + sl + 1])) bad = true;
+    }
+    if (bad) { addTeam(ia); addTeam(ib); }
+  }
+
   for (let i = 0; i < s.G; i++) {
     const sl = pl.slot[i]; if (!sl || s.gLocked[i]) continue;
     const np = s.netPos.get(pl.net[i]);
@@ -1057,6 +1136,19 @@ function emptyLastSlot(ctx, pl) {
     for (const j of s.teamGames[t]) if (j !== except && pl.slot[j] === sl) return true;
     return false;
   };
+  // §5.4 — האם שותפה כלשהי של t (קבוצה שחולקת איתה שחקנית) משחקת בסלוט sl
+  const linkPlaysAt = (t, sl, except) => {
+    for (const p of s.partners[t]) if (playsAt(p, sl, except)) return true;
+    return false;
+  };
+  // כמה הפרות "שותפות באותו סלוט" יש בלוז — לאימות אחרי אצווה (קשיח)
+  const countLinkSame = () => {
+    let n = 0;
+    for (const [ia, ib] of s.linked)
+      for (const j of s.teamGames[ia])
+        if (pl.slot[j] && playsAt(ib, pl.slot[j], -1)) n++;
+    return n;
+  };
   // רצפי שאו/א׳ בכל הלוז — לאימות שהאצווה לא יצרה חדשים (לוק קשיח)
   const countSL1 = () => {
     let n = 0;
@@ -1070,6 +1162,7 @@ function emptyLastSlot(ctx, pl) {
     return n;
   };
   const baseSL1 = countSL1();
+  const baseLink = countLinkSame();
 
   for (let guard = 0; guard < S; guard++) {
     let lastSlot = 0;
@@ -1096,6 +1189,8 @@ function emptyLastSlot(ctx, pl) {
         if (fx && net !== fx) continue;
         if (sl < s.availFrom[a] || sl > s.availTo[a] || sl < s.availFrom[b] || sl > s.availTo[b]) continue;
         if (playsAt(a, sl, i) || playsAt(b, sl, i)) continue;
+        // §5.4 — שותפה משחקת בסלוט הזה: קשיח, גם כשהמטרה היא לקצר את היום
+        if (linkPlaysAt(a, sl, i) || linkPlaysAt(b, sl, i)) continue;
         if (!s.allowConsec[a] && (playsAt(a, sl - 1, i) || playsAt(a, sl + 1, i))) continue;
         if (!s.allowConsec[b] && (playsAt(b, sl - 1, i) || playsAt(b, sl + 1, i))) continue;
         out.push(hi);
@@ -1107,16 +1202,29 @@ function emptyLastSlot(ctx, pl) {
     // ראשונים כדי לגזום מוקדם.
     const order = lastGames.map((_, x) => x).sort((p, q) => legal[p].length - legal[q].length);
     const usedHole = new Int8Array(holes.length), chosen = new Array(lastGames.length).fill(-1);
+    // §5.4 — לאן הלכה כל קבוצה **בתוך האצווה הזאת** (0 = לא הוזזה). `legal`
+    // נבדק מול הלוז כפי שהוא לפני האצווה, ולכן שתי שותפות שנמצאות שתיהן בסלוט
+    // האחרון היו יכולות לנחות יחד באותו סלוט מוקדם. כל קבוצה מופיעה לכל היותר
+    // במשחק אחד באצווה (כולן באותו סלוט), ולכן ערך יחיד לכל קבוצה מספיק.
+    const batchSlot = new Int32Array(s.T);
+    const linkFreeInBatch = (t, sl) => {
+      for (const p of s.partners[t]) if (batchSlot[p] === sl) return false;
+      return true;
+    };
     let nodes = 0;
     const rec = oi => {
       if (oi === order.length) return true;
       if (++nodes > 5000) return false;
-      const x = order[oi];
+      const x = order[oi], i = lastGames[x], a = s.gA[i], b = s.gB[i];
       for (const hi of legal[x]) {
         if (usedHole[hi]) continue;
+        const sl = holes[hi].sl;
+        if (!linkFreeInBatch(a, sl) || !linkFreeInBatch(b, sl)) continue;
         usedHole[hi] = 1; chosen[x] = hi;
+        batchSlot[a] = sl; batchSlot[b] = sl;
         if (rec(oi + 1)) return true;
         usedHole[hi] = 0; chosen[x] = -1;
+        batchSlot[a] = 0; batchSlot[b] = 0;
       }
       return false;
     };
@@ -1125,7 +1233,10 @@ function emptyLastSlot(ctx, pl) {
     // החלה, עם גיבוי לביטול אם האימות נכשל
     const backup = lastGames.map(i => [i, pl.slot[i], pl.net[i]]);
     for (let x = 0; x < lastGames.length; x++) { const i = lastGames[x], h = holes[chosen[x]]; pl.slot[i] = h.sl; pl.net[i] = h.net; }
-    if (countSL1() > baseSL1) { for (const [i, sl, nt] of backup) { pl.slot[i] = sl; pl.net[i] = nt; } break; }
+    if (countSL1() > baseSL1 || countLinkSame() > baseLink) {
+      for (const [i, sl, nt] of backup) { pl.slot[i] = sl; pl.net[i] = nt; }
+      break;
+    }
   }
   return pl;
 }
@@ -1464,6 +1575,20 @@ export function generateSeason(input, opts = {}) {
       //              המתנה. זו אזהרה: הגריד צר מדי ליעד של §4.4.
       if (res.unplaced.length)
         report.errors.push(`${day.label || day.id}: ${res.unplaced.length} משחקים לא שובצו — אין להם תא חוקי.`);
+
+      // §5.4 + §6.3 ("אילוץ בלתי פתיר → לא לשבץ בשקט"): קבוצות שחולקות שחקנית.
+      // מקביל = הפרה קשיחה ולכן **שגיאה** אם שרדה (המנהלת חייבת לדעת — שחקנית
+      // אחת בשני מגרשים בו-זמנית); רצף = אזהרה מרוכזת, שורה אחת ליום.
+      const vs = res.cost.violations || [];
+      const same = vs.filter(v => v.kind === 'sharedPlayerSameSlot');
+      const adj  = vs.filter(v => v.kind === 'sharedPlayerAdjacent');
+      if (same.length)
+        report.errors.push(`${day.label || day.id}: ${same.length} שיבוצים מקבילים של קבוצות שחולקות שחקנית ` +
+          `(${[...new Set(same.map(v => `${v.team}+${v.other}`))].join(', ')}) — לא ניתן להפריד. ` +
+          `הצעות: (א) העברת משחק ליום אחר (ב) הרחבת היום (ג) שיבוץ בכל זאת.`);
+      if (adj.length)
+        report.warnings.push(`${day.label || day.id}: ${adj.length} פעמים שקבוצות שחולקות שחקנית משחקות בסלוטים עוקבים ` +
+          `— אותה שחקנית משחקת פעמיים ברצף. אפשרי, אבל שווה בדיקה.`);
       for (const [catId, n] of Object.entries(res.overflow || {})) {
         const nm = ctx.cats.find(c => c.id === catId)?.name || catId;
         report.warnings.push(

@@ -1,8 +1,10 @@
 // ============================================================================
 // league.js — ליגת קיץ פוצ׳ילינה 2026
 //
-// שלב 1 מתוך §14 במפרט: מודל הנתונים + סנכרון חי.
-// אין כאן עדיין מתזמן, לוח גרירה, טבלת דירוג או הרשאות — אלה שלבים 3–7.
+// מודל הנתונים + סנכרון חי (שלב 1), רוסטר והגדרות (2), עמוד המתזמן (3),
+// ניקוד ודירוג (4), ומשלב 6: שלוש רמות הרשאה (§7.1), טיוטה/פרסום לכל יום
+// (§8.5), הלוז הציבורי, עמוד הקבוצות המלא ופאנל הנוכחות והזמינות (§8.4).
+// המתזמן, לוח הגרירה והפיינל פור יושבים במודולים נפרדים.
 //
 // המסמך היחיד: tournaments/{LEAGUE_ID}. ראו §5.1 במפרט.
 // ============================================================================
@@ -16,11 +18,11 @@ import {
 // והוא מקבל תמונת מצב ומחזיר משחקים ודוח. ראו league-sched.js.
 import {
   generateSeason, buildDayContext, dayCost, dayLength, slotLabel
-} from './league-sched.js?v=8';
+} from './league-sched.js?v=9';
 
 // לוח הגרירה — שלב 5. מודול תצוגה+שליטה שמקבל את המצב החי דרך Board.init().
 // אין לו window.* globals; פעולותיו בקידומת board.* ומוזרקות ל-ACT (ראו start()).
-import Board from './league-board.js?v=10';
+import Board from './league-board.js?v=11';
 import KO from './league-ko.js?v=1';
 
 // ============ זהות הליגה ============
@@ -672,6 +674,17 @@ function mergeDefaults(data) {
 
 const PRIVATE_ID = LEAGUE_ID + '_private';
 let PRIV = null;   // { phones: { p001:'050-0000000' } } — נטען עצל, פעם אחת
+let phoneState = 'idle';   // idle | loading | ready | error
+
+// נקראת מ-renderTeams בלבד (שלב 6). כל עוד המנהלת לא פתחה את עמוד הקבוצות
+// הדוק הפרטי לא נקרא — וגם לא נוצר, כי אין כתיבה בלי טלפון ראשון.
+function ensurePhones() {
+  if (phoneState !== 'idle') return;
+  phoneState = 'loading';
+  loadPhones()
+    .then(() => { phoneState = 'ready'; paint(); })
+    .catch(e => { phoneState = 'error'; console.error('Phones load failed', e); paint(); });
+}
 
 async function loadPhones() {
   if (PRIV) return PRIV;
@@ -773,21 +786,158 @@ async function loadLeague() {
 }
 
 // ============================================================================
-// תצוגה — שלד בלבד. העמודים האמיתיים נבנים בשלבים 4–7.
+// הרשאות — §7.1 (שלב 6)
+// ============================================================================
+//
+// שלוש רמות: 0 ציבור · 1 אדמין (הזנת תוצאות בלבד) · 2 מאסטר (הכל).
+// המנגנון ממוחזר מ-app.js (adminLevel + refreshAdmin): אותו sha256 מ-common.js
+// מול hash שמור ב-meta, אותה החלטה שההרשאה נאכפת בדפדפן בלבד (SECURITY.md).
+// שני הבדלים מכוונים:
+//   1. **אין בורר תפקיד בדיאלוג.** ב-app.js בוחרים "אדמין/מאסטר" ואז מקלידים;
+//      כאן הסיסמה עצמה מכריעה את הרמה. שדה אחד במקום שלושה פקדים.
+//   2. **בלי סיסמת מאסטר האתר פתוח.** אחרת המנהלת הייתה ננעלת מחוץ לעמוד
+//      ההגדרות — המקום היחיד שבו אפשר להגדיר סיסמה. כל עוד ה-hash ריק כולן
+//      מאסטר, והטאב מציג אזהרה שמובילה ישר למקטע "גישה".
+const ROLE_KEY = 'futilina-role:' + LEAGUE_ID;
+
+let role          = 0;       // מה שהוקלד בפועל
+let previewPublic = false;   // "איך זה נראה לשחקניות" (§8.5)
+
+// האם הליגה בכלל נעולה. ריק = טרם הוגדרה סיסמה.
+function secured() { return !!L.meta?.managerPasswordHash; }
+// הרמה האמיתית של המשתמשת (בלי קשר לתצוגה המקדימה)
+function realRole() { return secured() ? role : 2; }
+// **הרמה שכל התצוגה והפעולות נשענות עליהן.** בתצוגה מקדימה המאסטר הופכת
+// לציבור לכל דבר — כולל חסימת פעולות, אחרת "כך זה נראה" היה שקר חלקי.
+function R() { return previewPublic ? 0 : realRole(); }
+
+// sessionStorage ולא localStorage: רענון בחוף לא מוציא את המנהלת החוצה,
+// אבל סגירת הלשונית כן. אין כאן החמרה או הקלה אבטחתית — ההרשאה נאכפת
+// בדפדפן ממילא (SECURITY.md), וזה רק חוסך הקלדה חוזרת.
+function restoreRole() {
+  try {
+    const v = +sessionStorage.getItem(ROLE_KEY);
+    role = (v === 1 || v === 2) ? v : 0;
+  } catch (_) { role = 0; }
+}
+function storeRole() {
+  try { role ? sessionStorage.setItem(ROLE_KEY, role) : sessionStorage.removeItem(ROLE_KEY); }
+  catch (_) {}
+}
+
+// דיאלוג הכניסה — נבנה פעם אחת ומוזרק ל-body. משתמש ב-.overlay/.modal/.mbtn
+// של styles.css, ולכן אין לו CSS חדש. הכפתורים נושאים data-act ועוברים
+// דרך אותו handle() כמו כל השאר.
+function loginBox() {
+  let el = document.getElementById('login-overlay');
+  if (el) return el;
+  el = document.createElement('div');
+  el.id = 'login-overlay';
+  el.className = 'overlay h';
+  el.innerHTML = `
+    <div class="modal">
+      <h3>כניסת מנהלת</h3>
+      <div class="modal-row">
+        <input id="login-pw" class="modal-input" type="password" placeholder="סיסמה"
+               autocomplete="current-password"/>
+      </div>
+      <div id="login-err" class="frm-err h">סיסמה שגויה.</div>
+      <div class="modal-btns">
+        <button class="mbtn mbtn-cancel" data-act="auth.close">ביטול</button>
+        <button class="mbtn mbtn-ok" data-act="auth.submit">כניסה</button>
+      </div>
+    </div>`;
+  document.body.appendChild(el);
+  el.addEventListener('keydown', e => {
+    if (e.key === 'Enter')  { e.preventDefault(); ACT['auth.submit'](); }
+    if (e.key === 'Escape') { ACT['auth.close'](); }
+  });
+  return el;
+}
+
+function openLogin() {
+  const el = loginBox();
+  el.classList.remove('h');
+  el.querySelector('#login-err').classList.add('h');
+  const inp = el.querySelector('#login-pw');
+  inp.value = '';
+  setTimeout(() => inp.focus(), 60);
+}
+
+function closeLogin() {
+  const el = document.getElementById('login-overlay');
+  if (!el) return;
+  el.classList.add('h');
+  el.querySelector('#login-pw').value = '';
+}
+
+async function tryLogin() {
+  const inp = document.getElementById('login-pw');
+  const raw = (inp?.value || '').trim();
+  const m = L.meta || {};
+  const h = raw ? await sha256(raw) : '';
+  const lvl = (h && h === m.managerPasswordHash) ? 2
+            : (h && h === m.adminPasswordHash)   ? 1 : 0;
+  if (!lvl) {
+    document.getElementById('login-err')?.classList.remove('h');
+    if (inp) { inp.value = ''; inp.focus(); }
+    return;
+  }
+  role = lvl;
+  previewPublic = false;
+  storeRole();
+  closeLogin();
+  paint();
+}
+
+// ============================================================================
+// פרסום — §8.5
+// ============================================================================
+//
+// day.published הוא המתג היחיד. הציבור והאדמין רואים רק ימים מפורסמים
+// (§7.1); המאסטר תמיד רואה הכל, ולכן הסינון נגזר מ-R() ולא ממשתנה נפרד.
+const todayISO = () => new Date().toISOString().slice(0, 10);
+const isPastDay = d => !!d.date && d.date < todayISO();
+
+// יום נראה לרמה הנוכחית: מפורסם, ואם המחזור כבר עבר — רק כשהמתג הכללי דלוק.
+function dayVisible(d) {
+  if (R() >= 2) return true;
+  if (!d.published) return false;
+  return L.meta.showPastDays !== false || !isPastDay(d);
+}
+
+// הימים שיש להם לוז בפועל ושמותר להציג אותם. ff/cross אינם משובצים לגריד
+// (שלב 5) ולכן נושרים כאן מאליהם — הבראקט שלהם יושב בעמוד נפרד.
+function schedDaysFor() {
+  const has = new Set((L.games || []).filter(g => g.slot && g.net).map(g => g.day));
+  return (L.meta.days || []).filter(d => has.has(d.id) && dayVisible(d));
+}
+
+// היום שהכי הגיוני לפתוח בו: הקרוב שטרם עבר, אחרת האחרון.
+function defaultDayId(list) {
+  const t = todayISO();
+  return (list.find(d => !d.date || d.date >= t) || list[list.length - 1])?.id || null;
+}
+
+const fmtDate = iso => iso ? iso.slice(8, 10) + '.' + iso.slice(5, 7) : '';
+
+// ============================================================================
+// תצוגה
 // ============================================================================
 
-let page = 'teams';
+let page = 'standings';
 
+// min = רמת ההרשאה המינימלית לעמוד (§7.1). הציבור מקבל שלושה עמודים בלבד.
 const PAGES = [
-  { id:'standings', label:'דירוג',            stage:4 },
+  { id:'standings', label:'דירוג',            min:0 },
   // "הקבוצה שלי" בוטל (§7.2). כל מה שנשאר ממנו: שדה החיפוש בלוז זוכר את
   // עצמו ב-localStorage. אין עמוד, אין כרטיס "המשחק הבא", אין נעיצה.
-  { id:'schedule',  label:'לוז',              stage:5 },
-  { id:'ko',        label:'פיינל פור והצלבה', stage:7 },
-  { id:'teams',     label:'קבוצות',           stage:null },
-  { id:'sched',     label:'מתזמן',            stage:null },
-  { id:'settings',  label:'הגדרות',           stage:null },
-  { id:'status',    label:'מצב המערכת',       stage:null }
+  { id:'schedule',  label:'לוז',              min:0 },
+  { id:'ko',        label:'פיינל פור והצלבה', min:0 },
+  { id:'teams',     label:'קבוצות',           min:2 },
+  { id:'sched',     label:'מתזמן',            min:2 },
+  { id:'settings',  label:'הגדרות',           min:2 },
+  { id:'status',    label:'מצב המערכת',       min:2 }
 ];
 
 // מקטעי ההגדרות הפתוחים. בלי זה כל הקלדה סוגרת את כל האקורדיון,
@@ -806,23 +956,50 @@ function paint() {
   document.getElementById('header-name').textContent = L.meta.name || 'ליגה';
   document.title = L.meta.name || 'ליגה';
 
-  document.getElementById('main-nav').innerHTML = PAGES.map(p =>
-    `<button class="tab${p.id === page ? ' on' : ''}" data-page="${p.id}">${escH(p.label)}</button>`
-  ).join('');
+  // הטאבים לפי ההרשאה (§7.1). עמוד שאינו מותר לרמה הנוכחית נסגר מיד — כך
+  // גם יציאה מהמאסטר וגם כניסה לתצוגה המקדימה לא משאירות עמוד סגור פתוח.
+  const vis = PAGES.filter(p => R() >= p.min);
+  if (!vis.some(p => p.id === page)) page = vis[0].id;
+
+  document.getElementById('main-nav').innerHTML =
+    vis.map(p => `<button class="tab${p.id === page ? ' on' : ''}" data-page="${p.id}">${escH(p.label)}</button>`).join('')
+    + roleTab();
 
   const target = PAGES.find(p => p.id === page);
-  document.getElementById('page-body').innerHTML =
+  document.getElementById('page-body').innerHTML = (previewPublic ? previewBar() : '') + (
       page === 'teams'     ? renderTeams()
     : page === 'sched'     ? renderSched()
     : page === 'settings'  ? renderSettings()
     : page === 'status'    ? renderStatus()
     : page === 'standings' ? renderStandings()
-    : page === 'schedule'  ? Board.render()
+    : page === 'schedule'  ? (R() >= 2 ? masterSchedule() : renderPublicSchedule())
     : page === 'ko'        ? KO.render()
-    : renderPlaceholder(target);
+    : renderPlaceholder(target));
 
   renderSponsorBar();
   focusRestore(f);
+}
+
+// כפתור הכניסה/היציאה בסוף רצועת הטאבים. אין לו מקום משלו ב-league.html
+// (שאותו שלב 6 לא משנה מלבד ה-?v), ולכן הוא נכנס כטאב אחרון.
+function roleTab() {
+  if (!secured())
+    return `<button class="tab role-tab warn" data-act="auth.click"
+              title="לא הוגדרה סיסמת מאסטר — כל מי שמגיעה לכתובת רואה הכל">⚠ ללא סיסמה</button>`;
+  const r = realRole();
+  if (!r) return `<button class="tab role-tab" data-act="auth.click">כניסת מנהלת</button>`;
+  return `<button class="tab role-tab on" data-act="auth.click"
+            title="יציאה">${r === 2 ? 'מאסטר' : 'אדמין'} ✓</button>`;
+}
+
+// §8.5 — "איך זה נראה לשחקניות". לא סימולציה: R() באמת יורד ל-0, ולכן גם
+// הטאבים, גם הימים המוסתרים וגם הפעולות נחסמים בדיוק כמו אצל שחקנית.
+function previewBar() {
+  return `<div class="prev-bar">
+    <span><b>תצוגת שחקניות.</b> זה בדיוק מה שרואה מי שנכנסת לקישור הציבורי —
+      ימים מוסתרים, הזנת תוצאות ולוח הגרירה אינם כאן.</span>
+    <button class="cf-btn" data-act="pub.exit">חזרה למצב מאסטר</button>
+  </div>`;
 }
 
 // כמו paint(), אבל שומר את מיקום הגלילה (חלון + אזורים פנימיים עם data-sk). כל
@@ -881,10 +1058,11 @@ function renderSponsorBar() {
   ).join('');
 }
 
+// רשת ביטחון בלבד — כל שבעת העמודים ב-PAGES מרונדרים בפועל.
 function renderPlaceholder(p) {
   return `<div class="sett-section empty">
-    <h3>${escH(p.label)}</h3>
-    <p>העמוד הזה ייבנה בשלב ${p.stage} מתוך §14 במפרט.</p>
+    <h3>${escH(p?.label || '')}</h3>
+    <p>העמוד הזה אינו זמין.</p>
   </div>`;
 }
 
@@ -904,12 +1082,26 @@ function playerOptions() {
 const sharedTip = rest =>
   'משחקת גם ב-' + rest.map(x => `״${x.team.name || x.team.id}״ (${CAT_NAME(x.cat)})`).join(', ');
 
+// כמה משחקים לקבוצה בכל מחזור — "3 · 4 · 4 · 3" של §8.6. חלק מ"מידע מלא
+// לכל קבוצה": זה מה שמגלה בעין קבוצה שקיבלה יום ריק או יום עמוס.
+function teamDayCounts(id) {
+  const days = regularDays();
+  const n = days.map(d => (L.games || []).filter(g =>
+    g.day === d.id && (g.a === id || g.b === id)).length);
+  if (!n.some(Boolean)) return '';
+  return `<span class="team-meta" title="משחקים לפי מחזור: ${escH(days.map((d, i) => `${d.label} ${n[i]}`).join(' · '))}"
+    >${n.join(' · ')}</span>`;
+}
+
 function renderTeams() {
   // שלושה שדות שם במקום בורר גודל (החלטת המשתמשת 24.7): 2 מלאים = זוג,
   // 3 = שלישייה. אין כפתור פעילה/פרשה (פרישה נדירה — מחיקה או "טכני" פר משחק,
   // §10.3), ואין קוד מזהה גלוי (פנימי — המנהלת לא צריכה אותו, וגם לא את p001).
   const usage  = playerTeams();
   const shared = Object.values(usage).filter(l => l.length > 1).length;
+
+  // הטלפונים נטענים מהדוק הפרטי רק כאן ורק עכשיו (§5.4, אפשרות ב׳).
+  ensurePhones();
 
   const cards = L.categories.map(c => {
     const list = L.roster[c.id] || [];
@@ -919,16 +1111,24 @@ function renderTeams() {
       const fields = [0, 1, 2].map(s => {
         const pid  = isPid(p[s]) ? p[s] : '';
         const rest = (usage[pid] || []).filter(x => x.team.id !== t.id);
+        // שדה הטלפון מופיע רק כשיש מזהה שחקנית (הטלפון מוצמד למזהה) ורק
+        // כשהדוק הפרטי כבר בזיכרון — אחרת היה נראה כאילו הטלפון נמחק.
+        const phone = (pid && phoneState === 'ready')
+          ? `<input class="text-inp phone-inp" type="tel" inputmode="tel" autocomplete="off"
+                    value="${escH(phoneOf(pid))}" placeholder="טלפון"
+                    data-act="team.phone" data-pid="${escH(pid)}"/>` : '';
         return `
         <label class="player-slot${rest.length ? ' shared' : ''}"${rest.length ? ` title="${escH(sharedTip(rest))}"` : ''}>
           <input class="text-inp team-player-inp" list="players-reg" autocomplete="off"
                  value="${escH(slotName(p[s]))}" placeholder="${PH[s]}"
                  data-act="team.player" data-id="${escH(t.id)}" data-slot="${s}"/>
+          ${phone}
         </label>`;
       }).join('');
       return `
       <div class="team-row">
         <span class="team-num">${i + 1}</span>
+        ${teamDayCounts(t.id)}
         <div class="team-players">${fields}</div>
         <button class="team-del" data-act="team.del" data-id="${escH(t.id)}" title="מחיקה">×</button>
       </div>`;
@@ -945,6 +1145,13 @@ function renderTeams() {
     </div>`;
   }).join('');
 
+  const phoneNote =
+      phoneState === 'loading' ? '<span class="muted">טוען טלפונים…</span>'
+    : phoneState === 'error'   ? '<span class="pub-none">הטלפונים לא נטענו — נסי לרענן.</span>'
+    : `הטלפונים נשמרים ב<strong>מסמך נפרד</strong> (<code>${escH(PRIVATE_ID)}</code>) שהאתר
+       הציבורי אינו טוען כלל, ונראים <strong>רק בעמוד הזה</strong> (§5.4).
+       העמוד כולו פתוח למאסטר בלבד.`;
+
   return `
   <datalist id="players-reg">${playerOptions()}</datalist>
   <div class="info-box">
@@ -954,6 +1161,7 @@ function renderTeams() {
     כי המשחקים מצביעים על המזהה ולא על השם.
     <br/>שחקנית שכבר הוזנה מוצעת להשלמה בזמן ההקלדה: בחירה בה מסמנת
     ש<strong>זו אותה שחקנית</strong> בשתי הקבוצות.
+    <br/>${phoneNote}
   </div>
   <div id="shared-note" class="sett-empty-note${shared ? '' : ' h'}">
     ${shared} שחקניות רשומות בשתי קבוצות — מסומנות ⇄.
@@ -1634,21 +1842,26 @@ function renderSettings() {
 
   // ── 6. גישה ופעולות ──
   const access = `
-    ${row('סיסמת אדמין', 'הזנת תוצאות וסימון טכני.',
+    ${!m.managerPasswordHash ? `<div class="info-box scaffold-note">
+      ⚠️ <strong>לא הוגדרה סיסמת מאסטר, ולכן האתר פתוח לכולן</strong> — כל מי
+      שמגיעה לכתובת רואה את ההגדרות, את לוח הגרירה ואת עמוד הקבוצות.
+      הגדרת סיסמה כאן נועלת מיד את הכל חוץ משלושת העמודים הציבוריים.
+    </div>` : ''}
+    ${row('סיסמת אדמין', 'הזנת תוצאות וסימון טכני בלבד.',
       `<input class="text-inp" type="password" style="width:200px" placeholder="${m.adminPasswordHash ? '•••••• (מוגדרת)' : 'לא מוגדרת'}" data-act="pw.admin"/>`)}
-    ${row('סיסמת מאסטר', 'גישה מלאה, כולל ימים מוסתרים ולוח הגרירה.',
+    ${row('סיסמת מאסטר', 'גישה מלאה: לוח הגרירה, פרסום, קבוצות, טלפונים והגדרות.',
       `<input class="text-inp" type="password" style="width:200px" placeholder="${m.managerPasswordHash ? '•••••• (מוגדרת)' : 'לא מוגדרת'}" data-act="pw.manager"/>`)}
+    ${row('הרמה הנוכחית', 'שדה ריק מוחק את הסיסמה ומחזיר את האתר למצב פתוח.',
+      `<span class="status-badge ${realRole() === 2 ? 'badge-approved' : realRole() === 1 ? 'badge-pending' : 'badge-rejected'}"
+        >${realRole() === 2 ? 'מאסטר' : realRole() === 1 ? 'אדמין' : 'ציבור'}</span>`)}
     <div class="info-box" style="margin:12px 0 0">
       הסיסמאות נשמרות כ-SHA-256 בלבד. עם זאת — אין Firebase Auth, וההרשאות
       נאכפות בדפדפן. מי שיודעת את מזהה הליגה יכולה לקרוא את המסמך הגולמי כולל
       ה-hash. ראו <code>SECURITY.md</code>. <strong>לא לשמור טלפונים כאן.</strong>
+      הם יושבים במסמך נפרד ונטענים רק בעמוד הקבוצות (§5.4).
     </div>`;
 
   return `
-  <div class="info-box scaffold-note">
-    ⚠️ העמוד הזה ייחסם למאסטר בלבד בשלב 6 (§7.1). כרגע הוא פתוח לכל מי שמגיעה
-    לכתובת — לא לפרסם את הקישור לפני שההרשאות נבנות.
-  </div>
   ${section('general',  '1 · כללי',           general)}
   ${section('leagues',  '2 · ליגות',          leaguesNote + leagues)}
   ${section('nets',     '3 · רשתות',          netsNote + nets)}
@@ -1827,8 +2040,26 @@ function renderStandings() {
       <b class="num">${a.start === a.end ? a.start : a.start + '–' + a.end}</b>. התקנון לא מכריע —
       נדרשת החלטה ידנית${a.touchesF4 ? ' (נוגע לגבול הפיינל פור, מקומות 4–5)' : ''}.</div>`).join('');
 
-  // הזנת התוצאות עברה לטאב "לוז" (שלב 5, §8) — כאן נשארת רק הטבלה החיה.
-  return nav + standTable(ranked) + alertBox;
+  // הזנת התוצאות עברה לטאב "לוז" (שלב 5, §8) — כאן נשארת הטבלה החיה,
+  // ומתחתיה משחקי הקבוצה שנלחצה (§7.2).
+  return nav + standTable(ranked) + alertBox + teamGames();
+}
+
+// §7.2 — "לחיצה על קבוצה פותחת את כל משחקיה". רק ימים שהצופה רשאית לראות:
+// אצל שחקנית לוז של מחזור מוסתר לא ידלוף דרך טבלת הדירוג.
+function teamGames() {
+  if (!standTeam) return '';
+  const ok = new Set((L.meta.days || []).filter(dayVisible).map(d => d.id));
+  const gs = (L.games || [])
+    .filter(g => (g.a === standTeam || g.b === standTeam) && ok.has(g.day))
+    .sort((a, b) => (a.day || '').localeCompare(b.day || '') || ((a.slot || 0) - (b.slot || 0)));
+  return `<div class="sett-section">
+    <div class="sett-section-title">משחקי ${escH(TEAM_NAME(standTeam))}
+      <button class="team-del" data-act="stand.clearteam" title="סגירה">×</button></div>
+    ${gs.length
+      ? `<div class="pub-games">${gs.map(g => pubGameRow(g, { withDay: true, withTime: true })).join('')}</div>`
+      : '<div class="sett-empty-note">אין עדיין משחקים מפורסמים לקבוצה הזאת.</div>'}
+  </div>`;
 }
 
 function standTable(ranked) {
@@ -1861,6 +2092,225 @@ function standTable(ranked) {
       מיני־ליגה (3 ומעלה). מקומות 1–4 מעפילים לפיינל פור (3.8). לחיצה על קבוצה מציגה את משחקיה בלבד.
       "טכני" ו"היעדרות" מפרטות הפסדי 0 נק׳ ואינן משפיעות על המיון.</span>
   </div>`;
+}
+
+// ============================================================================
+// לוז — הציבורי (§7.2) והמאסטר (§8.5 · §8.4)
+// ============================================================================
+//
+// שני מסכים שונים על אותם נתונים: המאסטר מקבלת את לוח הגרירה של שלב 5 עם
+// שני פאנלים מעליו (פרסום · נוכחות), וכל השאר מקבלות רשימה קריאה של הימים
+// המפורסמים בלבד. הרשימה היא גם התצוגה המקדימה — אין שני מימושים.
+
+let pubDay = null;   // היום המוצג בלוז הציבורי
+let attDay = null;   // היום שפאנל הנוכחות פתוח עליו
+
+// §7.2 — "ושדה החיפוש זוכר את עצמו". זה כל מה שנשאר מעמוד "הקבוצה שלי":
+// מי שחיפשה פעם אחת לא מקלידה שוב לעולם. localStorage ולא sessionStorage —
+// הזיכרון אמור לשרוד סגירת דפדפן בין מחזור למחזור.
+const SEARCH_KEY = 'futilina-search:' + LEAGUE_ID;
+let pubQuery = (() => { try { return localStorage.getItem(SEARCH_KEY) || ''; } catch (_) { return ''; } })();
+function setQuery(v) {
+  pubQuery = v;
+  try { v ? localStorage.setItem(SEARCH_KEY, v) : localStorage.removeItem(SEARCH_KEY); } catch (_) {}
+}
+
+// שורת משחק אחת לקריאה (לא להזנה). אותה שורה משמשת גם ברשימת משחקי הקבוצה
+// שמתחת לטבלת הדירוג (§7.2).
+function pubGameRow(g, opts = {}) {
+  const day = (L.meta.days || []).find(d => d.id === g.day);
+  const color = NET_COLOR(g.net);
+  const { sa, sb } = techScores(g);
+  const done = g.result !== 'pending' && g.result !== 'cancelled';
+  const score = g.result === 'unfinished'
+    ? `<span class="pub-score muted">לא הסתיים</span>`
+    : done
+      ? `<span class="pub-score"><b class="num">${sa ?? 0}</b><i>:</i><b class="num">${sb ?? 0}</b></span>`
+      : `<span class="pub-score pub-vs">נגד</span>`;
+  const search = `${TEAM_NAME(g.a)} ${TEAM_NAME(g.b)}`.toLowerCase();
+  return `<div class="pub-game" data-s="${escH(search)}">
+    <span class="pub-net" style="background:${escH(color)};color:${onColor(color)}">${escH(NET_NAME(g.net))}</span>
+    ${opts.withTime && day ? `<span class="pub-when num">${escH(slotTime(day, g.slot))}</span>` : ''}
+    ${opts.withDay ? `<span class="pub-when">${escH(dayLabel(g.day))}</span>` : ''}
+    <span class="pub-team">${escH(TEAM_NAME(g.a))}</span>
+    ${score}
+    <span class="pub-team">${escH(TEAM_NAME(g.b))}</span>
+    <span class="pub-cat">${escH(CAT_NAME(g.cat))}</span>
+  </div>`;
+}
+
+function renderPublicSchedule() {
+  const days = schedDaysFor();
+  if (!days.length) return `<div class="sett-section empty">
+    <h3>הלוז עוד לא פורסם</h3>
+    <p>ברגע שהמנהלת תפרסם מחזור הוא יופיע כאן — עם השעה, המגרש ומי נגד מי.</p>
+  </div>`;
+
+  if (!pubDay || !days.some(d => d.id === pubDay)) pubDay = defaultDayId(days);
+  const day = days.find(d => d.id === pubDay) || days[0];
+
+  const games = (L.games || [])
+    .filter(g => g.day === day.id && g.slot && g.net)
+    .sort((a, b) => (a.slot - b.slot) || (a.net - b.net));
+
+  const bySlot = new Map();
+  for (const g of games) { if (!bySlot.has(g.slot)) bySlot.set(g.slot, []); bySlot.get(g.slot).push(g); }
+
+  const picker = days.length > 1 ? `<div class="day-picker">${days.map(d =>
+    `<button class="filter-btn${d.id === day.id ? ' on' : ''}" data-act="pub.day" data-day="${escH(d.id)}"
+      >${escH(d.label)}${d.date ? ` <span class="num">${fmtDate(d.date)}</span>` : ''}</button>`).join('')}</div>` : '';
+
+  const head = `<div class="pub-head">
+    <h3>${escH(day.label)}${day.date ? ` <span class="num">${escH(fmtDate(day.date))}</span>` : ''}</h3>
+    <span class="muted">${escH(day.beach || '')} · מתחילות ב-<b class="num">${escH(day.startTime)}</b></span>
+  </div>`;
+
+  const search = `<div class="pub-search">
+    <input class="text-inp" id="pub-search" type="search" placeholder="חיפוש קבוצה או שחקנית…"
+           value="${escH(pubQuery)}"/>
+    ${pubQuery ? `<button class="team-del" data-act="pub.clearSearch" title="נקה">×</button>` : ''}
+    <span class="team-counter" id="pub-count"></span>
+  </div>`;
+
+  const list = [...bySlot.entries()].map(([slot, gs]) => `
+    <div class="pub-slot">
+      <div class="pub-time num">${escH(slotTime(day, slot))}</div>
+      <div class="pub-games">${gs.map(g => pubGameRow(g)).join('')}</div>
+    </div>`).join('');
+
+  // הזנת תוצאות = אדמין ומעלה (§7.1). אותו רכיב של שלב 4, בלי עותק שני.
+  const entry = R() >= 1 ? `<details class="results-panel" open>
+    <summary class="sett-section-title">הזנת תוצאות · ${escH(day.label)}
+      <span class="muted">${games.length}</span></summary>
+    <div class="results-body">${games.map(g => renderGameEntry(g)).join('')}</div>
+  </details>` : '';
+
+  setTimeout(pubFilter, 0);   // מחיל את החיפוש הזכור מיד אחרי שה-HTML נכנס ל-DOM
+  return `<div class="sett-section pub-sched">
+    ${picker}${head}${search}
+    ${list || '<div class="empty">אין משחקים במחזור הזה.</div>'}
+  </div>${entry}`;
+}
+
+// סינון החיפוש בלי רינדור מחדש — הקלדה לא יכולה לאבד את הפוקוס בשדה
+// (מלכודת 3 בגרסתה החריפה: כאן זה שדה שמסנן את עצמו).
+function pubFilter() {
+  const q = pubQuery.trim().toLowerCase();
+  let n = 0;
+  document.querySelectorAll('.pub-game').forEach(el => {
+    const hit = !q || (el.dataset.s || '').includes(q);
+    el.classList.toggle('hide', !hit);
+    if (hit) n++;
+  });
+  document.querySelectorAll('.pub-slot').forEach(row =>
+    row.classList.toggle('hide', !row.querySelector('.pub-game:not(.hide)')));
+  const c = document.getElementById('pub-count');
+  if (c) {
+    c.textContent = !q ? '' : n ? `${n} משחקים` : 'לא נמצאה קבוצה';
+    c.classList.toggle('no', !!q && !n);
+  }
+}
+
+// ── מסך המאסטר: שני פאנלים מקופלים מעל לוח הגרירה ─────────────────────────
+// מקופלים במכוון — הלוח מותח את עצמו לגובה הזמין (fitGrid), וכל פאנל פתוח
+// גוזל ממנו. הסיכום בשורת הכותרת נותן את המידע בלי לפתוח.
+function masterSchedule() {
+  // שניהם סגורים = שורה אחת משותפת (‎.mpanels‎ מציב אותם זה לצד זה), פתוח =
+  // שורה מלאה. ככה שני הפאנלים עולים ללוח ~45px של גובה במקום 90.
+  return `<div class="mpanels">${publishBar()}${attPanel()}</div>` + Board.render();
+}
+
+// §8.5 — מתג לכל יום, מתג "הצג מחזורים שהסתיימו", וכפתור התצוגה המקדימה.
+function publishBar() {
+  const days = (L.meta.days || []).filter(d => (L.games || []).some(g => g.day === d.id && g.slot));
+  const isShown = d => d.published && (L.meta.showPastDays !== false || !isPastDay(d));
+  const shown = days.filter(isShown).length;
+  const summary = !days.length ? 'פרסום — אין עדיין לוז'
+    : shown ? `פרסום · <b>${shown}</b> מתוך ${days.length} מחזורים מוצגים לשחקניות`
+            : `פרסום · <b class="pub-none">אף מחזור אינו מוצג לשחקניות</b>`;
+
+  const chips = days.map(d => `
+    <button class="pub-chip${d.published ? ' on' : ''}" data-act="pub.toggle" data-day="${escH(d.id)}"
+      title="${d.published ? 'מוצג — לחיצה מסתירה' : 'מוסתר — לחיצה מציגה'}">
+      <span class="pub-chip-dot"></span>${escH(d.label)}
+      ${d.published && !isShown(d) ? '<span class="muted">(הסתיים)</span>' : ''}
+    </button>`).join('');
+
+  return `<details class="sett-section mpanel pub-bar" id="sec-publish"${openSections.has('publish') ? ' open' : ''}>
+    <summary class="sett-section-title">${summary}</summary>
+    <div class="mpanel-body pub-bar-body">
+      <div class="pub-chips">${chips || '<span class="muted">צרי לוז בעמוד המתזמן.</span>'}</div>
+      <div class="pub-tools">
+        <label class="toggle-switch" title="מחזור שתאריכו עבר — להשאיר באתר או להוריד">
+          <input type="checkbox"${L.meta.showPastDays !== false ? ' checked' : ''} data-act="pub.past"/>
+          <span class="toggle-slider"></span>
+          <span class="toggle-txt">הצג מחזורים שהסתיימו</span>
+        </label>
+        <button class="cf-btn" data-act="pub.preview">👀 איך זה נראה לשחקניות</button>
+      </div>
+      <span class="sett-desc">כל עוד מחזור מוסתר אפשר לגרור אותו בשקט — השחקניות
+        לא רואות אותו כלל. פרסום נכנס לתוקף מיד אצל כולן.</span>
+    </div>
+  </details>`;
+}
+
+// §8.4 — שני דברים שונים באותה שורה: בקשה **מראש** (חלון זמן, אילוץ קשיח
+// למתזמן) ומה שקרה **בפועל** ביום עצמו (הגיעה / נעדרה → הפסד טכני).
+function attPanel() {
+  const days = regularDays();
+  if (!days.length) return '';
+  if (!attDay || !days.some(d => d.id === attDay)) attDay = defaultDayId(days);
+  const day  = days.find(d => d.id === attDay) || days[0];
+  const av   = L.availability?.[day.id] || {};
+  const att  = L.attendance?.[day.id]   || {};
+
+  const teams = L.categories.flatMap(c =>
+    (L.roster[c.id] || []).filter(t => t.active !== false).map(t => ({ t, c })));
+  const reqN  = teams.filter(({ t }) => { const a = av[t.id]; return a && (a.notBefore || a.notAfter || a.note); }).length;
+  const outN  = teams.filter(({ t }) => att[t.id] === 'noshow').length;
+
+  const rows = teams.map(({ t, c }) => {
+    const a = av[t.id] || {};
+    const st = att[t.id] || '';
+    const n = (L.games || []).filter(g => g.day === day.id && (g.a === t.id || g.b === t.id)).length;
+    const inp = (act, type, val, ph, cls) =>
+      `<input class="text-inp ${cls}" type="${type}" value="${escH(val || '')}"${ph ? ` placeholder="${escH(ph)}"` : ''}
+        data-act="${act}" data-day="${escH(day.id)}" data-team="${escH(t.id)}"/>`;
+    return `<tr class="att-row${st === 'noshow' ? ' out' : ''}">
+      <td class="att-name">${escH(t.name || t.id)}
+        <span class="muted">${escH(CAT_NAME(c.id))} · ${n} משחקים</span></td>
+      <td>${inp('av.before', 'time', a.notBefore, '', 'att-time')}</td>
+      <td>${inp('av.after',  'time', a.notAfter,  '', 'att-time')}</td>
+      <td>${inp('av.note',   'text', a.note, 'סיבה (רשות)', 'att-note')}</td>
+      <td class="att-mark">
+        <button class="filter-btn${st === 'ok' ? ' on' : ''}" data-act="att.ok"
+          data-day="${escH(day.id)}" data-team="${escH(t.id)}">הגיעה</button>
+        <button class="filter-btn${st === 'noshow' ? ' on' : ''}" data-act="res.noshowDay"
+          data-day="${escH(day.id)}" data-team="${escH(t.id)}">נעדרה</button>
+      </td>
+    </tr>`;
+  }).join('');
+
+  const summary = `נוכחות וזמינות · ${escH(day.label)}` +
+    (reqN ? ` · <b>${reqN}</b> בקשות` : '') +
+    (outN ? ` · <b class="pub-none">${outN} נעדרו</b>` : '');
+
+  return `<details class="sett-section mpanel att-panel" id="sec-att"${openSections.has('att') ? ' open' : ''}>
+    <summary class="sett-section-title">${summary}</summary>
+    <div class="mpanel-body att-body">
+      <div class="day-picker">${days.map(d =>
+        `<button class="filter-btn${d.id === day.id ? ' on' : ''}" data-act="att.day" data-day="${escH(d.id)}"
+          >${escH(d.label)}</button>`).join('')}</div>
+      <div class="tscroll"><table class="stbl att-tbl">
+        <thead><tr><th>קבוצה</th><th>מגיעה מ־</th><th>עוזבת ב־</th><th>הערה</th><th>ביום עצמו</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table></div>
+      <span class="sett-desc">"מגיעה מ־" ו"עוזבת ב־" הן <strong>בקשות מראש</strong> —
+        אילוץ קשיח שהמתזמן מכבד. אחרי שינוי כדאי "סדר מחדש" ליום הזה.
+        "נעדרה" הוא מה שקרה <strong>בפועל</strong>: כל משחקיה במחזור נרשמים
+        כהפסד טכני ${L.meta.scoring?.walkoverFor ?? 18}:${L.meta.scoring?.walkoverAgainst ?? 10} לפי 6.3.1.</span>
+    </div>
+  </details>`;
 }
 
 // ============================================================================
@@ -2022,6 +2472,60 @@ const ACT = {
     }
   },
 
+  // ── הרשאות (§7.1) ──
+  // כפתור אחד לשלושה מצבים: אין סיסמה → ישר למקטע "גישה"; מחוברת → יציאה;
+  // אחרת → דיאלוג הכניסה.
+  'auth.click': () => {
+    if (!secured()) { page = 'settings'; openSections.add('access'); paint(); return false; }
+    if (realRole()) {
+      if (!confirm('לצאת ממצב מנהלת?')) return false;
+      role = 0; previewPublic = false; storeRole(); paint();
+      return false;
+    }
+    openLogin();
+    return false;
+  },
+  'auth.submit': () => { tryLogin(); return false; },
+  'auth.close':  () => { closeLogin(); return false; },
+
+  // ── פרסום (§8.5) ──
+  'pub.toggle': el => {
+    const d = (L.meta.days || []).find(x => x.id === el.dataset.day);
+    if (!d) return false;
+    d.published = !d.published;
+  },
+  'pub.past':    el => { L.meta.showPastDays = el.checked; },
+  'pub.preview': () => { previewPublic = true; page = 'schedule'; paint(); return false; },
+  'pub.exit':    () => { previewPublic = false; paint(); return false; },
+  'pub.day':     el => { pubDay = el.dataset.day; },
+  'pub.clearSearch': () => { setQuery(''); },
+
+  // ── נוכחות וזמינות (§8.4) ──
+  'att.day':   el => { attDay = el.dataset.day; },
+  'av.before': el => setAvail(el, 'notBefore', el.value || null),
+  'av.after':  el => setAvail(el, 'notAfter',  el.value || null),
+  'av.note':   el => setAvail(el, 'note', el.value.trim() || null),
+  // "הגיעה" הוא גם הביטול של "נעדרה": אם כבר נרשמו הפסדים טכניים בגללה,
+  // מציעים לנקות אותם — אחרת סימון בטעות היה נשאר בטבלה לנצח.
+  'att.ok': el => {
+    const { team, day } = el.dataset;
+    const was = L.attendance?.[day]?.[team];
+    (L.attendance[day] ||= {})[team] = 'ok';
+    if (was === 'noshow') {
+      const techs = (L.games || []).filter(g => g.day === day &&
+        ((g.a === team && g.result === 'tech_a') || (g.b === team && g.result === 'tech_b')));
+      if (techs.length && confirm(`לבטל גם את ${techs.length} ההפסדים הטכניים שנרשמו לה ב${dayLabel(day)}?`))
+        for (const g of techs) setTech(g, 'clear');
+    }
+  },
+
+  // ── טלפונים — דוק פרטי נפרד, ולכן שמירה משלו ולא queueSave (§5.4) ──
+  'team.phone': el => {
+    setPhone(el.dataset.pid, el.value.trim())
+      .catch(e => { console.error('Phone save failed', e); alert('הטלפון לא נשמר: ' + e.message); });
+    return false;
+  },
+
   // ── סיסמאות ──
   'pw.admin':   el => hashPassword('adminPasswordHash', el),
   'pw.manager': el => hashPassword('managerPasswordHash', el),
@@ -2033,6 +2537,17 @@ const ACT = {
 // פעולות לוח הגרירה (שלב 5). כולן בקידומת board.* וכל אחת עושה queueSave/paint
 // בעצמה, ולכן handle() לא שומר/מרנדר אותן אוטומטית (ראו התנאי ב-handle).
 Object.assign(ACT, Board.ACT);
+
+// בקשת זמינות אחת (§8.4). רשומה שכל שדותיה התרוקנו נמחקת ולא נשארת כאובייקט
+// ריק — המתזמן קורא את availability כמפה של אילוצים, ורשומה ריקה היא רעש.
+function setAvail(el, key, v) {
+  const { day, team } = el.dataset;
+  const d = (L.availability[day] ||= {});
+  const e = (d[team] ||= { notBefore: null, notAfter: null, note: null });
+  e[key] = v;
+  if (!e.notBefore && !e.notAfter && !e.note) delete d[team];
+  if (!Object.keys(d).length) delete L.availability[day];
+}
 
 function confirmRegen() {
   const scored = (L.games || []).filter(g => g.result && g.result !== 'pending').length;
@@ -2095,13 +2610,28 @@ const NO_REPAINT = new Set([
   'team.player', 'cat.name',
   'fmt.to', 'fmt.third', 'fmt.cap',
   'day.label', 'day.beach',
-  'sponsor.url', 'sponsor.alt'
+  'sponsor.url', 'sponsor.alt',
+  'av.note'
 ]);
 
 // פעולות שמשנות רק מה שמוצג ולא את המודל. בלי זה כל לחיצה על טאב של יום
 // בעמוד המתזמן הייתה כותבת את המסמך כולו ל-Firestore — 240 משחקים על שינוי
 // שקיים רק בדפדפן.
-const NO_SAVE = new Set(['sched.day', 'stand.cat', 'stand.team', 'stand.clearteam']);
+const NO_SAVE = new Set(['sched.day', 'stand.cat', 'stand.team', 'stand.clearteam',
+  'auth.click', 'auth.submit', 'auth.close',
+  'pub.preview', 'pub.exit', 'pub.day', 'pub.clearSearch', 'att.day',
+  'team.phone']);   // הטלפון נכתב לדוק אחר לגמרי
+
+// ── אכיפת ההרשאות (§7.1) ──
+// ההאצלה היא ברמת המסמך, ולכן הסתרת כפתור אינה הגנה: אפשר לזייף לחיצה
+// מהקונסולה. הגבול נאכף כאן, בשער היחיד שכל הפעולות עוברות בו.
+// **ברירת המחדל היא מאסטר** — פעולה חדשה שנוסיף בעתיד ותישכח מהרשימות
+// תיחסם, ולא תיפתח בשקט לציבור.
+const ACT_LEVEL = {};
+for (const a of ['stand.cat', 'stand.team', 'stand.clearteam',
+                 'auth.click', 'auth.submit', 'auth.close',
+                 'pub.day', 'pub.clearSearch', 'pub.exit']) ACT_LEVEL[a] = 0;
+for (const a of ['res.score', 'res.tech']) ACT_LEVEL[a] = 1;   // אדמין = הזנת תוצאות בלבד
 
 function handle(e, kinds) {
   const el = e.target.closest('[data-act]');
@@ -2109,6 +2639,7 @@ function handle(e, kinds) {
   const act = el.dataset.act;
   const fn = ACT[act];
   if (!fn) return;
+  if (R() < (ACT_LEVEL[act] ?? 2)) return;
   const skip = fn(el, e) === false || NO_REPAINT.has(act);
   // פעולות board.* מנהלות שמירה ורינדור בעצמן (מטפל הלוח קורא ל-queueSave/paint
   // רק כשבאמת חל שינוי) — כדי שהחלפת תצוגה או בחירת יום לא יכתבו את המסמך כולו.
@@ -2118,15 +2649,39 @@ function handle(e, kinds) {
 
 document.addEventListener('click',  e => {
   const tab = e.target.closest('[data-page]');
-  if (tab) { page = tab.dataset.page; paint(); return; }
+  if (tab) {
+    const p = PAGES.find(x => x.id === tab.dataset.page);
+    if (!p || R() < p.min) return;
+    page = p.id; paint(); return;
+  }
   // TR — שורת קבוצה בטבלת הדירוג לחיצה (§7.2: מציגה את משחקי הקבוצה)
   handle(e, /^(BUTTON|A|TR)$/);
 });
 document.addEventListener('change', e => handle(e, /^(INPUT|SELECT|TEXTAREA)$/));
-// type=color בלבד — כל שאר השדות נשמרים ב-blur (מלכודת 3)
+// type=color בלבד — כל שאר השדות נשמרים ב-blur (מלכודת 3).
+// היוצא השני: חיפוש הלוז הציבורי, שמסנן חי ולכן חייב oninput — ובגלל זה
+// הוא גם לא עובר דרך handle() (בלי שמירה ובלי רינדור, רק classList).
 document.addEventListener('input',  e => {
-  if (e.target.type === 'color') handle(e, /^INPUT$/);
+  if (e.target.type === 'color') { handle(e, /^INPUT$/); return; }
+  if (e.target.id === 'pub-search') { setQuery(e.target.value); pubFilter(); }
 });
+
+// שער ההרשאות של מסך הפיינל פור (§7.1). league-ko.js אינו שלי בשלב הזה,
+// והוא מאזין ברמת המסמך ב-bubble; מאזין ב-capture רץ לפניו ועוצר את
+// האירוע. הזנת תוצאות = אדמין; בחירת סלוט (3.9.2) והחלפה (3.9.3) = מאסטר;
+// מעבר לשונית/ליגה = כולן. אחרי חסימת change מרעננים, כדי שהערך שהוקלד
+// בשדה לא יישאר על המסך בלי שנשמר.
+const KO_LEVEL = { 'ko.tab': 0, 'ko.cat': 0, 'ko.score': 1, 'ko.cross': 1 };
+function koGate(e) {
+  const el = e.target.closest('[data-ko]');
+  if (!el) return;
+  if (R() >= (KO_LEVEL[el.dataset.ko] ?? 2)) return;
+  e.stopPropagation();
+  e.preventDefault();
+  if (e.type === 'change') paint();
+}
+document.addEventListener('click',  koGate, true);
+document.addEventListener('change', koGate, true);
 // זכירת המקטעים הפתוחים באקורדיון ההגדרות
 document.addEventListener('toggle', e => {
   const d = e.target;
@@ -2178,6 +2733,7 @@ Board.init({
 
   load.classList.add('h');
   document.getElementById('view-app').classList.remove('h');
+  restoreRole();   // §7.1 — כניסה שנעשתה בלשונית הזאת שורדת רענון
   paint();
   setSync('ok');
 })();

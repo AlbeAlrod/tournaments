@@ -958,3 +958,118 @@ main { padding-top: 16px !important; }
   .sett-section { padding: 16px 16px; }
   .sponsor-bar { gap: 16px; min-height: 46px; }
 }
+
+/* ============================================================================
+   7. שלב 6 — הרשאות, פרסום, הלוז הציבורי, נוכחות
+   §7 · §8.4 · §8.5. אין כאן רכיב חדש שיש לו מקבילה: דיאלוג הכניסה משתמש
+   ב-.overlay/.modal/.mbtn של styles.css, שני הפאנלים של המאסטר הם אותו
+   אקורדיון (.acc) של עמוד ההגדרות, וטבלת הנוכחות היא .stbl.
+   ========================================================================= */
+
+/* ── 7.1 כפתור הכניסה ברצועת הטאבים ───────────────────────────────────────
+   נראה כטאב אבל אינו טאב: אין לו עמוד, ולכן הוא נדחף לקצה ומקבל צבע משלו. */
+.role-tab { margin-inline-start: auto; opacity: .75; }
+.role-tab:hover { opacity: 1; }
+.role-tab.on { opacity: 1; color: var(--primary-text); font-weight: 800; }
+.role-tab.warn { opacity: 1; color: var(--red); font-weight: 700; }
+
+/* ── 7.2 תצוגת השחקניות (§8.5) ───────────────────────────────────────────
+   פס דביק כדי שאי אפשר יהיה לשכוח שאת בתוך תצוגה מקדימה ולתהות למה שום
+   כפתור לא עובד. */
+.prev-bar { position: sticky; top: 0; z-index: 30; display: flex; flex-wrap: wrap;
+  gap: 8px 14px; align-items: center; justify-content: space-between;
+  margin-bottom: 14px; padding: 10px 16px; border-radius: var(--rs);
+  background: color-mix(in srgb, var(--p-yellow) 45%, var(--bg2));
+  border: 1px solid var(--border2); font-size: 13px; color: var(--text); }
+
+/* ── 7.3 הלוז הציבורי (§7.2) ─────────────────────────────────────────────
+   שורה לכל סלוט, עם השעה בעמודה קבועה — זה מה שהופך את הרשימה לסריקה
+   מהירה של "מתי אני משחקת" בלי טבלת גריד ברוחב 4 מגרשים בטלפון. */
+.pub-head { margin-bottom: 12px; }
+.pub-head h3 { font-size: 19px; font-weight: 800; color: var(--text); }
+.pub-search { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 14px; }
+.pub-search .text-inp { width: 240px; max-width: 100%; }
+.pub-slot { display: flex; gap: 12px; align-items: flex-start; padding: 8px 0;
+  border-top: 1px solid var(--border); }
+.pub-slot:first-of-type { border-top: 0; }
+.pub-time { width: 54px; flex-shrink: 0; padding-top: 7px;
+  font-size: 14px; font-weight: 800; color: var(--primary-text); }
+.pub-games { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px; }
+.pub-game { display: flex; flex-wrap: wrap; gap: 6px 9px; align-items: center;
+  padding: 7px 11px; border: 1px solid var(--border); border-radius: var(--rs);
+  background: var(--bg2); font-size: 13.5px; }
+.pub-net { padding: 2px 9px; border-radius: 999px; font-size: 11px; font-weight: 800;
+  flex-shrink: 0; }
+.pub-when { font-size: 12px; color: var(--text3); font-weight: 600; }
+.pub-team { flex: 1; min-width: 90px; font-weight: 600; color: var(--text); }
+/* .pub-score הוא flex ב-RTL: הילד הראשון (sa) יושב מימין, צמוד לקבוצה א׳ —
+   בדיוק כמו בשורת ההזנה של שלב 4. בלי זה 18:14 היה נקרא הפוך. */
+.pub-score { display: flex; align-items: center; gap: 3px; flex-shrink: 0;
+  font-weight: 800; color: var(--text); }
+.pub-score i { font-style: normal; color: var(--text3); }
+.pub-score.pub-vs { color: var(--text3); font-weight: 600; font-size: 12px; }
+.pub-cat { font-size: 11px; color: var(--text3); flex-shrink: 0; }
+.pub-game.hide, .pub-slot.hide { display: none; }
+.team-counter.no { color: var(--red); }
+
+/* ── 7.4 שני פאנלי המאסטר מעל הלוח ──────────────────────────────────────
+   אותה התנהגות של אקורדיון ההגדרות, אבל **לא** מחלקת .acc: הכלל
+   `#page-body:has(.acc)` הופך את העמוד לשני טורים במסך רחב, וזה נכון
+   להגדרות ושובר את לוח הגרירה. לכן מחלקה משלהם, צרה יותר בגובה. */
+.mpanels { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+.mpanel { padding: 0; flex: 1; min-width: 260px; }
+.mpanel[open] { flex-basis: 100%; }
+.mpanel > summary { cursor: pointer; list-style: none; user-select: none;
+  padding: 9px 16px; font-size: 13.5px; display: flex; align-items: center; gap: 8px; }
+.mpanel > summary::-webkit-details-marker { display: none; }
+.mpanel > summary::after { content: '⌄'; margin-inline-start: auto; font-size: 18px;
+  line-height: 1; color: var(--text3); transition: transform .18s; }
+.mpanel[open] > summary::after { transform: rotate(180deg); }
+.mpanel[open] > summary { border-bottom: 2px solid var(--primary); }
+.mpanel-body { padding: 12px 18px 16px; }
+
+/* ── 7.5 פאנל הפרסום (§8.5) ──────────────────────────────────────────── */
+.pub-bar-body, .att-body { display: flex; flex-direction: column; gap: 12px; }
+.pub-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.pub-chip { display: inline-flex; align-items: center; gap: 7px; cursor: pointer;
+  padding: 7px 14px; border-radius: 999px; border: 1px solid var(--border2);
+  background: transparent; font: inherit; font-size: 12.5px; font-weight: 700;
+  color: var(--text3); }
+.pub-chip-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--border2); }
+.pub-chip.on { color: var(--text); border-color: color-mix(in srgb, var(--green) 45%, var(--border2)); }
+.pub-chip.on .pub-chip-dot { background: var(--green); }
+.pub-chip .muted { font-size: 11px; }
+.pub-tools { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; }
+.pub-none { color: var(--red); }
+
+/* ── 7.6 נוכחות וזמינות (§8.4) ───────────────────────────────────────── */
+.att-tbl td { vertical-align: middle; }
+.att-tbl .att-name { text-align: right; font-weight: 600; }
+.att-name .muted { display: block; font-weight: 400; }
+.att-time { width: 104px; padding: 5px 7px; font-size: 12.5px; }
+.att-note { width: 100%; min-width: 90px; padding: 5px 7px; font-size: 12.5px; }
+.att-mark { display: flex; gap: 5px; justify-content: center; }
+.att-mark .filter-btn { padding: 4px 11px; font-size: 12px; }
+.att-row.out .att-name { color: var(--red); }
+
+/* ── 7.7 עמוד הקבוצות — טלפון לכל שחקנית (§5.4, מאסטר בלבד) ───────────── */
+.phone-inp { width: 100%; margin-top: 4px; padding: 5px 8px;
+  font-size: 12px; direction: ltr; text-align: right; }
+.team-meta { font-size: 11.5px; font-weight: 700; color: var(--text3);
+  direction: ltr; unicode-bidi: isolate; white-space: nowrap; }
+
+@media (max-width: 640px) {
+  .pub-slot { gap: 8px; }
+  .pub-time { width: 44px; font-size: 13px; }
+  /* בטלפון הכרטיס עובר לגריד: שם / תוצאה / שם זה מתחת לזה, והרשת והליגה
+     בעמודה צרה משמאל. בשורה אחת שני השמות נמחצים והתוצאה נדבקת לשם אחד,
+     ואז אי אפשר לדעת של מי ה-18. */
+  .pub-game { display: grid; grid-template-columns: auto minmax(0,1fr);
+    column-gap: 9px; row-gap: 1px; align-items: center; font-size: 13px; padding: 7px 9px; }
+  .pub-net { grid-column: 1; grid-row: 1; }
+  .pub-cat { grid-column: 1; grid-row: 2 / span 2; align-self: start; }
+  .pub-when, .pub-team, .pub-score { grid-column: 2; }
+  .pub-search .text-inp { width: 100%; }
+  .att-tbl { min-width: 560px; }
+  .role-tab { margin-inline-start: 0; }
+}
