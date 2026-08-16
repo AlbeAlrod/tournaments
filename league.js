@@ -129,6 +129,11 @@ function defaultDoc() {
       liga2: { regular:clone(F_SET18), sf:clone(F_SET21), third:clone(F_SET18), final:clone(F_BO3) }
     },
 
+    // מרשם השחקניות — §5.4. מקור אמת אחד לשם: { p001:{name:'רוני כהן'} }.
+    // team.players מחזיק מזהים ולא שמות, ולכן שחקנית שמשחקת בשאו וגם בליגה
+    // היא אותה רשומה בשתי הקבוצות.
+    players: {},
+
     // קבוצה = רשומה עם id (החלטה 7). השם הוא מחרוזת אחת (החלטה 8).
     // רשימת הקבוצות מתפרסמת אחרי 12.8.2026 — §15.4.
     roster: { show:[], liga1:[], liga2:[] },
@@ -163,6 +168,143 @@ function newGame(id, cat, day) {
 }
 
 // ============================================================================
+// מזהי שחקניות — §5.4
+// ============================================================================
+//
+// כל שחקנית מקבלת מזהה אחד (p001) במרשם L.players, ו-team.players מחזיק מזהים
+// ולא שמות. לכן שחקנית שמשחקת בשאו וגם בליגה היא **אותה רשומה** בשתי הקבוצות,
+// והמתזמן יכול לדעת ששתי הקבוצות שלה אינן יכולות לשחק באותו סלוט.
+// המזהים אינם ממוחזרים, בדיוק כמו מזהי קבוצות (החלטה 7): מרשם הטלפונים בדוק
+// הפרטי מוצמד למזהה, ומיחזור היה מדביק את הטלפון של אחת לאחרת.
+
+const isPid = v => typeof v === 'string' && /^p\d+$/.test(v);
+
+// השוואת שמות להשלמה האוטומטית: רווח כפול ואותיות גדולות/קטנות (שם לטיני)
+// אינם הבדל. מעבר לזה לא מנרמלים — "נועה" ו"נועה כהן" הן שתי שחקניות שונות.
+const normName = s => String(s || '').trim().replace(/\s+/g, ' ').toLowerCase();
+
+// שם לתצוגה מערך של סלוט. מזהה → מהמרשם; מחרוזת → כמות שהיא. המקרה השני הוא
+// תאימות לאחור: קבוצות שנשמרו לפני §5.4 מחזיקות שמות בתוך players.
+function slotName(v, reg) {
+  if (isPid(v)) return (reg || L.players || {})[v]?.name || '';
+  return v || '';
+}
+
+function nextPlayerId() {
+  const used = Object.keys(L.players || {})
+    .map(k => parseInt(k.slice(1), 10)).filter(Number.isFinite);
+  return 'p' + String((used.length ? Math.max(...used) : 0) + 1).padStart(3, '0');
+}
+
+function newPlayer(name) {
+  const id = nextPlayerId();
+  (L.players ||= {})[id] = { name };
+  return id;
+}
+
+// מזהה שחקנית → כל הקבוצות שהיא רשומה בהן. הבסיס גם לסימון ⇄ ברוסטר וגם
+// לזוגות הקשורים שהמתזמן מקבל (links ב-schedInput).
+function playerTeams() {
+  const map = {};
+  for (const [cat, list] of Object.entries(L.roster || {}))
+    for (const t of (list || []))
+      for (const v of new Set(teamSlots(t)))
+        if (isPid(v)) (map[v] ||= []).push({ cat, team: t });
+  return map;
+}
+
+// זוגות קבוצות שחולקות שחקנית (§5.4). המתזמן כבר מכיר את השדה `links` ומעניש
+// עליו שיבוץ צפוף (linkedOverlap); הפיכתו לאילוץ קשיח היא שלב 3 של §5.4
+// ונעשית ב-league-sched.js.
+function sharedTeamPairs() {
+  const pairs = new Set();
+  for (const list of Object.values(playerTeams()))
+    for (let i = 0; i < list.length; i++)
+      for (let j = i + 1; j < list.length; j++) {
+        const a = list[i].team.id, b = list[j].team.id;
+        if (a !== b) pairs.add(a < b ? a + '|' + b : b + '|' + a);
+      }
+  return [...pairs].map(k => k.split('|'));
+}
+
+// שם הקבוצה נגזר תמיד מהמרשם (החלטה 8 + §5.4). מורץ גם על מסמך נכנס, כך
+// ששינוי שם שחקנית בחלון אחר מחלחל לשמות הקבוצות בכל מקום בלי כתיבה נוספת.
+function syncTeamNames(d) {
+  const reg = d.players || {};
+  for (const list of Object.values(d.roster || {}))
+    for (const t of (list || [])) {
+      const names = teamSlots(t).filter(Boolean).map(v => slotName(v, reg));
+      // מזהה שאין לו רשומה במרשם = מסמך חלקי (למשל לשונית שעדיין מריצה גרסה
+      // ישנה של league.js ושמרה בלי players). לא מוחקים אז את שמות הקבוצות —
+      // משאירים את השם האחרון שהיה במסמך עד שהמרשם חוזר.
+      if (names.some(n => !n)) continue;
+      t.name = names.join(' ');
+    }
+}
+
+// ההכרעה של §5.4: מה קורה כשמקלידים שם במשבצת שחקנית. מחזיר מזהה לשיבוץ,
+// או '' לניקוי המשבצת.
+//
+//   שם שכבר במרשם  → מציע לשייך את אותו מזהה (**הרגע היחיד** שבו נקבע ששתי
+//                     קבוצות חולקות שחקנית). אישור = משותפת, ביטול = חדשה.
+//   שם חדש         → אם בסלוט יושבת שחקנית ששייכת רק לקבוצה הזאת, זה תיקון
+//                     שם והמזהה נשמר (אחרת כל תיקון הקלדה היה שובר את השיוך).
+//                     אם היא משותפת — שואלים אם לשנות את שמה בכל מקום.
+//   שם כפול במרשם  → לא מנחשים: נוצרת חדשה, עם הסבר.
+function resolveSlot(typed, cur, catId, teamId) {
+  if (!typed) return '';
+  const curPid = (isPid(cur) && L.players?.[cur]) ? cur : null;
+  if (curPid && normName(slotName(curPid)) === normName(typed)) return curPid;
+
+  const usage = playerTeams();
+  const others = pid => (usage[pid] || []).filter(x => x.team.id !== teamId);
+  const where  = list => list.map(x => `״${x.team.name || x.team.id}״ (${CAT_NAME(x.cat)})`).join(', ');
+
+  const matches = Object.entries(L.players || {})
+    .filter(([id, p]) => id !== curPid && normName(p.name) === normName(typed))
+    .map(([id]) => id);
+
+  if (matches.length > 1) {
+    alert(`יש כבר יותר משחקנית אחת בשם "${typed}", ואי אפשר לדעת למי התכוונת. ` +
+          `נרשמה שחקנית חדשה. כדי לשייך אותה לשחקנית קיימת — כדאי להוסיף שם משפחה ולהבדיל ביניהן.`);
+    return newPlayer(typed);
+  }
+
+  if (matches.length === 1) {
+    const pid = matches[0], rest = others(pid);
+    // כבר בקבוצה הזאת, במשבצת אחרת — המשבצת הכפולה מתרוקנת ולא נוצרת כפילות.
+    const self = findTeam(teamId)?.team;
+    if (self && teamSlots(self).includes(pid)) {
+      alert(`"${typed}" כבר רשומה בקבוצה הזאת.`);
+      return '';
+    }
+    // שחקנית לא יכולה לשחק בשתי קבוצות באותה ליגה — רק שאו + ליגה אחת (§5.4).
+    const clash = rest.find(x => x.cat === catId);
+    if (clash) {
+      alert(`"${typed}" כבר רשומה ב״${clash.team.name || clash.team.id}״ באותה ליגה. ` +
+            `שחקנית לא יכולה לשחק בשתי קבוצות באותה ליגה, ולכן נרשמה שחקנית חדשה בשם הזה.`);
+      return newPlayer(typed);
+    }
+    if (!rest.length) return pid;   // קיימת במרשם אך אינה משובצת — פשוט חוזרת
+    if (confirm(`"${typed}" כבר משחקת ב-${where(rest)}. זו אותה שחקנית?\n\n` +
+                `אישור — אותה שחקנית בשתי הקבוצות.\nביטול — שחקנית אחרת עם אותו שם.`))
+      return pid;
+    return newPlayer(typed);
+  }
+
+  if (curPid) {
+    const rest = others(curPid);
+    if (!rest.length) { L.players[curPid].name = typed; return curPid; }   // תיקון שם
+    if (confirm(`"${slotName(curPid)}" משחקת גם ב-${where(rest)}.\n\n` +
+                `אישור — שינוי שמה ל"${typed}" בכל מקום.\nביטול — שיבוץ שחקנית אחרת כאן בלבד.`)) {
+      L.players[curPid].name = typed;
+      return curPid;
+    }
+  }
+  return newPlayer(typed);
+}
+
+// ============================================================================
 // קבוצות
 // ============================================================================
 
@@ -183,13 +325,13 @@ function nextTeamId(catId) {
 
 // שלושה שדות שם, לא בורר גודל (החלטת המשתמשת 24.7): ממלאים 2 → זוג, 3 →
 // שלישייה, והמערכת מסיקה. זה גם מתיישר עם טופס ההרשמה החיצוני שאוסף שחקניות
-// בנפרד. `name` נגזר מהשמות המלאים ומוצג כיחידה אחת (החלטה 8 נשמרת בתצוגה);
-// `players` נשמר כדי שאפשר יהיה לערוך כל שם בנפרד. `size` נגזר, לא נשמר.
+// בנפרד. `players` מחזיק **מזהי שחקניות** (§5.4) ו-`name` נגזר מהמרשם ומוצג
+// כיחידה אחת (החלטה 8 נשמרת בתצוגה). `size` נגזר, לא נשמר.
 function newTeam(catId) {
   return {
     id: nextTeamId(catId),
     players: ['', '', ''],   // עד 3 (2.1); מספר המלאים קובע זוג/שלישייה
-    name: '',                // = players.filter(Boolean).join(' ')
+    name: '',                // = players.map(שם מהמרשם).filter(Boolean).join(' ')
     // active/withdrewAfterDay נשארים במודל לטובת 6.1 בשלב 4 (הזנת תוצאות),
     // בלי פקד ברוסטר: פרישה נדירה, ומטופלת במחיקה או בסימון "טכני" למשחק (§10.3).
     active: true,
@@ -197,9 +339,10 @@ function newTeam(catId) {
   };
 }
 
-// עד 3 שמות. תומך גם בקבוצות ישנות שנשמרו עם name בלבד (לפני השינוי).
-// זוג/שלישייה נגזר ממספר השמות המלאים ולא נשמר בנפרד.
-function teamPlayers(t) {
+// שלושת הסלוטים כמות שהם: מזהי שחקניות (§5.4), או — בקבוצות שנשמרו לפני
+// השינוי — שמות כמחרוזות. תומך גם בקבוצה ישנה שנשמרה עם name בלבד.
+// זוג/שלישייה נגזר ממספר הסלוטים המלאים ולא נשמר בנפרד.
+function teamSlots(t) {
   if (Array.isArray(t.players)) return [t.players[0] || '', t.players[1] || '', t.players[2] || ''];
   return [t.name || '', '', ''];
 }
@@ -497,10 +640,11 @@ function mergeDefaults(data) {
     const def = d.categories.find(x => x.id === c.id);
     return def ? { ...def, ...c } : c;
   });
-  return {
+  const merged = {
     meta:         { ...d.meta, ...(data.meta || {}) },
     categories:   data.categories?.length ? mergeCats(data.categories) : d.categories,
     formats:      { ...d.formats, ...(data.formats || {}) },
+    players:      data.players      || {},
     roster:       { ...d.roster,  ...(data.roster  || {}) },
     availability: data.availability || {},
     attendance:   data.attendance   || {},
@@ -509,12 +653,48 @@ function mergeDefaults(data) {
     ko:           { ...d.ko, ...(data.ko || {}) },
     crossover:    data.crossover    || []
   };
+  // שם הקבוצה הוא שדה נגזר — נבנה מחדש מהמרשם בכל טעינה (§5.4). מקומי בלבד:
+  // אין כאן כתיבה, ולכן מסמך שנכתב בחלון אחר לא מייצר לולאת שמירה.
+  syncTeamNames(merged);
+  return merged;
+}
+
+// ============================================================================
+// טלפונים — דוק פרטי נפרד (§5.4)
+// ============================================================================
+//
+// הטלפונים אינם יושבים בדוק הליגה: הוא ציבורי לקריאה וכתובתו מופצת ל-72
+// השחקניות (מלכודת 7). הם יושבים בדוק שכן — tournaments/<id>_private —
+// שהאפליקציה הציבורית **לא טוענת בכלל**; רק עמוד הקבוצות של המנהלת יקרא אותו,
+// אחרי שיהיו הרשאות (שלב 6). כאן התשתית בלבד: אף אחת מהפונקציות אינה מחווטת
+// לממשק, ולכן הדוק גם לא נוצר ואין כרגע טלפון אחד במערכת.
+// ⚠️ בלי Firebase Auth זו פרטיות בפועל ולא הרמטית — §5.4.
+
+const PRIVATE_ID = LEAGUE_ID + '_private';
+let PRIV = null;   // { phones: { p001:'050-0000000' } } — נטען עצל, פעם אחת
+
+async function loadPhones() {
+  if (PRIV) return PRIV;
+  const snap = await getDoc(doc(db, 'tournaments', PRIVATE_ID));
+  PRIV = snap.exists() ? (snap.data() || {}) : {};
+  PRIV.phones ||= {};
+  return PRIV;
+}
+
+const phoneOf = pid => PRIV?.phones?.[pid] || '';
+
+async function setPhone(pid, phone) {
+  const p = await loadPhones();
+  phone ? (p.phones[pid] = phone) : delete p.phones[pid];
+  await setDoc(doc(db, 'tournaments', PRIVATE_ID),
+               { phones: p.phones, updatedAt: serverTimestamp() });
 }
 
 function payload() {
   return {
     meta: L.meta, categories: L.categories, formats: L.formats,
-    roster: L.roster, availability: L.availability, attendance: L.attendance,
+    players: L.players, roster: L.roster,
+    availability: L.availability, attendance: L.attendance,
     games: L.games, blocks: L.blocks, ko: L.ko, crossover: L.crossover
   };
 }
@@ -712,18 +892,40 @@ function renderPlaceholder(p) {
 // עמוד קבוצות — §14 שלב 2
 // ============================================================================
 
+// רשימת ההשלמה האוטומטית — כל השמות שכבר במרשם (§5.4). שם שנבחר מהרשימה
+// משייך את אותה שחקנית, וכך אותה שחקנית בשאו ובליגה מקבלת מזהה זהה.
+function playerOptions() {
+  return [...new Set(Object.values(L.players || {}).map(p => p.name).filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b, 'he'))
+    .map(n => `<option value="${escH(n)}"></option>`).join('');
+}
+
+// טקסט הסימון ⇄: היכן עוד השחקנית הזאת משחקת.
+const sharedTip = rest =>
+  'משחקת גם ב-' + rest.map(x => `״${x.team.name || x.team.id}״ (${CAT_NAME(x.cat)})`).join(', ');
+
 function renderTeams() {
   // שלושה שדות שם במקום בורר גודל (החלטת המשתמשת 24.7): 2 מלאים = זוג,
   // 3 = שלישייה. אין כפתור פעילה/פרשה (פרישה נדירה — מחיקה או "טכני" פר משחק,
-  // §10.3), ואין קוד מזהה גלוי (פנימי — המנהלת לא צריכה אותו).
+  // §10.3), ואין קוד מזהה גלוי (פנימי — המנהלת לא צריכה אותו, וגם לא את p001).
+  const usage  = playerTeams();
+  const shared = Object.values(usage).filter(l => l.length > 1).length;
+
   const cards = L.categories.map(c => {
     const list = L.roster[c.id] || [];
     const PH = ['שחקנית ראשונה', 'שחקנית שנייה', 'שחקנית שלישית (רשות)'];
     const rows = list.map((t, i) => {
-      const p = teamPlayers(t);
-      const fields = [0, 1, 2].map(s => `
-        <input class="text-inp team-player-inp" value="${escH(p[s])}" placeholder="${PH[s]}"
-               data-act="team.player" data-id="${escH(t.id)}" data-slot="${s}"/>`).join('');
+      const p = teamSlots(t);
+      const fields = [0, 1, 2].map(s => {
+        const pid  = isPid(p[s]) ? p[s] : '';
+        const rest = (usage[pid] || []).filter(x => x.team.id !== t.id);
+        return `
+        <label class="player-slot${rest.length ? ' shared' : ''}"${rest.length ? ` title="${escH(sharedTip(rest))}"` : ''}>
+          <input class="text-inp team-player-inp" list="players-reg" autocomplete="off"
+                 value="${escH(slotName(p[s]))}" placeholder="${PH[s]}"
+                 data-act="team.player" data-id="${escH(t.id)}" data-slot="${s}"/>
+        </label>`;
+      }).join('');
       return `
       <div class="team-row">
         <span class="team-num">${i + 1}</span>
@@ -744,13 +946,47 @@ function renderTeams() {
   }).join('');
 
   return `
+  <datalist id="players-reg">${playerOptions()}</datalist>
   <div class="info-box">
     רשימת הקבוצות הרשמית מתפרסמת אחרי <strong>12.8.2026</strong> (נספח ב׳ לתקנון).
     עד אז אפשר להזין ידנית. לפי 2.11.2 מותר להחליף או להוסיף שחקנית אחת עד
     <strong>27.8.2026</strong> — שינוי שם הקבוצה כאן מתעדכן אוטומטית בכל משחקיה,
     כי המשחקים מצביעים על המזהה ולא על השם.
+    <br/>שחקנית שכבר הוזנה מוצעת להשלמה בזמן ההקלדה: בחירה בה מסמנת
+    ש<strong>זו אותה שחקנית</strong> בשתי הקבוצות.
+  </div>
+  <div id="shared-note" class="sett-empty-note${shared ? '' : ' h'}">
+    ${shared} שחקניות רשומות בשתי קבוצות — מסומנות ⇄.
   </div>
   ${cards}`;
+}
+
+// עדכון כירורגי של הרוסטר אחרי שינוי במשבצת שחקנית. paint() מלא היה מנתק את
+// השדה שהמנהלת כבר עברה אליו (באג 2 בשלב 2), ולכן 'team.player' נשאר
+// ב-NO_REPAINT ורק מה שבאמת יכול היה להשתנות מתעדכן: השם הקנוני בכל סלוט
+// שמצביע על אותה שחקנית (שינוי שם מחלחל לקבוצה השנייה), סימון ⇄ בשני הצדדים,
+// רשימת ההשלמה ושורת הסיכום.
+function syncRosterInputs() {
+  const usage = playerTeams();
+  document.querySelectorAll('input[data-act="team.player"]').forEach(inp => {
+    const f = findTeam(inp.dataset.id); if (!f) return;
+    const v    = teamSlots(f.team)[+inp.dataset.slot] || '';
+    const rest = (isPid(v) ? (usage[v] || []) : []).filter(x => x.team.id !== f.team.id);
+    if (inp !== document.activeElement) inp.value = slotName(v);
+    const box = inp.closest('.player-slot');
+    if (!box) return;
+    box.classList.toggle('shared', rest.length > 0);
+    if (rest.length) box.title = sharedTip(rest);
+    else box.removeAttribute('title');
+  });
+  const dl = document.getElementById('players-reg');
+  if (dl) dl.innerHTML = playerOptions();
+  const note = document.getElementById('shared-note');
+  if (note) {
+    const n = Object.values(usage).filter(l => l.length > 1).length;
+    note.classList.toggle('h', n === 0);
+    note.textContent = `${n} שחקניות רשומות בשתי קבוצות — מסומנות ⇄.`;
+  }
 }
 
 // ============================================================================
@@ -787,6 +1023,11 @@ function schedInput() {
     })),
     blocks: L.blocks || [],
     availability: L.availability || {},
+    // §5.4 — זוגות קבוצות שחולקות שחקנית. המתזמן כבר מכיר את השדה ומעניש
+    // שיבוץ צפוף שלהן (linkedOverlap); הפיכתו לאילוץ קשיח על שיבוץ *מקביל*
+    // היא שלב 3 של §5.4 ותיעשה ב-league-sched.js. בלי שחקניות משותפות
+    // הרשימה ריקה וההתנהגות זהה לחלוטין לקודם.
+    links: sharedTeamPairs(),
     existing: L.games || []
   };
 }
@@ -1638,14 +1879,18 @@ const ACT = {
     if (!confirm(`למחוק את "${f.team.name || f.team.id}"?`)) return false;
     L.roster[f.cat] = L.roster[f.cat].filter(t => t.id !== f.team.id);
   },
-  // שם שחקנית בסלוט. השם המאוחד (החלטה 8) נגזר מהשמות המלאים; זוג/שלישייה
-  // נגזר ממספרם ולא נשמר.
+  // משבצת שחקנית. הערך שנשמר הוא **מזהה** (§5.4) ולא שם — resolveSlot מכריע
+  // אם השם שהוקלד הוא שחקנית קיימת (שיוך, וכך שתי הקבוצות חולקות אותה), תיקון
+  // שם של מי שכבר בסלוט, או שחקנית חדשה. השם המאוחד (החלטה 8) נגזר מהמרשם;
+  // זוג/שלישייה נגזר ממספר הסלוטים המלאים ולא נשמר.
   'team.player': el => {
-    const f = findTeam(el.dataset.id); if (!f) return;
-    const p = teamPlayers(f.team);
-    p[+el.dataset.slot] = el.value.trim();
-    f.team.players = p;
-    f.team.name = p.filter(Boolean).join(' ');
+    const f = findTeam(el.dataset.id); if (!f) return false;
+    const slots = teamSlots(f.team);
+    const slot  = +el.dataset.slot;
+    slots[slot] = resolveSlot(el.value.trim().replace(/\s+/g, ' '), slots[slot], f.cat, f.team.id);
+    f.team.players = slots;
+    syncTeamNames(L);
+    syncRosterInputs();
   },
 
   // ── כללי ──
@@ -1798,20 +2043,37 @@ function confirmRegen() {
 
 // רוסטר בדיקה. שמות אמיתיים באורך אמיתי, כדי שהגריד ייבדק בתנאים אמיתיים
 // ולא מול "קבוצה 1". ?dev=1 בלבד, ורק מול futilina-test.
+//
+// שם מלא (פרטי + משפחה) ולא שם פרטי בלבד: המרשם מזהה שחקנית לפי שם, ושמות
+// פרטיים חוזרים על עצמם. שחקניות השאו נלקחות **מתוך** ליגה א׳ ו-ב׳ (§5.4:
+// שחקנית היא תמיד שאו + ליגה אחת), כדי שהמקרה המשותף ייבדק בפועל.
 function seedTestRoster() {
   const first = ['רוני','טל','נועה','שירה','ליהי','עדי','מאיה','יערה','הילה','דנה',
                  'אור','ניצן','שקד','רותם','אביגיל','יובל','גאיה','תמר','אלה','נטע'];
-  const pick = (i, k) => first[(i * 7 + k * 3) % first.length];
-  const build = (cat, n) => Array.from({ length: n }, (_, i) => {
-    // כל קבוצה שלישית = שלישייה (3 שמות), השאר זוגות (2 שמות)
-    const players = i % 3 === 0 ? [pick(i, 0), pick(i, 1), pick(i, 2)] : [pick(i, 0), pick(i, 1)];
-    return {
-      id: `${CAT_PREFIX[cat]}t${String(i + 1).padStart(2, '0')}`,
-      players, name: players.join(' '),
-      active: true, withdrewAfterDay: null
-    };
+  const last  = ['כהן','לוי','מזרחי','פרץ','ביטון','אדרי','שפירא','גולן'];
+  const reg = {};
+  let n = 0;
+  const addPlayer = () => {
+    const id = 'p' + String(++n).padStart(3, '0');
+    reg[id] = { name: `${first[(n - 1) % first.length]} ${last[Math.floor((n - 1) / first.length) % last.length]}` };
+    return id;
+  };
+  const mkTeam = (cat, i, pids) => ({
+    id: `${CAT_PREFIX[cat]}t${String(i + 1).padStart(2, '0')}`,
+    players: pids, name: pids.map(p => reg[p].name).join(' '),
+    active: true, withdrewAfterDay: null
   });
-  L.roster = { show: build('show', 6), liga1: build('liga1', 15), liga2: build('liga2', 15) };
+  // כל קבוצה שלישית = שלישייה, השאר זוגות
+  const build = (cat, count) => Array.from({ length: count }, (_, i) =>
+    mkTeam(cat, i, Array.from({ length: i % 3 === 0 ? 3 : 2 }, addPlayer)));
+
+  const liga1 = build('liga1', 15);
+  const liga2 = build('liga2', 15);
+  const show  = Array.from({ length: 6 }, (_, i) =>
+    mkTeam('show', i, [liga1[i * 2].players[0], liga2[i * 2 + 1].players[0]]));
+
+  L.players = reg;
+  L.roster  = { show, liga1, liga2 };
   L.games = []; schedLast = null;
 }
 

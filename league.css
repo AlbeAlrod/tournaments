@@ -208,7 +208,17 @@ input[type="url"], input[type="date"], input[type="time"], input[type="number"] 
   display: flex; align-items: center; justify-content: center;
   font-size: 12px; font-weight: 800; }
 .team-players { flex: 1; min-width: 0; display: flex; gap: 6px; }
-.team-player-inp { flex: 1; min-width: 0; }
+.player-slot { flex: 1; min-width: 0; position: relative; display: block; }
+.team-player-inp { width: 100%; min-width: 0; }
+
+/* ⇄ — שחקנית שרשומה גם בקבוצה אחרת (§5.4). סימון בלבד, בלי פקד: הקישור
+   נוצר בהקלדת השם ולא בלחיצה. הריפוד מפנה לו מקום כדי שהשם לא יעבור מתחתיו. */
+.player-slot.shared .team-player-inp { padding-inline-end: 24px; }
+.player-slot.shared::after {
+  content: '⇄'; position: absolute; inset-inline-end: 7px; top: 50%;
+  transform: translateY(-50%); pointer-events: none;
+  font-size: 13px; font-weight: 700; color: var(--primary);
+}
 
 /* פורמט משחק — שדות מספר צרים בשורה אחת */
 .fmt-ctrl { flex-wrap: wrap; gap: 6px; }
