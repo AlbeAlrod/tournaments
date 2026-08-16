@@ -8,16 +8,64 @@
    נקודת הסנכרון וכל תיקוני הטלפון — כולם שם וממשיכים לשמש כאן.
 
    כאן יושב אך ורק מה שייחודי לליגה:
+     0. פלטת המותג (§15.1) — ארבעת קודי פוצ׳ילינה + ברירת מחדל לערכת הנושא
      1. היפוכי RTL — styles.css נכתב לפריסת LTR
      2. ביטול letter-spacing — באתר הזה כל טקסט הוא עברי (מלכודת 5)
      3. מסך טעינה ורוד (החלטה 14) במקום הלבן של styles.css
      4. מצב סנכרון שלישי: "שומר…"
      5. ארבעה רכיבים שאין להם מקבילה: צ׳יפ רשת, רצועת סלוטים,
         רשימת מפתח-ערך, ובידוד דו-כיווני לתאים מספריים
+     6. מיתוג ויזואלי (שלב 8) — החלת הפלטה על כל העמודים + ליטוש
 
    ❗ לא לגעת ב-styles.css. הוא משרת גם את index.html; כל תיקון RTL שם
    ישבור את האפליקציה הקיימת. כל ההתאמות עוברות דרך הקובץ הזה.
    ========================================================================= */
+
+/* ── 0. פלטת המותג ─────────────────────────────────────────────────────
+   §15.1 · החלטה 14. ארבעת הקודים הם מספרי פנטון של פוצ׳ילינה, לא ערכת
+   נושא — הם קבועים ולא עוברים דרך applyTheme.
+
+   בלוק שני של טוקנים כאן הוא **ברירת מחדל** לערכת הנושא של styles.css:
+   applyTheme() (common.js) מזריק ‎<style id="theme-style">‎ ל-head, כלומר
+   מאוחר יותר במסמך מהקובץ הזה — ולכן הצבעים מ-meta תמיד גוברים ברגע
+   שהמסמך נטען. מה שכתוב כאן צובע רק את מה שקודם לטעינה: מסך הטעינה,
+   "הליגה עוד לא נוצרה", מסך השגיאה, והפריים הראשון. בלעדיו הם מקבלים
+   את הסגול של אפליקציית הטורנירים. */
+:root {
+  --p-magenta: #EE2BC1;   /* 807 C  — ראשי */
+  --p-yellow:  #DAFF00;   /* 809 C  — הדגשה */
+  --p-blue:    #0775ED;   /* 2173 C — משני */
+  --p-dark:    #000B19;   /* כהה    — טקסט ועוגן */
+
+  /* ברירת מחדל לערכת הנושא — הערכים שה-applyTheme גוזר מ-#EE2BC1/#0775ED.
+     ‏--primary-text ו---secondary-text אינם קיימים כלל ב-:root של
+     styles.css (רק applyTheme כותב אותם), ולכן בלי השורות האלה הטאבים
+     והכותרות חסרי צבע עד שהמסמך נטען. */
+  --primary:        #EE2BC1;
+  --primary2:       #0775ED;
+  --primary3:       #226ebf;
+  --primary-text:   #EE2BC1;
+  --secondary-text: #0775ED;
+  --on-primary:     #1a1a1a;   /* onColor('#EE2BC1') — לבן לא עובר AA על מגנטה */
+  --bg:      #fdfbfd;
+  --bg3:     #f4f1f3;
+  --surface: #ece4ea;
+  --text:    #20131d;
+  --text2:   #502045;
+  --text3:   #a23488;
+  --border:  rgba(238,43,193,0.10);
+  --border2: rgba(238,43,193,0.22);
+  --nav-bg:    rgba(244,241,243,0.97);
+  --header-bg: rgba(255,255,255,0.94);
+
+  /* גיאומטריה וצל — styles.css קובע אותם ב-:root ו-applyTheme לא נוגע בהם,
+     ולכן זה המקום היחיד לכוונן אותם לליגה. הצל מקבל גוון כהה-מותג במקום
+     שחור נייטרלי. */
+  --r:  16px;
+  --rs: 10px;
+  --shadow-sm: 0 1px 2px rgba(0,11,25,0.05), 0 2px 10px rgba(0,11,25,0.04);
+  --shadow-md: 0 2px 8px rgba(0,11,25,0.07), 0 10px 30px rgba(0,11,25,0.06);
+}
 
 /* ── 1. RTL ─────────────────────────────────────────────────────────────
    styles.css מיישר שמאלה ומשתמש ב-border-left כמדד צד. בעברית שני אלה
@@ -51,7 +99,10 @@ input:checked + .toggle-slider::before { transform: translateX(-20px); }
 body, .lname, .tab, .pill, .admin-toggle, .filter-btn, .cat-btn, .cf-btn,
 .sett-section-title, .sett-card-title, .scard-name, .cat-section-header,
 .page-header h2, .modal h3, .mbtn, .status-badge, .sponsor-text,
-.brnd-title, .bm-label, .ko-lbl, .rtag, .ci {
+.brnd-title, .bm-label, .ko-lbl, .rtag, .ci,
+/* שלב 8: שלושה שנשארו מרווחים והם עברית מלאה — כותרות טבלת הדירוג,
+   תוויות שדות ההגדרות, ותג ה-bye בבראקט. */
+.stbl th, .cat-sett-label, .bye-tag, .prev-label {
   letter-spacing: 0;
   text-transform: none;
 }
@@ -61,10 +112,34 @@ body, .lname, .tab, .pill, .admin-toggle, .filter-btn, .cat-btn, .cf-btn,
 
 /* ── 3. מסך הטעינה ─────────────────────────────────────────────────────
    styles.css קובע #view-loading לבן. החלטה 14: ורוד. הצבע עצמו מוזרק
-   מ-meta.loadingColor ב-league.js, כך שהחלפתו בשלב 8 היא שינוי נתון. */
+   מ-meta.loadingColor ב-league.js — inline, ולכן אי אפשר לשכב עליו
+   gradient מכאן; הליטוש עובר דרך הילדים. */
 #view-loading .no-t-wrap h1,
 #view-loading .no-t-wrap p { color: inherit; }
-#view-loading .loader { border-color: currentColor; border-top-color: transparent; opacity: .7; }
+#view-loading .no-t-wrap { gap: 22px; }
+
+/* סימן המותג במסך הטעינה — placeholder. אין עדיין קובץ לוגו (§15.1 פריט 2),
+   ולכן האות פ בריבוע לבן, באותה שפה של ‎.lmark‎ בכותרת. כשיגיע הנכס: להחליף
+   את ה-content ברקע תמונה. */
+#view-loading .no-t-wrap::before {
+  content: 'פ';
+  width: 88px; height: 88px; border-radius: 26px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 44px; font-weight: 900; line-height: 1;
+  color: var(--p-magenta); background: #fff;
+  box-shadow: 0 12px 34px rgba(0,11,25,.22);
+}
+#view-loading .no-t-wrap p { font-size: 16px; font-weight: 700; opacity: .88; }
+/* הטבעת לבנה-שקופה (כהה על ורוד כמעט נעלם), הקשת המסתובבת בצהוב המותג */
+#view-loading .loader {
+  width: 42px; height: 42px; border-width: 4px;
+  border-color: rgba(255,255,255,.42); border-top-color: var(--p-yellow); opacity: 1;
+}
+
+/* מסכי "הליגה עוד לא נוצרה" ו"לא הצלחנו לטעון" — אותה משפחה, בלי הוורוד */
+#view-missing .no-t-wrap h1,
+#view-error   .no-t-wrap h1 { color: var(--primary-text); }
+#view-missing .no-t-wrap a { color: var(--secondary-text); font-weight: 700; }
 
 /* ── 4. מצב סנכרון שלישי ───────────────────────────────────────────────
    styles.css מכיר ok ו-err בלבד. כתיבה עם debounce מוסיפה מצב ביניים. */
@@ -348,9 +423,9 @@ footer { padding: 20px; text-align: center; font-size: 12px;
   text-align: center; vertical-align: middle; white-space: nowrap; position: sticky; right: 0; z-index: 2; }
 /* שפת הצבעים של הלוח — פלטת המותג בלבד לסימון משמעות (בלי ירוק/אדום/כתום —
    בקשת המשתמשת). המשמעות נישאת בצבע, וסוג-הסימון (מילוי/טבעת/מקווקו/צביעת-טקסט)
-   מבדיל בין משמעויות שחולקות צבע. קבועים — לא תלויים בערכת הנושא של המסמך. */
+   מבדיל בין משמעויות שחולקות צבע. קבועים — לא תלויים בערכת הנושא של המסמך.
+   הפלטה עצמה (‎--p-*‎) מוגדרת ב-§0 בראש הקובץ; כאן רק כינויי המשמעות. */
 :root {
-  --p-magenta: #EE2BC1; --p-yellow: #DAFF00; --p-blue: #0775ED; --p-dark: #000B19;   /* פלטת פוצ׳ילינה */
   --hl-a: var(--p-magenta);       /* זוג נבחר A — צביעת טקסט + מסגרת כרטיס */
   --hl-b: var(--p-blue);          /* זוג נבחר B — צביעת טקסט + מסגרת כרטיס */
   --place: var(--p-yellow);       /* אפשר לשים / יעד — טבעת מלאה=מותר · מקווקו=מפר-רך */
@@ -635,6 +710,179 @@ main { max-width: min(1680px, 100%) !important; padding: 12px 24px 6px !importan
 .board-help ul, .board-guide ul { margin: 0 0 10px; padding-inline-start: 20px; line-height: 1.9; font-size: 12.5px; color: var(--text2); }
 .board-help .lg-sw, .board-guide .lg-sw { vertical-align: middle; }
 
+/* ============================================================================
+   6. מיתוג ויזואלי — שלב 8 (§14) · §15.1 · החלטה 14
+   מגנטה #EE2BC1 ראשי · צהוב #DAFF00 הדגשה · כחול #0775ED משני · כהה #000B19.
+
+   העיקרון: הצבע הראשי כבר זורם מ-meta דרך applyTheme לכל --primary*, ולכן
+   רוב הרכיבים של styles.css כבר מגיעים במגנטה. מה שנשאר כאן הוא (א) שני
+   הצבעים שאין להם דרך להיכנס דרך applyTheme — הצהוב והכהה, (ב) רכיבים
+   שקודדו קשיח בגוון נייטרלי או זהב, ו-(ג) הליטוש: מרווחים, צללים, קריאוּת.
+   ========================================================================= */
+
+/* ── 6.1 פס המותג ─────────────────────────────────────────────────────────
+   שלושת הצבעים כרצועה דקה מתחת לניווט. זה הסימן היחיד באתר שנושא את כל
+   הפלטה במקום אחד, ולכן הוא יושב במקום הכי גלוי — בתחתית הבלוק הדביק,
+   מעל כל עמוד. */
+/* ‎to left‎ ולא ‎90deg‎: מעברי צבע ב-CSS הם פיזיים ואינם מתהפכים ב-RTL.
+   העין העברית מתחילה מימין, ולכן המגנטה (הראשי) חייבת לפתוח בקצה הימני. */
+.sticky-block::after {
+  content: ''; display: block; height: 3px;
+  background: linear-gradient(to left,
+    var(--p-magenta) 0 40%, var(--p-yellow) 40% 62%, var(--p-blue) 62% 100%);
+}
+
+/* ── 6.2 כותרת ולוגו ──────────────────────────────────────────────────────
+   ‎#logo-mark‎ מקבל background inline מ-applyTheme (הצבע הראשי) ו-boxShadow
+   ריק, ולכן הצל והרדיוס נשלטים מכאן. האות פ היא placeholder עד שיגיע קובץ
+   הלוגו (§15.1 פריט 2); ‎#logo-img‎ תופס את מקומה אוטומטית כשיוזן logoUrl. */
+.lmark { border-radius: 13px; box-shadow: 0 3px 12px rgba(0,11,25,.20); }
+.lmark span { font-size: 22px; }
+#logo-img { max-width: 168px; }
+.lname { font-size: 21px; }
+header { padding: 13px 20px; }
+
+/* ── 6.3 סרגל הספונסרים ───────────────────────────────────────────────────
+   ‎#sponsor-bar‎ מוסתר ב-league.js כשאין ספונסרים, ולכן אין מה לשמור לו מקום
+   בעמוד עצמו — הוא ייכנס ברגע שיוזנו נכסים (§15.1 פריט 3). מה שמוגדר כאן
+   הוא הצורה הסופית: לוגואים בצבע מלא (החלטה 15 — לא שחור-לבן), גובה קבוע
+   כדי שהרצועה לא תקפוץ, וקו מותג דק מתחת. */
+.sponsor-bar {
+  gap: 26px; padding: 9px 20px; min-height: 54px;
+  border-bottom: 1px solid var(--border);
+}
+.sponsor-logo { height: 34px; filter: none; opacity: 1; }
+.sponsor-text { font-size: 13px; color: var(--text2); }
+/* התצוגה המקדימה בהגדרות — משבצת הספונסר מקבלת מסגרת מקווקוות כדי
+   שברור שזה שטח שמור ולא תמונה חסרה */
+.sp-thumb { border: 1px dashed var(--border2); }
+
+/* ── 6.4 ניווט וטאבים ─────────────────────────────────────────────────────
+   הקו התחתון של הטאב הפעיל עולה ל-3px ומקבל מילוי מגנטה עדין, במקום
+   ה-rgba שחור של styles.css שנראה אפור על רקע מותגי. */
+.tab { font-size: 14px; padding: 13px 18px; border-bottom-width: 3px; }
+.tab:hover  { color: var(--primary-text);
+  background: color-mix(in srgb, var(--p-magenta) 6%, transparent); }
+.tab.on     { color: var(--primary-text);
+  background: color-mix(in srgb, var(--p-magenta) 10%, transparent); }
+nav { border-bottom: 0; }   /* פס המותג (6.1) מחליף את קו ההפרדה */
+
+/* ── 6.5 כפתורים וגלולות ──────────────────────────────────────────────────
+   הגלולה הנבחרת כבר מגנטה מ-styles.css; מה שמתווסף הוא הרמה (צל בגוון
+   הצבע עצמו) ומצב מיקוד. הגלולות של מסנן הליגות בלוח נשארות כהות —
+   שם הצבע שמור לסימון משמעות — ולכן מקבלות צל כהה במקום מגנטה. */
+.filter-btn.on, .cf-btn.on {
+  box-shadow: 0 2px 10px color-mix(in srgb, var(--p-magenta) 34%, transparent);
+}
+.league-filter .filter-btn.on {
+  box-shadow: 0 2px 10px color-mix(in srgb, var(--p-dark) 26%, transparent);
+}
+.filter-btn:hover:not(.on), .cf-btn:hover:not(.on) {
+  border-color: var(--border2); color: var(--primary-text);
+  background: color-mix(in srgb, var(--p-magenta) 5%, var(--bg2));
+}
+/* "+ קבוצה" / "+ ספונסר" — פעולת הוספה, ולכן מקווקוות ולא מלאה */
+.add-cat-btn { border-style: dashed; color: var(--primary-text); font-weight: 700; }
+.add-cat-btn:hover {
+  border-color: var(--p-magenta); border-style: solid;
+  background: color-mix(in srgb, var(--p-magenta) 8%, transparent);
+}
+
+/* מיקוד מקלדת — כחול המותג, גלוי על כל משטח. ‎:where‎ שומר על עוצמה 0 כך
+   שכל כלל צבע קיים גובר, ורק המתאר מתווסף. */
+:where(button, a, summary, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--p-blue); outline-offset: 2px;
+}
+
+/* ── 6.6 כרטיסים ──────────────────────────────────────────────────────────
+   ‎.sett-section-title‎ ב-styles.css הוא קו מגנטה ברוחב מלא. בעברית, ואחרי
+   שביטלנו את ה-letter-spacing (§2), הכותרת היא כותרת רגילה — ולכן קו הפרדה
+   דק בכל הרוחב, ומעליו מקטע מודגש קצר בשני צבעי המותג. */
+.sett-section { padding: 20px 22px; box-shadow: var(--shadow-sm); }
+.sett-card    { box-shadow: var(--shadow-sm); }
+/* ‎:not(summary)‎ — בעמוד ההגדרות אותה מחלקה יושבת על ה-summary של האקורדיון
+   (§5), שם היא כותרת לחיצה עם קארט משלה ו-padding משלה. קו ומרווח כאן היו
+   פותחים חלל מת בתוך מקטע סגור. */
+.sett-section-title:not(summary) {
+  position: relative; border-bottom: 1px solid var(--border);
+  padding-bottom: 9px; margin-bottom: 16px;
+}
+.sett-section-title:not(summary)::after {
+  content: ''; position: absolute; bottom: -1px; inset-inline-start: 0;
+  width: 58px; height: 3px; border-radius: 2px;
+  background: linear-gradient(to left, var(--p-magenta), var(--p-blue));   /* ראו 6.1 */
+}
+/* קופסת מידע — הכחול המשני כפס-צד. ‎border-inline-start‎ = ימין ב-RTL.
+   ‎.scaffold-note‎ מוחרג: הוא מקווקו בכוונה (כרטיס זמני). */
+.info-box:not(.scaffold-note) {
+  border-inline-start: 3px solid var(--p-blue);
+  color: var(--text2); line-height: 1.65;
+}
+.sett-desc { line-height: 1.55; }
+/* מצב ריק — מסגרת מקווקוות מראה איזה שטח יתמלא (ספונסרים, רוסטר) */
+.sett-empty-note {
+  border: 1px dashed var(--border2); border-radius: var(--rs);
+  padding: 13px 16px; margin-top: 8px; font-style: normal;
+}
+
+/* ── 6.7 טבלאות ───────────────────────────────────────────────────────────
+   ריחוף ובחירה עוברים מאפור נייטרלי לגוון מגנטה, כדי שטבלת הדירוג תרגיש
+   מאותה משפחה כמו הלוח. */
+.stbl th { padding-bottom: 8px; border-bottom: 1px solid var(--border2); }
+.stbl tr.winner td { background: color-mix(in srgb, var(--p-magenta) 6%, transparent); }
+.stand-row:hover td { background: color-mix(in srgb, var(--p-magenta) 7%, transparent); }
+.stand-pts { box-shadow: 0 1px 4px color-mix(in srgb, var(--p-magenta) 30%, transparent); }
+
+/* ── 6.8 פיינל פור והבראקט ────────────────────────────────────────────────
+   styles.css צובע את המנצחת באפור ואת האלופה בזהב (‎--gold‎ = #B45309),
+   שניהם מחוץ לפלטה. כאן: מנצחת = מגנטה, אלופה = מגנטה+צהוב. */
+.brnd-title { font-size: 14px; font-weight: 800; color: var(--text2); }
+.bm-label   { color: var(--text3); }
+.bmatch     { border-radius: 12px; border-color: var(--border2); box-shadow: var(--shadow-sm); }
+.bteam.win  {
+  background: color-mix(in srgb, var(--p-magenta) 9%, transparent);
+  color: var(--primary-text); font-weight: 800;
+}
+.bteam.win .bsc { color: var(--primary-text); }
+.bye-tag {
+  color: var(--secondary-text);
+  background: color-mix(in srgb, var(--p-blue) 12%, transparent);
+}
+.seed-tag { direction: ltr; unicode-bidi: isolate; }
+.champ-wrap {
+  border: 2px solid var(--p-magenta);
+  background: linear-gradient(135deg,
+    color-mix(in srgb, var(--p-magenta) 11%, var(--bg2)),
+    color-mix(in srgb, var(--p-yellow) 22%, var(--bg2)));
+  box-shadow: var(--shadow-md);
+}
+.ci { color: var(--primary-text); }
+.champ-name { color: var(--text); }
+
+/* ── 6.9 קריאוּת עברית ────────────────────────────────────────────────────
+   רווח שורות של styles.css כויל לטקסט לטיני קצר. בעברית, עם ניקוד-סרק
+   ואותיות סופיות, פסקה שלמה צריכה יותר אוויר. */
+body { line-height: 1.55; }
+.muted, .sett-name, .kv dd, .board-help ul, .board-guide ul { line-height: 1.6; }
+main { padding-top: 16px !important; }
+
+/* ── 6.10 עמוד המתזמן ─────────────────────────────────────────────────────
+   הודעות המתזמן משתמשות ב-red/amber (מצב אמיתי — נשמר). מה שמתמרכז כאן
+   הוא צ׳יפ הסיכום "תקין", שהיה ירוק ועובר לכחול המותג כמו בסרגל האזהרות. */
+.q-chip.good {
+  background: color-mix(in srgb, var(--p-blue) 12%, transparent);
+  color: var(--secondary-text);
+}
+.cost-chip.total { box-shadow: 0 1px 5px color-mix(in srgb, var(--p-magenta) 30%, transparent); }
+/* "מחיקת הלוז" יורש את ‎.team-del‎, שהוא כפתור ×‎ בגודל 24×24 — הטקסט העברי
+   נשבר לשתי שורות וגולש. כאן הוא חוזר להיות כפתור טקסט מלא. */
+.sched-clear {
+  width: auto; height: auto; padding: 6px 15px; border-radius: 999px;
+  font-size: 12.5px; font-weight: 700; white-space: nowrap;
+  border: 1px solid var(--border2); color: var(--text2);
+}
+.sched-clear:hover { border-color: var(--red); }
+
 @media (max-width: 860px) {
   /* בלוק ולא flex-column: פריט flex בציר-רוחב לא מצטמצם מתחת ל-min-width של
      הטבלה (520px), ואז .board-scroll לא חותך והדף גולל לרוחב. block כן חוסם. */
@@ -689,4 +937,14 @@ main { max-width: min(1680px, 100%) !important; padding: 12px 24px 6px !importan
 
   .acc > summary { padding: 14px 16px; }
   .acc-body { padding: 6px 16px 18px; }
+
+  /* שלב 8 — המיתוג בטלפון: סימן הטעינה קטן יותר, הטאבים צפופים יותר כדי
+     ששבעה מהם ייכנסו בלי לגלול, והכותרת לא נמחצת. */
+  #view-loading .no-t-wrap::before { width: 68px; height: 68px; border-radius: 20px; font-size: 34px; }
+  .tab { font-size: 13px; padding: 12px 12px; }
+  .lname { font-size: 17px; }
+  .lmark { width: 36px; height: 36px; border-radius: 11px; }
+  .lmark span { font-size: 18px; }
+  .sett-section { padding: 16px 16px; }
+  .sponsor-bar { gap: 16px; min-height: 46px; }
 }

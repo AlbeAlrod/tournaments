@@ -16,11 +16,11 @@ import {
 // והוא מקבל תמונת מצב ומחזיר משחקים ודוח. ראו league-sched.js.
 import {
   generateSeason, buildDayContext, dayCost, dayLength, slotLabel
-} from './league-sched.js?v=7';
+} from './league-sched.js?v=8';
 
 // לוח הגרירה — שלב 5. מודול תצוגה+שליטה שמקבל את המצב החי דרך Board.init().
 // אין לו window.* globals; פעולותיו בקידומת board.* ומוזרקות ל-ACT (ראו start()).
-import Board from './league-board.js?v=9';
+import Board from './league-board.js?v=10';
 import KO from './league-ko.js?v=1';
 
 // ============ זהות הליגה ============

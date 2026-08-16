@@ -80,7 +80,10 @@ export const WEIGHTS = {
   // 4 חורים נוספים ומחזור 1 ב-22:20 במקום 22:00. שאו/א׳ נשארות 0 רצף.
   streakLiga2:     5_000,
   streakLiga2Pair:   100,
-  streak:          1_000,
+  // רצף שאו/א׳ = לוק **קשיח** (החלטת המשתמשת 25.7): גבוה מכל קנס רך אחר (כולל
+  // סיום-מאוחר), כך שהדחיסה לסיום מוקדם לעולם לא "קונה" רצף שאו/א׳. מתחת ל-hard
+  // כדי שאילוצים קשיחים אמיתיים עדיין גוברים.
+  streak:        100_000,
 
   noReferee:       800,   // אין שופטת (5.2/5.3) — רך, היה קשיח
   linkedOverlap:   800,   // קבוצה רשומה כפול (שאו+ליגה) משובצת צפוף — פעיל רק אם סומן (§6.3)
@@ -89,7 +92,9 @@ export const WEIGHTS = {
   gamesOver:       200,   // יותר מהמכסה העליונה ביום
   gamesUnder:      200,   // פחות מהמכסה התחתונה ביום
   showNotNet1:     150,   // שאו לא על הרשת המועדפת (רך בינוני, לא חובה)
-  lateFinish:      100,   // × מרחק — סיום מאוחר: היום נגמר אחרי המינימום התאורטי
+  lateFinish:     2000,   // × מרחק — סיום מאוחר. **המטרה העליונה (25.7):** לסיים מוקדם
+                          // (לקפל רשתות). גבוה מ-togetherness/זוגות/המתנה — מנצח אותם;
+                          // נמוך מרצף שאו/א׳ — לא קונה רצף. דוחף לדחוס ל-15 סלוטים = 22:00.
   emptyEarly:       40,   // × מוקדמוּת — חור בסלוט מוקדם (חורים צריכים להתרכז בסוף)
   fairness:         40,   // הוגנות מוקדם/מאוחר — קבוצה שמקבלת שוב את הסלוט הראשון/אחרון (חוצה-ימים)
   wait3:            30,   // המתנה של 3 סלוטים (1–2 = אידיאלי, עלות 0)
@@ -1033,6 +1038,98 @@ function candidates(ctx, pl, s, occ) {
   return [...out];
 }
 
+// ── פאס "רוקן את הסלוט האחרון" — לסיום מוקדם (המטרה העליונה, החלטת המשתמשת 25.7) ──
+// דוחס את היום מ-16 ל-15 סלוטים = 22:00 (המינימום המתמטי: 60 משחקים על 4 רשתות).
+// לא ניתן להשיג זאת צעד-צעד: הזזת משחק בודד מהסלוט האחרון לא מקצרת את היום עד
+// שכולם זזים, ולכן כל צעד ביניים "נראה גרוע" והחיפוש המקומי נתקע. כאן מטפלים בכל
+// הסלוט האחרון **יחד**: אם אפשר לשבץ את כל משחקיו לתאים ריקים מוקדמים יותר בלי
+// אילוץ קשיח **ובלי רצף שאו/א׳** (שיבוץ מושלם, חיפוש עם נסיגה) — עושים זאת והיום
+// מתקצר. חוזרים עד שאי אפשר עוד; טבעית עוצר ב-15 סלוטים (אין אז חורים לספיגה).
+// togetherness מותר לרדת — זו המטרה השנייה. זוגות ליגה ב׳ מותרים.
+function emptyLastSlot(ctx, pl) {
+  const s = scratch(ctx);
+  const S = ctx.slots, N = s.N;
+  let placed = 0; for (let i = 0; i < s.G; i++) if (pl.slot[i]) placed++;
+  const minSlots = Math.ceil(placed / N);
+
+  const playsAt = (t, sl, except) => {
+    if (sl < 1 || sl > S) return false;
+    for (const j of s.teamGames[t]) if (j !== except && pl.slot[j] === sl) return true;
+    return false;
+  };
+  // רצפי שאו/א׳ בכל הלוז — לאימות שהאצווה לא יצרה חדשים (לוק קשיח)
+  const countSL1 = () => {
+    let n = 0;
+    for (let t = 0; t < s.T; t++) {
+      if (s.allowConsec[t]) continue;
+      const sl = [];
+      for (const j of s.teamGames[t]) if (pl.slot[j]) sl.push(pl.slot[j]);
+      sl.sort((a, b) => a - b);
+      for (let i = 1; i < sl.length; i++) if (sl[i] - sl[i - 1] === 1) n++;
+    }
+    return n;
+  };
+  const baseSL1 = countSL1();
+
+  for (let guard = 0; guard < S; guard++) {
+    let lastSlot = 0;
+    for (let i = 0; i < s.G; i++) if (pl.slot[i] > lastSlot) lastSlot = pl.slot[i];
+    if (lastSlot <= minSlots) break;
+
+    const lastGames = []; let locked = false;
+    for (let i = 0; i < s.G; i++) if (pl.slot[i] === lastSlot) { if (s.gLocked[i]) locked = true; lastGames.push(i); }
+    if (locked || !lastGames.length) break;
+
+    const occ = new Uint8Array((S + 2) * N);
+    for (let i = 0; i < s.G; i++) if (pl.slot[i]) occ[pl.slot[i] * N + s.netPos.get(pl.net[i])] = 1;
+    const holes = [];
+    for (let sl = 1; sl < lastSlot; sl++) for (let k = 0; k < N; k++)
+      if (!occ[sl * N + k] && !s.blocked[sl * N + k]) holes.push({ sl, net: s.nets[k] });
+    if (holes.length < lastGames.length) break;
+
+    // תאים חוקיים לכל משחק: רשת קבועה, חלון זמינות, שתי הקבוצות פנויות בסלוט,
+    // ובלי ליצור רצף שאו/א׳ (קבוצת שאו/א׳ שכבר משחקת בסלוט צמוד).
+    const legal = lastGames.map(i => {
+      const a = s.gA[i], b = s.gB[i], fx = s.gFixedNet[i], out = [];
+      for (let hi = 0; hi < holes.length; hi++) {
+        const { sl, net } = holes[hi];
+        if (fx && net !== fx) continue;
+        if (sl < s.availFrom[a] || sl > s.availTo[a] || sl < s.availFrom[b] || sl > s.availTo[b]) continue;
+        if (playsAt(a, sl, i) || playsAt(b, sl, i)) continue;
+        if (!s.allowConsec[a] && (playsAt(a, sl - 1, i) || playsAt(a, sl + 1, i))) continue;
+        if (!s.allowConsec[b] && (playsAt(b, sl - 1, i) || playsAt(b, sl + 1, i))) continue;
+        out.push(hi);
+      }
+      return out;
+    });
+
+    // שיבוץ מושלם: תא נפרד לכל משחק (חיפוש עם נסיגה). המשחקים הקשים (מעט תאים)
+    // ראשונים כדי לגזום מוקדם.
+    const order = lastGames.map((_, x) => x).sort((p, q) => legal[p].length - legal[q].length);
+    const usedHole = new Int8Array(holes.length), chosen = new Array(lastGames.length).fill(-1);
+    let nodes = 0;
+    const rec = oi => {
+      if (oi === order.length) return true;
+      if (++nodes > 5000) return false;
+      const x = order[oi];
+      for (const hi of legal[x]) {
+        if (usedHole[hi]) continue;
+        usedHole[hi] = 1; chosen[x] = hi;
+        if (rec(oi + 1)) return true;
+        usedHole[hi] = 0; chosen[x] = -1;
+      }
+      return false;
+    };
+    if (!rec(0)) break;
+
+    // החלה, עם גיבוי לביטול אם האימות נכשל
+    const backup = lastGames.map(i => [i, pl.slot[i], pl.net[i]]);
+    for (let x = 0; x < lastGames.length; x++) { const i = lastGames[x], h = holes[chosen[x]]; pl.slot[i] = h.sl; pl.net[i] = h.net; }
+    if (countSL1() > baseSL1) { for (const [i, sl, nt] of backup) { pl.slot[i] = sl; pl.net[i] = nt; } break; }
+  }
+  return pl;
+}
+
 // ── פאס דחיסת חורים סופי (תיקון באג 25.7) ──
 // פאס התיקון מוגבל ברדיוס וברשימת מועמדים, ולכן החמיץ מהלכים שמושכים משחק מאוחר
 // אל תא ריק מוקדם — נשארו "חורים באמצע" שאפשר היה למלא. כאן סורקים כל תא ריק
@@ -1089,7 +1186,10 @@ export function packDay(ctx, opts = {}) {
   // הרצות (מה שהתקציב הישן של 2.2ש הרשה בפועל) הותירו מדי פעם המתנה של 5–6.
   // 16 הרצות מביאות למקס׳ המתנה 4 באופן יציב. המשתמשת ביקשה מפורשות שהמהירות
   // לא משנה — לכן החיפוש מלא. נמדד: ~8ש ליום, ~32ש לעונה.
-  const restarts = opts.restarts ?? 16;
+  // 32 הרצות (25.7): המטרה העליונה היא סיום מוקדם. נמדד שב-16 הרצות רק 3/4 הימים
+  // נדחסים ל-15 סלוטים (22:00); ב-32 — **כל 4 הימים** מגיעים ל-22:00 עם 0 חורים
+  // (48 נותן זהה → 32 יציב, לא מקרי). דטרמיניסטי (זרעים קבועים). ~70ש/עונה.
+  const restarts = opts.restarts ?? 32;
   // תקציב זמן ליום נדיב (60ש) — קאפ-ביטחון לקונפיגורציה פתולוגית בלבד. במקרה
   // האמיתי (4 רשתות, 16 סלוטים) 16 ההרצות מסתיימות תוך ~8ש הרבה לפני הקאפ, כך
   // שהתוצאה **דטרמיניסטית** (כל ההרצות תמיד רצות) ואינה תלויה במהירות המכונה —
@@ -1103,7 +1203,8 @@ export function packDay(ctx, opts = {}) {
     const g = greedyFill(ctx, plan, mulberry32(0x5EED + i * 7919));
     const unplaced = placeLeftovers(ctx, g.pl, g.leftovers);
     const r = repair(ctx, g.pl, opts);
-    const score = r.cost + unplaced.length * WEIGHTS.hard;
+    emptyLastSlot(ctx, r.pl);                 // דחיסה לסיום מוקדם (המטרה העליונה)
+    const score = evalDay(r.pl, ctx, false) + unplaced.length * WEIGHTS.hard;
     if (!best || score < best.score)
       best = { score, pl: r.pl, unplaced, moves: r.moves, seed: i };
     if (i >= 2 && Date.now() - t0 > dayBudgetMs) break;
