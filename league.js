@@ -3,7 +3,8 @@
 //
 // מודל הנתונים + סנכרון חי (שלב 1), רוסטר והגדרות (2), עמוד המתזמן (3),
 // ניקוד ודירוג (4), ומשלב 6: שלוש רמות הרשאה (§7.1), טיוטה/פרסום לכל יום
-// (§8.5), הלוז הציבורי, עמוד הקבוצות המלא ופאנל הנוכחות והזמינות (§8.4).
+// ולטאב הפיינל פור (§8.5), הלוז הציבורי, עמוד הקבוצות המלא ופאנל הנוכחות
+// והזמינות (§8.4). שלב 6ב מוסיף את דחיסת הלוז החיה (§8.7).
 // המתזמן, לוח הגרירה והפיינל פור יושבים במודולים נפרדים.
 //
 // המסמך היחיד: tournaments/{LEAGUE_ID}. ראו §5.1 במפרט.
@@ -103,6 +104,10 @@ function defaultDoc() {
 
       showPastDays: true,
       tieBreak: ['pts','diff','h2h'],   // 3.10 — נעול, לא ניתן לשינוי
+
+      // §8.7 — דחיסת לוז חיה (שלב 6ב). כבוי = הלוז יציב לגמרי ואין הצעות.
+      // זהו השדה **היחיד** שנוסף ל-§5 (מאושר במפורש ב-§8.7).
+      liveReschedule: false,
 
       // ניקוד — סעיף 3.7 והמקרים יוצאי הדופן בסעיף 6.
       // ⚠️ unfinished הוא 1.5 (6.2). זהו הערך היחיד שאינו שלם, והוא הסיבה
@@ -906,6 +911,13 @@ function dayVisible(d) {
   return L.meta.showPastDays !== false || !isPastDay(d);
 }
 
+// §8.5 — הפרסום חל גם על טאב הפיינל פור. המתג הוא `published` של יום 'ff',
+// אותו שדה ואותה פעולה (`pub.toggle`) של שאר המחזורים — אין מנגנון שני.
+// showPastDays **לא** חל עליו במכוון: הבראקט הוא התוצאה הסופית ואמור להישאר
+// באתר גם אחרי 19.9, בניגוד ללוז של מחזור שהסתיים.
+const ffDay = () => (L.meta.days || []).find(d => d.id === 'ff');
+const ffPublished = () => !!ffDay()?.published;
+
 // הימים שיש להם לוז בפועל ושמותר להציג אותם. ff/cross אינם משובצים לגריד
 // (שלב 5) ולכן נושרים כאן מאליהם — הבראקט שלהם יושב בעמוד נפרד.
 function schedDaysFor() {
@@ -933,7 +945,9 @@ const PAGES = [
   // "הקבוצה שלי" בוטל (§7.2). כל מה שנשאר ממנו: שדה החיפוש בלוז זוכר את
   // עצמו ב-localStorage. אין עמוד, אין כרטיס "המשחק הבא", אין נעיצה.
   { id:'schedule',  label:'לוז',              min:0 },
-  { id:'ko',        label:'פיינל פור והצלבה', min:0 },
+  // gate — תנאי נוסף מעל ההרשאה (§8.5): הפיינל פור נסתר מהניווט וחסום כעמוד
+  // עד שהמאסטר מפרסם אותו. המאסטר עצמו עובר בזכות R()>=2.
+  { id:'ko',        label:'פיינל פור והצלבה', min:0, gate:ffPublished },
   { id:'teams',     label:'קבוצות',           min:2 },
   { id:'sched',     label:'מתזמן',            min:2 },
   { id:'settings',  label:'הגדרות',           min:2 },
@@ -943,6 +957,10 @@ const PAGES = [
 // מקטעי ההגדרות הפתוחים. בלי זה כל הקלדה סוגרת את כל האקורדיון,
 // כי paint() בונה מחדש את כל ה-innerHTML.
 const openSections = new Set(['general']);
+
+// עמוד מותר לרמה הנוכחית: הרשאה (§7.1) **וגם** ה-gate של העמוד (§8.5).
+// המאסטר תמיד עובר — ה-gate של הפיינל פור נגזר מ-R() בעצמו.
+const pageOk = p => R() >= p.min && (R() >= 2 || !p.gate || p.gate());
 
 function paint() {
   const f = focusSnapshot();
@@ -958,7 +976,7 @@ function paint() {
 
   // הטאבים לפי ההרשאה (§7.1). עמוד שאינו מותר לרמה הנוכחית נסגר מיד — כך
   // גם יציאה מהמאסטר וגם כניסה לתצוגה המקדימה לא משאירות עמוד סגור פתוח.
-  const vis = PAGES.filter(p => R() >= p.min);
+  const vis = PAGES.filter(pageOk);
   if (!vis.some(p => p.id === page)) page = vis[0].id;
 
   document.getElementById('main-nav').innerHTML =
@@ -2217,29 +2235,39 @@ function pubFilter() {
 function masterSchedule() {
   // שניהם סגורים = שורה אחת משותפת (‎.mpanels‎ מציב אותם זה לצד זה), פתוח =
   // שורה מלאה. ככה שני הפאנלים עולים ללוח ~45px של גובה במקום 90.
-  return `<div class="mpanels">${publishBar()}${attPanel()}</div>` + Board.render();
+  // שלושה פאנלים: פרסום (§8.5) · נוכחות (§8.4) · דחיסה חיה (§8.7). הפאנל
+  // החי אינו מוצג כשאין לוז — אין מה להקדים.
+  return `<div class="mpanels">${publishBar()}${attPanel()}${livePanel()}</div>` + Board.render();
 }
 
 // §8.5 — מתג לכל יום, מתג "הצג מחזורים שהסתיימו", וכפתור התצוגה המקדימה.
 function publishBar() {
-  const days = (L.meta.days || []).filter(d => (L.games || []).some(g => g.day === d.id && g.slot));
+  const days = (L.meta.days || []).filter(d =>
+    d.id !== 'ff' && (L.games || []).some(g => g.day === d.id && g.slot));
   const isShown = d => d.published && (L.meta.showPastDays !== false || !isPastDay(d));
   const shown = days.filter(isShown).length;
-  const summary = !days.length ? 'פרסום — אין עדיין לוז'
+  const ff = ffDay();
+  const summary = (!days.length ? 'פרסום — אין עדיין לוז'
     : shown ? `פרסום · <b>${shown}</b> מתוך ${days.length} מחזורים מוצגים לשחקניות`
-            : `פרסום · <b class="pub-none">אף מחזור אינו מוצג לשחקניות</b>`;
+            : `פרסום · <b class="pub-none">אף מחזור אינו מוצג לשחקניות</b>`)
+    + (ff ? ` · פיינל פור ${ff.published ? 'מוצג' : '<b class="pub-none">מוסתר</b>'}` : '');
 
-  const chips = days.map(d => `
+  const chipOf = (d, extra) => `
     <button class="pub-chip${d.published ? ' on' : ''}" data-act="pub.toggle" data-day="${escH(d.id)}"
       title="${d.published ? 'מוצג — לחיצה מסתירה' : 'מוסתר — לחיצה מציגה'}">
-      <span class="pub-chip-dot"></span>${escH(d.label)}
-      ${d.published && !isShown(d) ? '<span class="muted">(הסתיים)</span>' : ''}
-    </button>`).join('');
+      <span class="pub-chip-dot"></span>${escH(d.label)}${extra || ''}
+    </button>`;
+
+  const chips = days.map(d => chipOf(d, d.published && !isShown(d) ? '<span class="muted">(הסתיים)</span>' : ''))
+    .join('') || (ff ? '' : '<span class="muted">צרי לוז בעמוד המתזמן.</span>');
+  // §8.5 — הפיינל פור אינו משובץ לגריד ולכן אין לו לוז שיסמן אותו כאן; הצ׳יפ
+  // שלו מפרסם את **הטאב** (הבראקט), ומשתמש באותה פעולה בדיוק.
+  const ffChip = ff ? chipOf(ff, '<span class="muted">(הטאב)</span>') : '';
 
   return `<details class="sett-section mpanel pub-bar" id="sec-publish"${openSections.has('publish') ? ' open' : ''}>
     <summary class="sett-section-title">${summary}</summary>
     <div class="mpanel-body pub-bar-body">
-      <div class="pub-chips">${chips || '<span class="muted">צרי לוז בעמוד המתזמן.</span>'}</div>
+      <div class="pub-chips">${chips}${ffChip}</div>
       <div class="pub-tools">
         <label class="toggle-switch" title="מחזור שתאריכו עבר — להשאיר באתר או להוריד">
           <input type="checkbox"${L.meta.showPastDays !== false ? ' checked' : ''} data-act="pub.past"/>
@@ -2249,7 +2277,9 @@ function publishBar() {
         <button class="cf-btn" data-act="pub.preview">👀 איך זה נראה לשחקניות</button>
       </div>
       <span class="sett-desc">כל עוד מחזור מוסתר אפשר לגרור אותו בשקט — השחקניות
-        לא רואות אותו כלל. פרסום נכנס לתוקף מיד אצל כולן.</span>
+        לא רואות אותו כלל. פרסום נכנס לתוקף מיד אצל כולן.
+        <strong>פיינל פור</strong> מפרסם את הטאב כולו (הבראקט ומשחקי ההצלבה) —
+        עד שהוא דלוק, הטאב לא קיים אצל אף אחת חוץ ממך.</span>
     </div>
   </details>`;
 }
@@ -2310,6 +2340,386 @@ function attPanel() {
         "נעדרה" הוא מה שקרה <strong>בפועל</strong>: כל משחקיה במחזור נרשמים
         כהפסד טכני ${L.meta.scoring?.walkoverFor ?? 18}:${L.meta.scoring?.walkoverAgainst ?? 10} לפי 6.3.1.</span>
     </div>
+  </details>`;
+}
+
+// ============================================================================
+// דחיסת לוז חיה — §8.7 (שלב 6ב)
+// ============================================================================
+//
+// **עקרון-על נעול: לעולם לא אוטומטי.** המערכת מחשבת ומציעה; המאסטר לוחצת.
+// שום משחק לא זז בלי לחיצה מפורשת, וגם אז רק אחרי שכל חוקי §6 נבדקו על
+// השיבוץ **החדש** בפונקציית העלות עצמה (dayCost) ולא בהיוריסטיקה מקבילה.
+//
+// שלושת סוגי ההצעה של §8.7 נבדלים במה שזז, לא במנגנון (ראו liveKindOf):
+//   הקדמה  — משחק בודד נמשך קדימה על **אותה רשת** שהתפנתה.
+//   הזזה   — משחק בודד עובר לתא פנוי אחר, כולל מגרש אחר.
+//   קבוצתית — משחק שלא יכול לזוז לבד גורר שרשרת: אריזה מחדש של היום
+//             (generateSeason + onlyDays) שכל הקפואים בה נעולים.
+//
+// מה ש**לא** מוצע: כל מה שלא חוסך זמן לאף אחת. הרשימה היא הודעה אחת מרוכזת
+// שהמנהלת פותחת כשנוח לה, ורשימה שמלאה במהלכים ניטרליים היא רשימה שלא נקראת.
+//
+// אין שדה חדש במודל מלבד meta.liveReschedule (§5 נעול): ההצעות מחושבות מחדש
+// מהמצב בכל רינדור ואינן נשמרות.
+
+const LIVE_PULL_OK_MIN = 40;   // משיכה קדימה מעבר לזה = אזהרה + אישור נוסף (ה-X של §8.7)
+const LIVE_TOP         = 8;    // כמה הצעות מוצגות — הודעה אחת מרוכזת, לא רשימה אינסופית
+// האריזה הקבוצתית היא המתזמן המלא על יום אחד. ברירות המחדל שלו (32 הרצות,
+// 60ש) נכונות ליצירת לוז בערב שלפני, לא לכפתור שהמנהלת לוחצת באמצע טורניר:
+// נמדד 28ש כשכל היום עוד לפניו. 6 הרצות + תקציב 8ש נותנות תשובה בזמן סביר,
+// ובשעת האמת ממילא רוב היום כבר נעול והריצה קצרה. packDay מריץ תמיד לפחות 3.
+const LIVE_RESTARTS    = 6;
+const LIVE_BUDGET_MS   = 8000;
+
+let liveDay      = null;   // היום שהפאנל פועל עליו
+let liveNowStr   = '';     // דריסת "עכשיו" — ?dev=1 בלבד, כדי שאפשר יהיה לבדוק
+let liveBusy     = false;  // האריזה הקבוצתית רצה
+let liveCache    = null;   // { sig, list } — ההצעות הזולות, ממוחזרות בין רינדורים
+let liveGroupRes = null;   // { sig, sug } — תוצאת החישוב הכבד האחרון
+
+const liveOn = () => !!L.meta.liveReschedule;
+
+// השעה שלפיה נקבע מה כבר התחיל. ?dev=1 מאפשר לדרוס אותה — בלי זה אי אפשר
+// לבדוק את הפיצ׳ר אלא בערב משחקים אמיתי.
+const liveNowLabel = () => (DEV && liveNowStr) ? liveNowStr
+  : (() => { const t = new Date(); return `${String(t.getHours()).padStart(2,'0')}:${String(t.getMinutes()).padStart(2,'0')}`; })();
+
+// הסלוט שרץ **כרגע**. 0 = היום עוד לא התחיל; day.slots = הסתיים.
+// התאריך מכריע לפני השעון: יום עתידי לא "רץ" ב-19:00 רק כי השעה 19:00.
+function liveSlotNow(day) {
+  const over = DEV && liveNowStr;
+  if (!over) {
+    const d = (L.meta.days || []).find(x => x.id === day.id);
+    if (d?.date && d.date > todayISO()) return 0;
+    if (d?.date && d.date < todayISO()) return day.slots;
+  }
+  const t = hhmmToMin(liveNowLabel()) - hhmmToMin(day.startTime);
+  if (t < 0) return 0;
+  return Math.min(day.slots, Math.floor(t / day.slotMin) + 1);
+}
+
+// מצב היום החי: ההקשר של §6, השיבוץ הנוכחי, הסלוט הרץ, ומי קפוא.
+// **קפוא = לא זז**: נעול 📌, יש לו תוצאה (גמר), או שהסלוט שלו כבר התחיל.
+function liveState(dayId) {
+  const input = schedInput();
+  const day = input.days.find(d => d.id === dayId);
+  if (!day) return null;
+  const dayGames = (L.games || []).filter(g => g.day === dayId);
+  if (!dayGames.some(g => g.slot && g.net)) return null;
+
+  const total = {};
+  for (const g of (L.games || [])) { total[g.a] = (total[g.a] || 0) + 1; total[g.b] = (total[g.b] || 0) + 1; }
+  const D = Math.max(1, input.days.length);
+  const bounds = {};
+  for (const [t, n] of Object.entries(total)) bounds[t] = { lo: Math.floor(n / D), hi: Math.ceil(n / D) };
+
+  const ctx = buildDayContext(input, day, dayGames, bounds);
+  const place = new Map();
+  for (const g of dayGames) if (g.slot && g.net) place.set(g.key, { slot: g.slot, net: g.net });
+
+  const nowSlot = liveSlotNow(day);
+  const done = g => !!g.result && g.result !== 'pending';
+  const frozen = new Set(dayGames
+    .filter(g => !g.slot || !g.net || g.locked || done(g) || g.slot <= nowSlot)
+    .map(g => g.key));
+
+  return { input, day, dayGames, ctx, place, nowSlot, frozen, base: dayCost(place, ctx) };
+}
+
+// מפתח הפרה — לזיהוי מה **נוסף** אחרי ההזזה ומה כבר היה קודם
+const violKey = v => `${v.kind}|${v.team || ''}|${v.slot || ''}|${v.net || ''}`;
+
+// אילו הפרות רכות שווה להציג כאזהרה על הצעה. `emptyEarly` ו-`lateFinish`
+// מכוונות החוצה במפורש: משחק שמוקדם **תמיד** משאיר חור אחריו, וזו בדיוק
+// המטרה — להציג את זה כאזהרה היה הופך כל הצעה לאזהרה חסרת מידע. אותו שיקול
+// ל-fairness/catReturn/span, שאינם אזהרות ב-§9.
+const LIVE_WARN_KINDS = new Set(['backToBack', 'longWait', 'noReferee',
+  'tooMany', 'tooFew', 'noGames', 'sharedPlayerAdjacent']);
+
+// שם קבוצה במקום מזהה פנימי בטקסט של המתזמן — אותו טיפול כמו ב-violationList
+const violText = t => String(t || '').replace(/\b([sl]\d?t\d+)\b/g, (_, id) => TEAM_NAME(id));
+
+// אזהרות אנושיות להצעה (§8.7): מי אולי לא תגיע, ומשיכה אגרסיבית מדי.
+//
+// "טרם הגיעה" הוא אזהרה **רק** כשהיא נושאת מידע, ולכן שלושה סייגים: המחזור
+// רץ · המשחק בכלל מוקדם · ואין שום עדות שהזוג על החוף. "עדות" היא משחק
+// שכבר התחיל היום — ולא תוצאה שהוזנה, כי הזנת התוצאות מפגרת אחרי המציאות.
+// בלי הסייגים האלה כל הצעה נשאה 20 שורות אזהרה, וזה שווה ערך לאפס אזהרות.
+// שורה אחת לכל סוג, עם ספירה — לא שורה לכל קבוצה.
+function liveWarns(st, teamIds, pullMin) {
+  const att = L.attendance?.[st.day.id] || {};
+  const onBeach = t => att[t] === 'ok' ||
+    st.dayGames.some(g => (g.a === t || g.b === t) && g.slot && g.slot <= st.nowSlot);
+  const gone = [], late = [], busy = [];
+  for (const t of new Set(teamIds)) {
+    if (att[t] === 'noshow') gone.push(t);
+    else if (st.nowSlot && pullMin > 0 && !onBeach(t)) late.push(t);
+    if (st.nowSlot && st.dayGames.some(g => g.slot === st.nowSlot && (g.a === t || g.b === t))) busy.push(t);
+  }
+  const line = (list, one, many) => !list.length ? ''
+    : list.length === 1 ? `${TEAM_NAME(list[0])} ${one}` : `${list.length} קבוצות ${many}`;
+  return [
+    line(gone, 'סומנה כנעדרת', 'סומנו כנעדרות'),
+    line(late, 'טרם הגיעה', 'טרם הגיעו'),
+    line(busy, 'משחקת כרגע', 'משחקות כרגע'),
+    pullMin > LIVE_PULL_OK_MIN ? `מוקדם ב-${pullMin} דק׳ — צריך זמן להתארגן` : ''
+  ].filter(Boolean);
+}
+
+// שני סוגי ההצעה של משחק בודד, בדיוק כלשון §8.7: **הקדמה** היא משיכה קדימה
+// "לרשת שהתפנתה" — אותה רשת, מוקדם יותר, והזוג נשאר על אותו מגרש; **הזזה**
+// היא מעבר "למקום פנוי אחר בלוז" — גם המגרש משתנה. ההבחנה אינה קוסמטית:
+// היא בדיוק מה שהמנהלת צריכה להגיד לזוג בקול רם.
+const liveKindOf = (g, slot, net) => (slot < g.slot && net === g.net) ? 'advance' : 'move';
+
+// הצעה אחת, בצורה שהטבלה יודעת להציג ו-live.apply יודע לבצע.
+function liveSug(st, kind, moves, cost, pairSaved) {
+  const endSaved = (st.base.lastSlot - cost.lastSlot) * st.day.slotMin;
+  const seen = new Set((st.base.violations || []).map(violKey));
+  const fresh = [...new Set((cost.violations || [])
+    .filter(v => LIVE_WARN_KINDS.has(v.kind) && !seen.has(violKey(v)))
+    .map(v => violText(v.text)))].slice(0, 3);
+  const teams = moves.flatMap(m => { const g = findGame(m.id); return g ? [g.a, g.b] : []; });
+  return {
+    kind, moves, endSaved, pairSaved, teams, endSlot: cost.lastSlot,
+    score: endSaved * 1000 + Math.max(0, pairSaved),
+    warns: [...liveWarns(st, teams, pairSaved), ...fresh]
+  };
+}
+
+// ── הצעות של משחק בודד (הקדמה / הזזה) ──
+// לכל משחק שטרם התחיל נבדקים כל התאים הפנויים שאחרי הסלוט הרץ, ונשמרת
+// **הטובה ביותר בלבד** — אחרת אותו משחק היה ממלא את הרשימה ב-12 וריאציות.
+function liveSingles(st) {
+  const { ctx, place, day, nowSlot, base } = st;
+  const occupied = new Set();
+  const teamAt = new Map();   // 'סלוט|קבוצה' → כמה משחקים
+  for (const g of st.dayGames) {
+    if (!g.slot || !g.net) continue;
+    occupied.add(g.slot + '|' + g.net);
+    for (const t of [g.a, g.b]) { const k = g.slot + '|' + t; teamAt.set(k, (teamAt.get(k) || 0) + 1); }
+  }
+
+  const out = [];
+  for (const g of st.dayGames) {
+    if (st.frozen.has(g.key)) continue;
+    let best = null;
+    for (let s = nowSlot + 1; s <= day.slots; s++) {
+      for (const n of ctx.netIds) {
+        if (s === g.slot && n === g.net) continue;
+        if (occupied.has(s + '|' + n) || ctx.blocked.has(s + '|' + n)) continue;
+        // מסנן זול לפני dayCost: קבוצה שכבר משחקת בסלוט הזה (בלי לספור את
+        // המשחק עצמו, שיוצא מהתא). זה גם האילוץ הקשיח הראשון של §6.2.
+        const self = g.slot === s ? 1 : 0;
+        if ((teamAt.get(s + '|' + g.a) || 0) - self > 0) continue;
+        if ((teamAt.get(s + '|' + g.b) || 0) - self > 0) continue;
+
+        const cand = new Map(place);
+        cand.set(g.key, { slot: s, net: n });
+        const cost = dayCost(cand, ctx);
+        if (cost.hard > base.hard) continue;   // אילוץ קשיח נשבר — לא מוצג כלל (§8.7)
+
+        const pairSaved = (g.slot - s) * day.slotMin;
+        const endSaved  = (base.lastSlot - cost.lastSlot) * day.slotMin;
+        if (pairSaved <= 0 && endSaved <= 0) continue;   // לא חוסך זמן לאף אחת
+        const score = endSaved * 1000 + Math.max(0, pairSaved);
+        if (!best || score > best.score) best = { s, n, cost, pairSaved, score };
+      }
+    }
+    if (best)
+      out.push(liveSug(st, liveKindOf(g, best.s, best.n),
+        [{ id: g.id, key: g.key, slot: best.s, net: best.n, from: { slot: g.slot, net: g.net } }],
+        best.cost, best.pairSaved));
+  }
+  return out;
+}
+
+// ── ההצעה הקבוצתית ──
+// ממחזר את המתזמן במלואו (§8.7 "מימוש"): אריזה מחדש של יום אחד בלבד
+// (`onlyDays`), כשכל הקפואים נעולים. שני דברים שהמתזמן לא יודע לבד ולכן
+// מוזרקים דרך הקלט הקיים שלו: (1) נעילה — `locked:true`; (2) "אסור לרדת מתחת
+// לסלוט הרץ" — חלון זמינות `notBefore` לכל קבוצות היום, אילוץ קשיח שהוא כבר
+// מכבד (availWindow). כך אין שינוי בחוזה של §6.
+function liveGroup(st) {
+  const { day, nowSlot } = st;
+  const av = { ...(st.input.availability?.[day.id] || {}) };
+  if (nowSlot >= 1) {
+    const floor = slotTime(day, nowSlot + 1);
+    const teams = new Set(st.dayGames.flatMap(g => [g.a, g.b]));
+    for (const t of teams) {
+      const cur = av[t] || {};
+      av[t] = { ...cur, notBefore:
+        cur.notBefore && hhmmToMin(cur.notBefore) > hhmmToMin(floor) ? cur.notBefore : floor };
+    }
+  }
+  const input = {
+    ...st.input,
+    availability: { ...(st.input.availability || {}), [day.id]: av },
+    existing: (L.games || []).map(g =>
+      g.day === day.id && st.frozen.has(g.key) ? { ...g, locked: true } : g)
+  };
+
+  const { games } = generateSeason(input, {
+    phases: ['pack'], onlyDays: [day.id], restarts: LIVE_RESTARTS, dayBudgetMs: LIVE_BUDGET_MS
+  });
+
+  const cur = new Map(st.dayGames.map(g => [g.key, g]));
+  const newPlace = new Map();
+  const moves = [];
+  for (const ng of games) {
+    if (ng.day !== day.id) continue;
+    const g = cur.get(ng.key);
+    if (!g) continue;
+    if (!ng.slot || !ng.net) { if (g.slot) return null; continue; }   // משחק שנשמט — לא מציעים
+    newPlace.set(ng.key, { slot: ng.slot, net: ng.net });
+    if (ng.slot !== g.slot || ng.net !== g.net)
+      moves.push({ id: g.id, key: g.key, slot: ng.slot, net: ng.net, from: { slot: g.slot, net: g.net } });
+  }
+  if (!moves.length) return null;
+  // חגורה ושלייקס: הנעילה והחלון הם קלט למתזמן, וכאן בודקים את **הפלט**.
+  for (const m of moves) if (st.frozen.has(m.key) || m.slot <= nowSlot) return null;
+
+  const cost = dayCost(newPlace, st.ctx);
+  if (cost.hard > st.base.hard) return null;
+  const pairSaved = Math.max(0, ...moves.map(m => (m.from.slot - m.slot) * day.slotMin));
+  // שרשרת מוצעת **רק** אם היום באמת נגמר מוקדם יותר. אריזה מחדש מזיזה עשרות
+  // משחקים ומשנה את השעה לכל הקבוצות; בלי סיום מוקדם זו טלטלה בתמורה לרווח
+  // של זוג בודד — וזה כבר "סדר לי את היום מחדש" של §8.6, לא הצעה של §8.7.
+  const endSaved = (st.base.lastSlot - cost.lastSlot) * day.slotMin;
+  if (endSaved <= 0) return null;
+  const one = moves[0];
+  return liveSug(st, moves.length > 1 ? 'group'
+                   : liveKindOf({ slot: one.from.slot, net: one.from.net }, one.slot, one.net),
+                 moves, cost, pairSaved);
+}
+
+// חתימת המצב — כל שינוי בשיבוץ, בתוצאות או בסלוט הרץ מבטל את המטמון.
+// בלי זה כל paint() (וכל הקלדה בעמוד) היה מריץ את הסריקה מחדש.
+function liveSig(dayId) {
+  const day = (L.meta.days || []).find(d => d.id === dayId);
+  const gs = (L.games || []).filter(g => g.day === dayId)
+    .map(g => `${g.key}:${g.slot}:${g.net}:${g.locked ? 1 : 0}:${g.result}`).join(',');
+  return `${dayId}|${day ? liveSlotNow(day) : 0}|${gs}`;
+}
+
+function liveScan(dayId) {
+  const sig = liveSig(dayId);
+  if (liveCache && liveCache.sig === sig) return liveCache.list;
+  const st = liveState(dayId);
+  const list = st ? liveSingles(st) : [];
+  // ההצעה הקבוצתית נשמרת מהחישוב הכבד האחרון ומצטרפת רק אם המצב לא זז מאז.
+  // שרשרת שהתכווצה למהלך בודד שכבר ברשימה לא מוצגת פעמיים.
+  const grp = liveGroupRes?.sig === sig ? liveGroupRes.sug : null;
+  const same = (a, b) => a.moves.length === b.moves.length &&
+    a.moves.every((m, i) => m.id === b.moves[i].id && m.slot === b.moves[i].slot && m.net === b.moves[i].net);
+  if (grp && !list.some(s => same(s, grp))) list.push(grp);
+  // מיון לפי הזמן שנחסך (§8.7); בתיקו — המהלך שמזיז פחות משחקים קודם.
+  list.sort((a, b) => b.score - a.score || a.moves.length - b.moves.length);
+  let top = list.slice(0, LIVE_TOP);
+  // חישוב שהמנהלת ביקשה במפורש לא נחתך על ידי הקיצוץ
+  if (grp && list.includes(grp) && !top.includes(grp)) top = [...top.slice(0, LIVE_TOP - 1), grp];
+  liveCache = { sig, list: top };
+  return top;
+}
+
+// היום שהכי הגיוני לעבוד עליו: זה שקורה היום, אחרת הקרוב שטרם עבר.
+function liveDefaultDay(days) {
+  const t = todayISO();
+  return (days.find(d => d.date === t) || days.find(d => !d.date || d.date >= t) || days[days.length - 1])?.id || null;
+}
+
+const LIVE_KIND = { advance:'הקדמה', move:'הזזה', group:'הזזה קבוצתית' };
+
+// ── הפאנל: הודעה אחת מרוכזת (§8.7), לא התראות שקופצות ──
+function livePanel() {
+  const days = regularDays().filter(d => (L.games || []).some(g => g.day === d.id && g.slot));
+  if (!days.length) return '';
+  if (!liveDay || !days.some(d => d.id === liveDay)) liveDay = liveDefaultDay(days);
+
+  const on = liveOn();
+  const sugs = on && !liveBusy ? liveScan(liveDay) : [];
+  const summary = !on ? 'עדכון לוז חי · <span class="muted">כבוי</span>'
+    : liveBusy ? 'עדכון לוז חי · <span class="muted">מחשב…</span>'
+    : sugs.length ? `עדכון לוז חי · <b>${sugs.length}</b> ${sugs.length === 1 ? 'הזדמנות' : 'הזדמנויות'}`
+                  : 'עדכון לוז חי · <span class="muted">אין מה להקדים</span>';
+
+  const toggle = `<label class="toggle-switch" title="כבוי = הלוז יציב לגמרי, בלי הצעות">
+      <input type="checkbox"${on ? ' checked' : ''} data-act="live.toggle"/>
+      <span class="toggle-slider"></span>
+      <span class="toggle-txt">חשב הזדמנויות להקדים</span>
+    </label>`;
+
+  let body;
+  if (!on) {
+    body = `<div class="pub-tools">${toggle}</div>
+      <span class="sett-desc">כשהמתג דלוק, כל פעם שנרשמת תוצאה המערכת בודקת אילו משחקים
+        אפשר להקדים לרשת שהתפנתה, ומציגה כאן רשימה מדורגת. <strong>שום דבר לא זז
+        לבד</strong> — כל הזזה קורית רק בלחיצה שלך.</span>`;
+  } else {
+    const st = liveBusy ? null : liveState(liveDay);
+    const day = days.find(d => d.id === liveDay);
+    const picker = `<div class="day-picker">${days.map(d =>
+      `<button class="filter-btn${d.id === liveDay ? ' on' : ''}" data-act="live.day"
+        data-day="${escH(d.id)}">${escH(d.label)}</button>`).join('')}</div>`;
+
+    const readout = st ? `<div class="pub-tools">
+        <span class="q-chip">עכשיו <b class="num">${escH(liveNowLabel())}</b>
+          ${st.nowSlot ? `· רץ <b class="num">${escH(slotTime(st.day, st.nowSlot))}</b>` : '· המחזור טרם התחיל'}</span>
+        <span class="q-chip">היום נגמר ב-<b class="num">${escH(slotTime(st.day, st.base.lastSlot + 1))}</b></span>
+        <span class="q-chip">${st.dayGames.length - st.frozen.size} משחקים עוד יכולים לזוז</span>
+        <button class="cf-btn" data-act="live.refresh">↻ בדוק שוב</button>
+        <button class="cf-btn" data-act="live.group">🔗 חפש הזזה קבוצתית</button>
+        ${liveGroupRes?.sig === liveSig(liveDay) && !liveGroupRes.sug
+          ? `<span class="muted">נבדקה אריזה מחדש של היום — אין שרשרת שמסיימת מוקדם יותר.</span>` : ''}
+        ${DEV ? `<label class="toggle-txt">בדיקה — עכשיו:
+          <input class="text-inp att-time" type="time" value="${escH(liveNowStr)}" data-act="live.now"/></label>` : ''}
+      </div>` : `<div class="empty">אין לוז למחזור הזה.</div>`;
+
+    const rows = !st ? '' : sugs.map((s, i) => {
+      const m = s.moves[0];
+      const g = findGame(m.id);
+      const some = s.moves.slice(0, 2).map(x => TEAM_NAME(findGame(x.id)?.a)).join(' · ');
+      const who = s.moves.length > 1
+        ? `<b>${s.moves.length} משחקים</b> <span class="muted">${escH(some)}…</span>`
+        : `${escH(TEAM_NAME(g.a))} <span class="muted">נגד</span> ${escH(TEAM_NAME(g.b))}`;
+      const to = s.moves.length > 1
+        ? `<span class="muted">אריזה מחדש · סיום ב-</span><b class="num">${escH(slotTime(st.day, s.endSlot + 1))}</b>`
+        : `<b class="num">${escH(slotTime(st.day, m.slot))}</b>
+           <span class="pub-net" style="background:${escH(NET_COLOR(m.net))};color:${onColor(NET_COLOR(m.net))}"
+             >${escH(NET_NAME(m.net))}</span>
+           <span class="muted">היה ${escH(slotTime(st.day, m.from.slot))} · ${escH(NET_NAME(m.from.net))}</span>`;
+      const saved = [
+        s.endSaved > 0 ? `<b>היום נגמר ${s.endSaved} דק׳ מוקדם</b>` : '',
+        s.pairSaved > 0 ? `<span class="muted">${s.moves.length > 1 ? 'עד ' : ''}${s.pairSaved} דק׳ מוקדם לזוג</span>` : ''
+      ].filter(Boolean).join('<br/>');
+      return `<tr>
+        <td><span class="gtag">${escH(LIVE_KIND[s.kind])}</span></td>
+        <td class="att-name">${who}</td>
+        <td>${to}</td>
+        <td>${saved}</td>
+        <td>${s.warns.length ? `<span class="pub-none">⚠ ${escH(s.warns.join(' · '))}</span>` : ''}</td>
+        <td class="att-mark"><button class="filter-btn" data-act="live.apply" data-i="${i}"
+          >${s.kind === 'group' ? `הזז את ה-${s.moves.length}` : s.kind === 'advance' ? 'הקדם' : 'הזז'}</button></td>
+      </tr>`;
+    }).join('');
+
+    const table = !st ? '' : sugs.length ? `<div class="tscroll"><table class="stbl att-tbl">
+        <thead><tr><th>סוג</th><th>מי</th><th>לאן</th><th>כמה נחסך</th><th>אזהרה</th><th></th></tr></thead>
+        <tbody>${rows}</tbody></table></div>`
+      : `<div class="empty">${liveBusy ? 'מחשב…' : 'אין כרגע הזדמנות שחוסכת זמן ולא שוברת אף חוק.'}</div>`;
+
+    body = `${picker}${readout}${table}
+      <span class="sett-desc">הרשימה מדורגת לפי הזמן שנחסך. כל הצעה כבר נבדקה מול
+        <strong>כל</strong> חוקי הלוז (${escH(day?.label || '')}) — מה ששובר אילוץ קשיח
+        לא מופיע כאן בכלל, ומה שמפר כלל רך מופיע עם אזהרה. משחק שכבר התחיל, נגמר או
+        נעול 📌 לא זז. משיכה של יותר מ-${LIVE_PULL_OK_MIN} דק׳ קדימה תבקש אישור נוסף.
+        <strong>שום דבר לא קורה עד הלחיצה.</strong></span>`;
+  }
+
+  return `<details class="sett-section mpanel live-bar" id="sec-live"${openSections.has('live') ? ' open' : ''}>
+    <summary class="sett-section-title">${summary}</summary>
+    <div class="mpanel-body pub-bar-body">${body}</div>
   </details>`;
 }
 
@@ -2519,6 +2929,53 @@ const ACT = {
     }
   },
 
+  // ── דחיסת לוז חיה (§8.7) — מאסטר בלבד דרך ברירת המחדל של ACT_LEVEL ──
+  'live.toggle':  el => { L.meta.liveReschedule = el.checked; liveCache = null; liveGroupRes = null; },
+  'live.day':     el => { liveDay = el.dataset.day; liveCache = null; },
+  'live.refresh': () => { liveCache = null; liveGroupRes = null; },
+  'live.now':     el => { liveNowStr = el.value || ''; liveCache = null; liveGroupRes = null; },
+
+  // האריזה הקבוצתית היא החישוב הכבד (~שנייה), ולכן אותה תבנית של runScheduler:
+  // לצייר "מחשב…" קודם, ורק אז לחשב. היא לא משנה כלום — רק מייצרת הצעה.
+  'live.group': () => {
+    if (liveBusy) return false;
+    liveBusy = true; paint();
+    setTimeout(() => {
+      const sig = liveSig(liveDay);
+      try {
+        const st = liveState(liveDay);
+        liveGroupRes = { sig, sug: st ? liveGroup(st) : null };
+      } catch (e) {
+        console.error('Live group scan failed', e);
+        liveGroupRes = { sig, sug: null };
+      }
+      liveCache = null; liveBusy = false; paint();
+    }, 30);
+    return false;
+  },
+
+  // הביצוע. עד כאן שום דבר לא זז (§8.7 — עקרון-על): רק כאן, ורק אחרי אימות
+  // שהמצב לא השתנה מאז שההצעה חושבה, ואישור נוסף אם יש אזהרה.
+  'live.apply': el => {
+    const sugs = liveScan(liveDay);
+    const s = sugs[+el.dataset.i];
+    if (!s) return false;
+    const taken = new Set();
+    const moving = new Set(s.moves.map(m => m.id));
+    for (const g of (L.games || []))
+      if (g.day === liveDay && g.slot && g.net && !moving.has(g.id)) taken.add(g.slot + '|' + g.net);
+    for (const m of s.moves)
+      if (taken.has(m.slot + '|' + m.net) || !findGame(m.id)) {
+        alert('הלוז השתנה מאז החישוב. לחצי "בדוק שוב".');
+        liveCache = null; liveGroupRes = null;
+        paint();       // רשימה מעודכנת, בלי לכתוב את המסמך
+        return false;
+      }
+    if (s.warns.length && !confirm(`⚠ ${s.warns.join('\n⚠ ')}\n\nלבצע בכל זאת?`)) return false;
+    for (const m of s.moves) { const g = findGame(m.id); g.slot = m.slot; g.net = m.net; }
+    liveCache = null; liveGroupRes = null;
+  },
+
   // ── טלפונים — דוק פרטי נפרד, ולכן שמירה משלו ולא queueSave (§5.4) ──
   'team.phone': el => {
     setPhone(el.dataset.pid, el.value.trim())
@@ -2620,6 +3077,9 @@ const NO_REPAINT = new Set([
 const NO_SAVE = new Set(['sched.day', 'stand.cat', 'stand.team', 'stand.clearteam',
   'auth.click', 'auth.submit', 'auth.close',
   'pub.preview', 'pub.exit', 'pub.day', 'pub.clearSearch', 'att.day',
+  // §8.7 — בחירת יום, רענון, שעת-בדיקה וחישוב ההצעה הקבוצתית אינם משנים
+  // את המודל: הם רק מחשבים ומציגים. רק live.toggle ו-live.apply כותבים.
+  'live.day', 'live.refresh', 'live.now', 'live.group',
   'team.phone']);   // הטלפון נכתב לדוק אחר לגמרי
 
 // ── אכיפת ההרשאות (§7.1) ──
@@ -2651,7 +3111,7 @@ document.addEventListener('click',  e => {
   const tab = e.target.closest('[data-page]');
   if (tab) {
     const p = PAGES.find(x => x.id === tab.dataset.page);
-    if (!p || R() < p.min) return;
+    if (!p || !pageOk(p)) return;   // אותו שער בדיוק כמו בניווט — גם מול לחיצה מזויפת
     page = p.id; paint(); return;
   }
   // TR — שורת קבוצה בטבלת הדירוג לחיצה (§7.2: מציגה את משחקי הקבוצה)
