@@ -550,8 +550,12 @@ footer { padding: 20px; text-align: center; font-size: 12px;
 .board-subbar { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; margin-bottom: 6px; }
 .board-search { margin: 0; }
 .league-filter { margin: 0; }
-.day-picker { display: inline-flex; gap: 6px; flex-wrap: wrap; margin: 0; }
-.day-picker::before { content: ''; width: 1px; align-self: stretch; background: var(--border2); margin: 2px 4px; }
+/* ⚠️ מוגבל ל-‎.board-toolbar‎ בכוונה. בלי ההגבלה הכללים האלה דלפו לכל
+   בורר-היום באתר: הלוז הציבורי איבד את ה-‎margin-bottom‎ של 14px (§ המתזמן)
+   והכותרת נדחקה לגלולות, ובנוסף צויר קו-מפריד בקצה הרצועה בלי שיהיה לו מה
+   להפריד — כאן הוא מפריד בין "יום/עונה" לבין בורר היום, ורק שם. */
+.board-toolbar .day-picker { display: inline-flex; gap: 6px; flex-wrap: wrap; margin: 0; }
+.board-toolbar .day-picker::before { content: ''; width: 1px; align-self: stretch; background: var(--border2); margin: 2px 4px; }
 
 /* תא */
 .bcell { padding: 3px; vertical-align: top; height: 46px; min-width: 96px; }
@@ -890,9 +894,13 @@ header {
 /* ── 6.4 ניווט וטאבים ─────────────────────────────────────────────────────
    המוקאפ: טאב = טקסט עם קו תחתון של 2px כשהוא פעיל. בלי מילוי, בלי רקע
    מטושטש — הרצועה שקטה והמגנטה מסמנת מקום אחד בלבד. */
+/* אותו מרזב בדיוק כמו ‎header‎, ‎.sponsor-bar‎ ו-‎main‎ (ראו "רוחב מלא לכל
+   האתר"): כך הקו התחתון של הטאב הפעיל — הסימן היחיד ברצועה — נוחת על אותו
+   קו-עמודה של הלוגו, שם הליגה וקצה הכרטיס. עם ‎clamp(10px,3vw,26px)‎ הוא חרג
+   ממנו ב-6px, וטקסט הטאב נכנס פנימה ב-6px: לא זה ולא זה התיישרו. */
 nav {
   background: var(--ground); backdrop-filter: none;
-  padding: 0 clamp(10px, 3vw, 26px); gap: 2px; border-bottom: 0;
+  padding: 0 clamp(16px, 4vw, 32px); gap: 2px; border-bottom: 0;
 }
 .tab {
   font-size: 13.5px; font-weight: 500; color: var(--ink-70);
@@ -1022,10 +1030,23 @@ nav {
 .stand-tbl { font-variant-numeric: tabular-nums; border-collapse: separate; border-spacing: 0; }
 .stand-tbl .spacer td { height: 8px; padding: 0; border: 0; }
 .stand-tbl td { padding: 0 8px; height: 52px; vertical-align: middle; }
+/* ביטול המילוי של ‎.stbl tr.winner td‎ מ-styles.css (שם "מנצח" = צבע הקטגוריה;
+   בליגה זו העפלה, והמסגרת הצהובה של §6.7 היא הסימון היחיד שלה).
+
+   ⚠️ מקומו של הכלל אינו שרירותי. הוא (0,2,2), בדיוק כמו ‎.stand-row:hover td‎,
+   ולכן ביניהם **סדר-מקור מכריע** והוא חייב להקדים את ‎:hover‎ ואת ‎.sel‎.
+   כשהוא ישב בסוף §6.7 ארבע המובילות היו השורות היחידות בטבלה בלי משוב ריחוף.
+   מול תיקת עמודת המיון סדר לא עוזר — ‎.stand-tbl td.c-pts‎ הוא (0,2,1) ומפסיד
+   בכל מקרה, ולכן שם נוסף וריאנט ‎tr.winner‎ מפורש. */
+.stbl tr.winner td { background: transparent; }
 .stand-name { font-size: 14.5px; font-weight: 500; letter-spacing: -.012em; }
 .stand-tbl th.c-team { text-align: right; }   /* הכותרת מיושרת עם השמות שמתחתיה */
-/* עמודת המיון (נקודות) מסומנת בגוון דיו של 2.8% — לא בצבע */
-.stand-tbl td.c-pts, .stand-tbl th.c-pts { background: rgba(0,11,25,.028); }
+/* עמודת המיון (נקודות) מסומנת בגוון דיו של 2.8% — לא בצבע.
+   הווריאנט ‎tr.winner‎ אינו כפילות: בלעדיו ביטול-המילוי שלמעלה (0,2,2) גובר
+   על (0,2,1), הגוון נעלם דווקא בארבע המובילות, והעמודה נראית כפס תלוש
+   שמתחיל רק מתחת למסגרת הצהובה. */
+.stand-tbl td.c-pts, .stand-tbl th.c-pts,
+.stand-tbl tr.winner td.c-pts { background: rgba(0,11,25,.028); }
 /* ניקוד = מספר גדול, לא גלולה. במוקאפ הגלולה הוחלפה בהיררכיית גופן. */
 .stand-pts {
   display: inline; padding: 0; border-radius: 0; background: none;
@@ -1034,7 +1055,9 @@ nav {
 }
 /* ריחוף ובחירה — מגנטה בעוצמה מינימלית (‎--hover‎/‎--open‎) */
 .stand-row td { transition: background .16s ease; }
-.stand-row:hover td { background: var(--hover); }
+/* ‎.winner‎ מפורש, כמו ב-‎.sel‎ שמתחת: תיקת ‎td.c-pts‎ של המובילות היא (0,3,2)
+   ובלי הווריאנט תא הנקודות היה נשאר מחוץ לפס הריחוף. */
+.stand-row:hover td, .stand-row.winner:hover td { background: var(--hover); }
 .stand-row.sel td, .stand-row.sel.winner td { background: var(--open); }
 /* אפס = נקודה דהויה, לא תא ריק (‎.zero‎ במוקאפ) */
 .stand-tbl td.num:empty::after { content: '·'; color: var(--ink-32); }
@@ -1075,9 +1098,9 @@ nav {
    ‎direction:ltr‎ (§5, כדי ש-"17:00–22:20" לא ייקרא הפוך) — ולכן
    ‎border-inline-start‎ בתוכם מתפרש כשמאל ולא כימין, והמסגרת יצאה על
    הצד ההפוך. בדף RTL קבוע: ראשון = ימין, אחרון = שמאל.
-   הקו המגנטה של ‎.stbl tr.winner‎ (§1, צבע הקטגוריה באפליקציה הראשית)
-   מבוטל כאן — בליגה "winner" הוא העפלה, והצהוב הוא הסימון שלה. */
-.stbl tr.winner td { background: transparent; }
+   בליגה "winner" הוא העפלה, והצהוב הוא הסימון היחיד שלה: המילוי והקו
+   המגנטה של ‎.stbl tr.winner‎ (§1, צבע הקטגוריה באפליקציה הראשית) מבוטלים
+   בראש §6.7, ליד ‎.stand-tbl td‎ — ראו ההערה שם למה דווקא שם. */
 .stand-tbl tr.winner td:first-child { border-right: 2px solid var(--qual); }
 .stand-tbl tr.winner td:last-child  { border-right: 0; border-left: 2px solid var(--qual); }
 .stand-tbl tbody tr.winner:first-child td { border-top: 2px solid var(--qual); }
@@ -1378,8 +1401,8 @@ footer { border-top-color: var(--line-soft); color: var(--ink-32); }
      בלי גלילת-דף). הגריד עצמו גולל פנימית (4 מגרשים לא נכנסים ל-375). */
   .board-toolbar { gap: 5px 7px; margin-bottom: 5px; }
   .board-toolbar .filter-btn, .board-toolbar .cf-btn { padding: 4px 8px; font-size: 11.5px; }
-  .day-picker { gap: 5px; }
-  .day-picker::before { display: none; }
+  .board-toolbar .day-picker { gap: 5px; }
+  .board-toolbar .day-picker::before { display: none; }
   .board-subbar { gap: 5px 8px; margin-bottom: 5px; }
   .board-subbar .filter-btn { padding: 4px 8px; font-size: 11.5px; }
   .board-search .text-inp { width: 130px; }
@@ -1461,7 +1484,12 @@ footer { border-top-color: var(--line-soft); color: var(--ink-32); }
 .pub-search .text-inp { width: 240px; max-width: 100%; }
 .pub-slot { display: flex; gap: 12px; align-items: flex-start; padding: 7px 0;
   border-top: 1px solid var(--line-soft); }
-.pub-slot:first-of-type { border-top: 0; }
+/* ‎:first-of-type‎ סופר לפי סוג האלמנט, וכל הילדים כאן הם ‎div‎ — ‎.pub-head‎
+   ו-‎.pub-search‎ קודמים, ולכן הכלל הקודם (‎.pub-slot:first-of-type‎) לא התאים
+   לאף אלמנט והסלוט הראשון קיבל קו שמסמן "קבוצת שעה חדשה" בלי שתהיה קבוצה
+   לפניו. ‎:not(.pub-slot ~ .pub-slot)‎ מגדיר אותו לפי מה שהוא באמת: הסלוט
+   שאין לפניו סלוט אחר. */
+.pub-sched > .pub-slot:not(.pub-slot ~ .pub-slot) { border-top: 0; }
 .pub-time { width: 54px; flex-shrink: 0; padding-top: 9px;
   font-size: 12.5px; font-weight: 600; color: var(--ink-70);
   font-variant-numeric: tabular-nums; }
@@ -1475,6 +1503,13 @@ footer { border-top-color: var(--line-soft); color: var(--ink-32); }
 .pub-when { font-size: 10.5px; color: var(--ink-48); font-weight: 600; }
 .pub-team { flex: 1; min-width: 90px; font-weight: 500; color: var(--ink-70); }
 .pub-team.win { color: var(--ink); font-weight: 700; }
+/* שני השמות הם ‎flex:1‎, ולכן התוצאה יושבת תמיד באותו מקום ונסרקת כעמודה —
+   אבל קבוצה א׳ נצמדה לקצה הרחוק של התיבה שלה, ובמסך רחב נפער בינה לבין
+   התוצאה נהר של מאות פיקסלים. ‎text-align:end‎ מצמיד אותה לתוצאה מהצד השני,
+   וכך שני השמות יוצאים מהתוצאה החוצה והחלל נדחק אל תוויות-המיקרו שבקצוות.
+   ‎:has(~ .pub-score)‎ מזהה את קבוצה א׳ בלי להסתמך על מיקום: ‎.pub-when‎
+   האופציונלי (‎pubGameRow‎, יום/שעה) מזיז כל ספירת ‎nth-of-type‎. */
+.pub-game > .pub-team:has(~ .pub-score) { text-align: end; }
 /* .pub-score הוא flex ב-RTL: הילד הראשון (sa) יושב מימין, צמוד לקבוצה א׳ —
    בדיוק כמו בשורת ההזנה של שלב 4. בלי זה 18:14 היה נקרא הפוך. */
 .pub-score { display: flex; align-items: center; gap: 3px; flex-shrink: 0;
@@ -1546,11 +1581,21 @@ footer { border-top-color: var(--line-soft); color: var(--ink-32); }
   /* בטלפון הכרטיס עובר לגריד: שם / תוצאה / שם זה מתחת לזה, והרשת והליגה
      בעמודה צרה משמאל. בשורה אחת שני השמות נמחצים והתוצאה נדבקת לשם אחד,
      ואז אי אפשר לדעת של מי ה-18. */
-  .pub-game { display: grid; grid-template-columns: auto minmax(0,1fr);
+  /* רוחב קבוע ולא ‎auto‎: ברוחב-תוכן עמודת התוויות נמדדת לפי שם הליגה של כל
+     כרטיס בנפרד ("ליגת שואו" מול "ליגה ראשונה", ובאנגלית "League 1" מול
+     "Show League"), והקצה של שמות הקבוצות מתנדנד מכרטיס לכרטיס. ‎4.8em‎
+     (יחסית ל-13px של הכרטיס) מיישר את כולם בכל שלוש השפות בלי להוסיף
+     ולו שבירת-שורה אחת בשמות; תווית ארוכה מהרוחב נשברת לשתי שורות בתוך
+     שתי השורות שהיא ממילא פורשׂת, ולכן הכרטיס לא גדל. */
+  .pub-game { display: grid; grid-template-columns: 4.8em minmax(0,1fr);
     column-gap: 9px; row-gap: 1px; align-items: center; font-size: 13px; padding: 7px 9px; }
   .pub-net { grid-column: 1; grid-row: 1; }
   .pub-cat { grid-column: 1; grid-row: 2 / span 2; align-self: start; }
   .pub-when, .pub-team, .pub-score { grid-column: 2; }
+  /* "נגד" נפל בדיוק ליד שם הליגה — שתי תוויות זעירות באותו משקל ובאותו גוון,
+     שנקראות כמחרוזת אחת ("ליגה ראשונה נגד"). במרכז העמודה הוא חוזר להיות מה
+     שהוא: המפריד בין השם שמעליו לשם שמתחתיו. */
+  .pub-score { justify-self: center; }
   .pub-search .text-inp { width: 100%; }
   .att-tbl { min-width: 560px; }
   .role-tab { margin-inline-start: 0; }
