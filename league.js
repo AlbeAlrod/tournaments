@@ -15,6 +15,10 @@ import {
   escH, sha256, applyTheme, onColor, focusSnapshot, focusRestore
 } from './common.js?v=2';
 
+// שלוש השפות של העמודים הציבוריים. ראו league-i18n.js — כולל ההחלטה
+// שהכיוון נשאר RTL בכל שפה, כי שמות הקבוצות נשארים עברית.
+import { t, tData, getLang, setLang, LANGS } from './league-i18n.js?v=2';
+
 // המתזמן — שלב 3. מודול טהור: הוא לא מכיר את L, את ה-DOM או את Firestore,
 // והוא מקבל תמונת מצב ומחזיר משחקים ודוח. ראו league-sched.js.
 import {
@@ -35,6 +39,11 @@ const params    = new URLSearchParams(location.search);
 const LEAGUE_ID = params.get('l') || 'futilina-2026';
 const DEV       = params.get('dev') === '1';
 const INIT      = params.get('init') === '1';   // יצירת דוק חדש — ראו loadLeague()
+// ?m=1 — כניסת המנהלת. הקישור הציבורי שמקבלות 72 השחקניות לא נושא את
+// הפרמטר, ולכן הן רואות ניווט של צופה בלבד: הכפתור "כניסת מנהלת" פשוט אינו
+// שם. זו לא שכבת אבטחה (SECURITY.md — ההרשאה נאכפת בדפדפן ממילא), אלא
+// הסרת פקד שאינו שייך לאף אחת מהן. המנהלת שומרת את הקישור עם ‎?m=1‎.
+const MGR       = params.get('m') === '1';
 
 // ============================================================================
 // מודל הנתונים — §5.1
@@ -635,7 +644,8 @@ function setSync(state, detail) {
   const el = document.getElementById('sync-dot');
   const tx = document.getElementById('sync-text');
   if (el) el.className = 'sync-dot sync-' + state;
-  if (tx) tx.textContent = detail || ({ ok:'מסונכרן', wait:'שומר…', err:'שגיאת סנכרון' }[state] || '');
+  if (tx) tx.textContent = detail ||
+    ({ ok: t('sync.ok'), wait: t('sync.saving'), err: t('sync.error') }[state] || '');
 }
 
 function mergeDefaults(data) {
@@ -841,15 +851,15 @@ function loginBox() {
   el.className = 'overlay h';
   el.innerHTML = `
     <div class="modal">
-      <h3>כניסת מנהלת</h3>
+      <h3>${escH(t('auth.login'))}</h3>
       <div class="modal-row">
-        <input id="login-pw" class="modal-input" type="password" placeholder="סיסמה"
+        <input id="login-pw" class="modal-input" type="password" placeholder="${escH(t('auth.pw'))}"
                autocomplete="current-password"/>
       </div>
-      <div id="login-err" class="frm-err h">סיסמה שגויה.</div>
+      <div id="login-err" class="frm-err h">${escH(t('auth.wrong'))}</div>
       <div class="modal-btns">
-        <button class="mbtn mbtn-cancel" data-act="auth.close">ביטול</button>
-        <button class="mbtn mbtn-ok" data-act="auth.submit">כניסה</button>
+        <button class="mbtn mbtn-cancel" data-act="auth.close">${escH(t('auth.cancel'))}</button>
+        <button class="mbtn mbtn-ok" data-act="auth.submit">${escH(t('auth.enter'))}</button>
       </div>
     </div>`;
   document.body.appendChild(el);
@@ -941,17 +951,17 @@ let page = 'standings';
 
 // min = רמת ההרשאה המינימלית לעמוד (§7.1). הציבור מקבל שלושה עמודים בלבד.
 const PAGES = [
-  { id:'standings', label:'דירוג',            min:0 },
+  { id:'standings', k:'nav.standings', min:0 },
   // "הקבוצה שלי" בוטל (§7.2). כל מה שנשאר ממנו: שדה החיפוש בלוז זוכר את
   // עצמו ב-localStorage. אין עמוד, אין כרטיס "המשחק הבא", אין נעיצה.
-  { id:'schedule',  label:'לוז',              min:0 },
+  { id:'schedule',  k:'nav.schedule',  min:0 },
   // gate — תנאי נוסף מעל ההרשאה (§8.5): הפיינל פור נסתר מהניווט וחסום כעמוד
   // עד שהמאסטר מפרסם אותו. המאסטר עצמו עובר בזכות R()>=2.
-  { id:'ko',        label:'פיינל פור והצלבה', min:0, gate:ffPublished },
-  { id:'teams',     label:'קבוצות',           min:2 },
-  { id:'sched',     label:'מתזמן',            min:2 },
-  { id:'settings',  label:'הגדרות',           min:2 },
-  { id:'status',    label:'מצב המערכת',       min:2 }
+  { id:'ko',        k:'nav.ko',        min:0, gate:ffPublished },
+  { id:'teams',     k:'nav.teams',     min:2 },
+  { id:'sched',     k:'nav.sched',     min:2 },
+  { id:'settings',  k:'nav.settings',  min:2 },
+  { id:'status',    k:'nav.status',    min:2 }
 ];
 
 // מקטעי ההגדרות הפתוחים. בלי זה כל הקלדה סוגרת את כל האקורדיון,
@@ -973,6 +983,7 @@ function paint() {
 
   document.getElementById('header-name').textContent = L.meta.name || 'ליגה';
   document.title = L.meta.name || 'ליגה';
+  renderLangSwitch();
 
   // הטאבים לפי ההרשאה (§7.1). עמוד שאינו מותר לרמה הנוכחית נסגר מיד — כך
   // גם יציאה מהמאסטר וגם כניסה לתצוגה המקדימה לא משאירות עמוד סגור פתוח.
@@ -980,7 +991,7 @@ function paint() {
   if (!vis.some(p => p.id === page)) page = vis[0].id;
 
   document.getElementById('main-nav').innerHTML =
-    vis.map(p => `<button class="tab${p.id === page ? ' on' : ''}" data-page="${p.id}">${escH(p.label)}</button>`).join('')
+    vis.map(p => `<button class="tab${p.id === page ? ' on' : ''}" data-page="${p.id}">${escH(t(p.k))}</button>`).join('')
     + roleTab();
 
   const target = PAGES.find(p => p.id === page);
@@ -1000,14 +1011,31 @@ function paint() {
 
 // כפתור הכניסה/היציאה בסוף רצועת הטאבים. אין לו מקום משלו ב-league.html
 // (שאותו שלב 6 לא משנה מלבד ה-?v), ולכן הוא נכנס כטאב אחרון.
+// מתג השפה. שלוש אותיות בכותרת, בלי תפריט נפתח — שלוש אפשרויות אינן
+// מצדיקות פקד שצריך לפתוח כדי לראות מה יש בו.
+function renderLangSwitch() {
+  const box = document.getElementById('langsw');
+  if (!box) return;
+  const cur = getLang();
+  box.setAttribute('aria-label', t('lang.aria'));
+  box.innerHTML = LANGS.map(([code, label]) =>
+    `<button class="langsw__b${code === cur ? ' is-on' : ''}" data-act="lang.set" data-lang="${code}"
+       lang="${code}" aria-pressed="${code === cur}">${label}</button>`).join('');
+}
+
+// שלושה מצבים, ורק אחד מהם גלוי לצופה: **אף אחד**.
+//   אין סיסמה  → אזהרה (כולן מאסטר בפועל; חייבת להיות גלויה)
+//   מחוברת     → יציאה
+//   ‎?m=1‎      → כניסה
+//   אחרת       → כלום. השחקניות לא צריכות לדעת שיש דלת.
 function roleTab() {
   if (!secured())
     return `<button class="tab role-tab warn" data-act="auth.click"
-              title="לא הוגדרה סיסמת מאסטר — כל מי שמגיעה לכתובת רואה הכל">⚠ ללא סיסמה</button>`;
+              title="${escH(t('auth.nopassT'))}">${escH(t('auth.nopass'))}</button>`;
   const r = realRole();
-  if (!r) return `<button class="tab role-tab" data-act="auth.click">כניסת מנהלת</button>`;
-  return `<button class="tab role-tab on" data-act="auth.click"
-            title="יציאה">${r === 2 ? 'מאסטר' : 'אדמין'} ✓</button>`;
+  if (r) return `<button class="tab role-tab on" data-act="auth.click"
+            title="${escH(t('auth.exitT'))}">${escH(t(r === 2 ? 'auth.master' : 'auth.admin'))} ✓</button>`;
+  return MGR ? `<button class="tab role-tab" data-act="auth.click">${escH(t('auth.login'))}</button>` : '';
 }
 
 // §8.5 — "איך זה נראה לשחקניות". לא סימולציה: R() באמת יורד ל-0, ולכן גם
@@ -2040,75 +2068,125 @@ function renderGameEntry(g) {
 function renderStandings() {
   const cats = L.categories.filter(c => (L.roster[c.id] || []).length >= 2);
   if (!cats.length) return `<div class="sett-section empty">
-    <h3>אין עדיין דירוג</h3>
-    <p>הדירוג יופיע כשיהיו קבוצות ומשחקים. רשימת הקבוצות מתפרסמת אחרי
-       <strong>12.8.2026</strong>; אפשר להזין ידנית בעמוד <b>קבוצות</b> ואז ליצור לוז ב<b>מתזמן</b>.</p>
+    <h3>${escH(t('stand.emptyH'))}</h3>
+    <p>${escH(t('stand.emptyP'))}</p>
   </div>`;
 
   if (!standCat || !cats.find(c => c.id === standCat)) standCat = cats[0].id;
 
   const nav = `<div class="court-filter">${cats.map(c =>
-    `<button class="cf-btn${c.id === standCat ? ' on' : ''}" data-act="stand.cat" data-cat="${escH(c.id)}">${escH(c.name)}</button>`
+    `<button class="cf-btn${c.id === standCat ? ' on' : ''}" data-act="stand.cat" data-cat="${escH(c.id)}">${escH(tData(c.name))}</button>`
   ).join('')}</div>`;
 
   const { ranked, alerts } = rankStandings(standCat);
 
   const alertBox = alerts.map(a =>
-    `<div class="sched-msg warn tie-alert">⚠ שוויון מלא בין ${a.size} קבוצות על מקומות
-      <b class="num">${a.start === a.end ? a.start : a.start + '–' + a.end}</b>. התקנון לא מכריע —
-      נדרשת החלטה ידנית${a.touchesF4 ? ' (נוגע לגבול הפיינל פור, מקומות 4–5)' : ''}.</div>`).join('');
+    `<div class="sched-msg warn tie-alert">⚠ ${escH(t('stand.tie', {
+        n: a.size,
+        places: a.start === a.end ? a.start : a.start + '–' + a.end
+      }))}${a.touchesF4 ? escH(t('stand.tieF4')) : ''}.</div>`).join('');
 
   // הזנת התוצאות עברה לטאב "לוז" (שלב 5, §8) — כאן נשארת הטבלה החיה,
-  // ומתחתיה משחקי הקבוצה שנלחצה (§7.2).
-  return nav + standTable(ranked) + alertBox + teamGames();
+  // ומשחקי הקבוצה שנלחצה נפתחים במגירה מתחת לשורה שלה (§7.2).
+  return nav + standTable(ranked) + alertBox;
 }
 
-// §7.2 — "לחיצה על קבוצה פותחת את כל משחקיה". רק ימים שהצופה רשאית לראות:
-// אצל שחקנית לוז של מחזור מוסתר לא ידלוף דרך טבלת הדירוג.
-function teamGames() {
-  if (!standTeam) return '';
-  const ok = new Set((L.meta.days || []).filter(dayVisible).map(d => d.id));
-  const gs = (L.games || [])
-    .filter(g => (g.a === standTeam || g.b === standTeam) && ok.has(g.day))
-    .sort((a, b) => (a.day || '').localeCompare(b.day || '') || ((a.slot || 0) - (b.slot || 0)));
-  return `<div class="sett-section">
-    <div class="sett-section-title">משחקי ${escH(TEAM_NAME(standTeam))}
-      <button class="team-del" data-act="stand.clearteam" title="סגירה">×</button></div>
-    ${gs.length
-      ? `<div class="pub-games">${gs.map(g => pubGameRow(g, { withDay: true, withTime: true })).join('')}</div>`
-      : '<div class="sett-empty-note">אין עדיין משחקים מפורסמים לקבוצה הזאת.</div>'}
-  </div>`;
+// §7.2 — "לחיצה על קבוצה פותחת את כל משחקיה". המגירה נפתחת **מתחת לשורה**
+// ולא ככרטיס בתחתית העמוד: כך העין לא מאבדת את הקבוצה שנלחצה, וזה גם מה
+// שהמוקאפ המאושר עושה. רק ימים שהצופה רשאית לראות — אצל שחקנית לוז של
+// מחזור מוסתר לא ידלוף דרך טבלת הדירוג.
+function teamDrawer(teamId, cols, qual) {
+  const ok = (L.meta.days || []).filter(dayVisible);
+  const gs = (L.games || []).filter(g => (g.a === teamId || g.b === teamId));
+
+  const rounds = ok.map(d => {
+    const list = gs.filter(g => g.day === d.id).sort((a, b) => (a.slot || 0) - (b.slot || 0));
+    if (!list.length) return '';
+    return `<section class="rnd">
+      <h4 class="rnd__t">${escH(tData(d.label))}</h4>
+      <ol class="rnd__games">${list.map(g => drawerGame(g, teamId)).join('')}</ol>
+    </section>`;
+  }).join('');
+
+  // ‎.winner‎ גם על המגירה: מסגרת הפיינל פור חייבת להימשך דרכה, אחרת פתיחת
+  // שורה בתוך הארבע הראשונות שוברת את המסגרת לשניים.
+  // ⚠️ ‎gdrawer‎ ולא ‎drawer‎ — ‎.drawer‎ כבר תפוס במגירת הצד של לוח הגרירה
+  // (‎width:210px; display:flex‎), וזה היה מוציא את התא ממודל הטבלה ומאיין
+  // את ה-colspan.
+  return `<tr class="gdrawer${qual ? ' winner' : ''}"><td colspan="${cols}">
+    <div class="rounds">${rounds ||
+      `<p class="foot">${escH(t('drawer.none'))}</p>`}</div>
+  </td></tr>`;
+}
+
+// לוח תוצאות של שתי שורות — שורה לקבוצה, הניקוד שלה בקצה השורה שלה.
+// הקבוצה שנפתחה תמיד למעלה, כדי שאפשר יהיה לסרוק עמודה אחת של תוצאות.
+function drawerGame(g, teamId) {
+  const { sa, sb } = techScores(g);
+  const flip = g.b === teamId;
+  const done = g.result !== 'pending' && g.result !== 'cancelled' && g.result !== 'unfinished';
+  const side = (id, sc, win) => `<span class="side${win ? ' is-win' : ''}">
+      <span class="side__team">${escH(TEAM_NAME(id))}</span>
+      <span class="side__sc">${done ? (sc ?? 0) : '·'}</span>
+    </span>`;
+  const [ia, ib] = flip ? [g.b, g.a] : [g.a, g.b];
+  const [ca, cb] = flip ? [sb, sa] : [sa, sb];
+  return `<li class="game${done ? '' : ' is-pending'}">
+    ${side(ia, ca, done && (ca ?? 0) > (cb ?? 0))}
+    ${side(ib, cb, done && (cb ?? 0) > (ca ?? 0))}
+  </li>`;
 }
 
 function standTable(ranked) {
+  // מחלקות העמודות (‎c-*‎) הן החוזה עם league.css: הן נותנות לעמודת המיון את
+  // הגוון שלה, להפסד הטכני את התגית, ולעמודות המשניות להיעלם בטלפון — בלי
+  // להישען על nth-child, שנשבר בשקט אם סדר העמודות ישתנה.
+  //
+  // סרגל ההפרש מנורמל למקסימום המוחלט בטבלה, כך שהעמודה נקראת כהשוואה בין
+  // הקבוצות ולא כערך מוחלט חסר הקשר.
+  const maxAbs = Math.max(1, ...ranked.map(({ row }) => Math.abs(row.diff)));
   const rows = ranked.map(({ row, rank, tied }) => {
     const dc = row.diff > 0 ? 'diff-pos' : row.diff < 0 ? 'diff-neg' : 'diff-zero';
     const sign = row.diff > 0 ? '+' : '';
-    return `<tr class="stand-row${rank <= 4 ? ' winner' : ''}${standTeam === row.id ? ' sel' : ''}"
-        data-act="stand.team" data-id="${escH(row.id)}">
-      <td class="num">${rank}${tied ? '<span class="tie-mark" title="שוויון לא מוכרע">=</span>' : ''}</td>
-      <td class="stand-name">${escH(row.name)}</td>
-      <td class="num">${row.played}</td>
+    const bar = `<span class="diffbar" aria-hidden="true">${row.diff
+      ? `<i class="${row.diff > 0 ? 'pos' : 'neg'}" style="width:${Math.round(Math.abs(row.diff) / maxAbs * 50)}%"></i>`
+      : ''}</span>`;
+    const open = standTeam === row.id;
+    return `<tr class="stand-row${rank <= 4 ? ' winner' : ''}${open ? ' sel' : ''}"
+        data-act="stand.team" data-id="${escH(row.id)}" tabindex="0" role="button"
+        aria-expanded="${open}">
+      <td class="num c-rank">${rank}${tied ? `<span class="tie-mark" title="${escH(t('stand.tieT'))}">=</span>` : ''}</td>
+      <td class="stand-name c-team">${escH(row.name)}</td>
+      <td class="num c-played">${row.played}</td>
       <td class="num">${row.wins}</td>
       <td class="num">${row.losses}</td>
-      <td class="num">${row.tech || ''}</td>
-      <td class="num">${row.noshow || ''}</td>
-      <td class="num"><b class="stand-pts">${fmtPts(row.pts)}</b></td>
-      <td class="num">${row.pf}</td>
-      <td class="num">${row.pa}</td>
-      <td class="num ${dc}">${sign}${row.diff}</td>
-    </tr>`;
+      <td class="num c-pen">${row.tech ? `<span class="pen pen-tech">${row.tech}</span>` : ''}</td>
+      <td class="num c-pen">${row.noshow ? `<span class="pen pen-abs">${row.noshow}</span>` : ''}</td>
+      <td class="num c-pts"><b class="stand-pts">${fmtPts(row.pts)}</b></td>
+      <td class="num c-opt">${row.pf}</td>
+      <td class="num c-opt">${row.pa}</td>
+      <td class="num c-diff"><span class="diffwrap">${bar}<span class="diffnum ${dc}">${sign}${row.diff}</span></span></td>
+    </tr>${open ? teamDrawer(row.id, 11, rank <= 4) : ''}`;
   }).join('');
 
   return `<div class="sett-section">
     <div class="tscroll"><table class="stbl stand-tbl">
-      <thead><tr><th>#</th><th>קבוצה</th><th>מש׳</th><th>נצ׳</th><th>הפ׳</th>
-        <th>טכני</th><th>היעדרות</th><th>נק׳</th><th>לזכות</th><th>לחובה</th><th>הפרש</th></tr></thead>
+      <thead><tr><th class="c-rank">${escH(t('col.rank'))}</th>
+        <th class="c-team">${escH(t('col.team'))}</th>
+        <th class="c-played">${escH(t('col.played'))}</th>
+        <th>${escH(t('col.wins'))}</th><th>${escH(t('col.losses'))}</th>
+        <th class="c-pen">${escH(t('col.tech'))}</th><th class="c-pen">${escH(t('col.abs'))}</th>
+        <th class="c-pts">${escH(t('col.pts'))}</th>
+        <th class="c-opt">${escH(t('col.pf'))}</th><th class="c-opt">${escH(t('col.pa'))}</th>
+        <th class="c-diff">${escH(t('col.diff'))}</th></tr></thead>
+      <!-- שורת אוויר: מפרידה את הקו הכהה של כותרות העמודות ממסגרת הפיינל
+           פור, שאחרת שתיהן נצמדות לאותם 2px (כמו ‎.spacer‎ במוקאפ). -->
+      <tbody class="spacer" aria-hidden="true"><tr><td colspan="11"></td></tr></tbody>
       <tbody>${rows}</tbody>
     </table></div>
-    <span class="sett-desc" style="margin-top:10px">מיון לפי 3.10: נקודות ← הפרש ← מפגש ישיר ←
-      מיני־ליגה (3 ומעלה). מקומות 1–4 מעפילים לפיינל פור (3.8). לחיצה על קבוצה מציגה את משחקיה בלבד.
-      "טכני" ו"היעדרות" מפרטות הפסדי 0 נק׳ ואינן משפיעות על המיון.</span>
+    <!-- מה שהעמוד כבר מראה לא נכתב שוב: המסגרת הצהובה אומרת "1–4 מעפילות",
+         והחץ בשורה אומר "לחיצה פותחת משחקים". נשאר סדר השוברים בלבד. -->
+    <span class="foot">${escH(t('stand.foot'))}</span>
   </div>`;
 }
 
@@ -2140,28 +2218,35 @@ function pubGameRow(g, opts = {}) {
   const color = NET_COLOR(g.net);
   const { sa, sb } = techScores(g);
   const done = g.result !== 'pending' && g.result !== 'cancelled';
+  // תוצאה מוכרעת → הצד המנצח מודגש והמספר שלו בכחול (שפת ‎.side.is-win‎
+  // במוקאפ). "לא הסתיים" ו"נגד" אינם הכרעה ולכן אין בהם מנצחת.
+  const scored = done && g.result !== 'unfinished';
+  const wa = scored && (sa ?? 0) > (sb ?? 0);
+  const wb = scored && (sb ?? 0) > (sa ?? 0);
   const score = g.result === 'unfinished'
-    ? `<span class="pub-score muted">לא הסתיים</span>`
+    ? `<span class="pub-score muted">${escH(t('sched.unfin'))}</span>`
     : done
-      ? `<span class="pub-score"><b class="num">${sa ?? 0}</b><i>:</i><b class="num">${sb ?? 0}</b></span>`
-      : `<span class="pub-score pub-vs">נגד</span>`;
+      ? `<span class="pub-score"><b class="num${wa ? ' win' : ''}">${sa ?? 0}</b><i>:</i><b class="num${wb ? ' win' : ''}">${sb ?? 0}</b></span>`
+      : `<span class="pub-score pub-vs">${escH(t('sched.vs'))}</span>`;
   const search = `${TEAM_NAME(g.a)} ${TEAM_NAME(g.b)}`.toLowerCase();
-  return `<div class="pub-game" data-s="${escH(search)}">
-    <span class="pub-net" style="background:${escH(color)};color:${onColor(color)}">${escH(NET_NAME(g.net))}</span>
+  // צבע המגרש עובר כ-custom property ולא כרקע: ב-league.css הוא נישא על
+  // השפה המובילה של הכרטיס (‎.mt‎ במוקאפ), ושם המגרש נשאר תווית קריאה.
+  return `<div class="pub-game" data-s="${escH(search)}" style="--net:${escH(color)}">
+    <span class="pub-net">${escH(tData(NET_NAME(g.net)))}</span>
     ${opts.withTime && day ? `<span class="pub-when num">${escH(slotTime(day, g.slot))}</span>` : ''}
-    ${opts.withDay ? `<span class="pub-when">${escH(dayLabel(g.day))}</span>` : ''}
-    <span class="pub-team">${escH(TEAM_NAME(g.a))}</span>
+    ${opts.withDay ? `<span class="pub-when">${escH(tData(dayLabel(g.day)))}</span>` : ''}
+    <span class="pub-team${wa ? ' win' : ''}">${escH(TEAM_NAME(g.a))}</span>
     ${score}
-    <span class="pub-team">${escH(TEAM_NAME(g.b))}</span>
-    <span class="pub-cat">${escH(CAT_NAME(g.cat))}</span>
+    <span class="pub-team${wb ? ' win' : ''}">${escH(TEAM_NAME(g.b))}</span>
+    <span class="pub-cat">${escH(tData(CAT_NAME(g.cat)))}</span>
   </div>`;
 }
 
 function renderPublicSchedule() {
   const days = schedDaysFor();
   if (!days.length) return `<div class="sett-section empty">
-    <h3>הלוז עוד לא פורסם</h3>
-    <p>ברגע שהמנהלת תפרסם מחזור הוא יופיע כאן — עם השעה, המגרש ומי נגד מי.</p>
+    <h3>${escH(t('sched.emptyH'))}</h3>
+    <p>${escH(t('sched.emptyP'))}</p>
   </div>`;
 
   if (!pubDay || !days.some(d => d.id === pubDay)) pubDay = defaultDayId(days);
@@ -2176,17 +2261,17 @@ function renderPublicSchedule() {
 
   const picker = days.length > 1 ? `<div class="day-picker">${days.map(d =>
     `<button class="filter-btn${d.id === day.id ? ' on' : ''}" data-act="pub.day" data-day="${escH(d.id)}"
-      >${escH(d.label)}${d.date ? ` <span class="num">${fmtDate(d.date)}</span>` : ''}</button>`).join('')}</div>` : '';
+      >${escH(tData(d.label))}${d.date ? ` <span class="num">${fmtDate(d.date)}</span>` : ''}</button>`).join('')}</div>` : '';
 
   const head = `<div class="pub-head">
-    <h3>${escH(day.label)}${day.date ? ` <span class="num">${escH(fmtDate(day.date))}</span>` : ''}</h3>
-    <span class="muted">${escH(day.beach || '')} · מתחילות ב-<b class="num">${escH(day.startTime)}</b></span>
+    <h3>${escH(tData(day.label))}${day.date ? ` <span class="num">${escH(fmtDate(day.date))}</span>` : ''}</h3>
+    <span class="muted">${escH(tData(day.beach || ''))} · ${escH(t('sched.startsAt'))}<b class="num">${escH(day.startTime)}</b></span>
   </div>`;
 
   const search = `<div class="pub-search">
-    <input class="text-inp" id="pub-search" type="search" placeholder="חיפוש קבוצה או שחקנית…"
+    <input class="text-inp" id="pub-search" type="search" placeholder="${escH(t('sched.search'))}"
            value="${escH(pubQuery)}"/>
-    ${pubQuery ? `<button class="team-del" data-act="pub.clearSearch" title="נקה">×</button>` : ''}
+    ${pubQuery ? `<button class="team-del" data-act="pub.clearSearch" title="${escH(t('sched.clear'))}">×</button>` : ''}
     <span class="team-counter" id="pub-count"></span>
   </div>`;
 
@@ -2198,7 +2283,7 @@ function renderPublicSchedule() {
 
   // הזנת תוצאות = אדמין ומעלה (§7.1). אותו רכיב של שלב 4, בלי עותק שני.
   const entry = R() >= 1 ? `<details class="results-panel" open>
-    <summary class="sett-section-title">הזנת תוצאות · ${escH(day.label)}
+    <summary class="sett-section-title">הזנת תוצאות · ${escH(tData(day.label))}
       <span class="muted">${games.length}</span></summary>
     <div class="results-body">${games.map(g => renderGameEntry(g)).join('')}</div>
   </details>` : '';
@@ -2206,7 +2291,7 @@ function renderPublicSchedule() {
   setTimeout(pubFilter, 0);   // מחיל את החיפוש הזכור מיד אחרי שה-HTML נכנס ל-DOM
   return `<div class="sett-section pub-sched">
     ${picker}${head}${search}
-    ${list || '<div class="empty">אין משחקים במחזור הזה.</div>'}
+    ${list || `<div class="empty">${escH(t('sched.noGames'))}</div>`}
   </div>${entry}`;
 }
 
@@ -2224,7 +2309,7 @@ function pubFilter() {
     row.classList.toggle('hide', !row.querySelector('.pub-game:not(.hide)')));
   const c = document.getElementById('pub-count');
   if (c) {
-    c.textContent = !q ? '' : n ? `${n} משחקים` : 'לא נמצאה קבוצה';
+    c.textContent = !q ? '' : n ? t('sched.found', { n }) : t('sched.notfound');
     c.classList.toggle('no', !!q && !n);
   }
 }
@@ -2686,7 +2771,7 @@ function livePanel() {
       const to = s.moves.length > 1
         ? `<span class="muted">אריזה מחדש · סיום ב-</span><b class="num">${escH(slotTime(st.day, s.endSlot + 1))}</b>`
         : `<b class="num">${escH(slotTime(st.day, m.slot))}</b>
-           <span class="pub-net" style="background:${escH(NET_COLOR(m.net))};color:${onColor(NET_COLOR(m.net))}"
+           <span class="net-chip" style="background:${escH(NET_COLOR(m.net))};color:${onColor(NET_COLOR(m.net))}"
              >${escH(NET_NAME(m.net))}</span>
            <span class="muted">היה ${escH(slotTime(st.day, m.from.slot))} · ${escH(NET_NAME(m.from.net))}</span>`;
       const saved = [
@@ -2842,9 +2927,11 @@ const ACT = {
   },
 
   // ── דירוג + הזנת תוצאות (שלב 4) ──
+  // שינוי שפה — תצוגה בלבד, ולכן NO_SAVE ורמה 0 (ראו הרשימות למטה).
+  'lang.set':        el => { setLang(el.dataset.lang); },
+
   'stand.cat':       el => { standCat = el.dataset.cat; standTeam = null; },
   'stand.team':      el => { standTeam = standTeam === el.dataset.id ? null : el.dataset.id; },
-  'stand.clearteam': () => { standTeam = null; },
 
   // ניקוד: שומר sa/sb; שני ערכים תקינים → ok, אחרת חוזר ל-pending.
   'res.score': el => {
@@ -2888,7 +2975,7 @@ const ACT = {
   'auth.click': () => {
     if (!secured()) { page = 'settings'; openSections.add('access'); paint(); return false; }
     if (realRole()) {
-      if (!confirm('לצאת ממצב מנהלת?')) return false;
+      if (!confirm(t('auth.exitQ'))) return false;
       role = 0; previewPublic = false; storeRole(); paint();
       return false;
     }
@@ -3074,7 +3161,7 @@ const NO_REPAINT = new Set([
 // פעולות שמשנות רק מה שמוצג ולא את המודל. בלי זה כל לחיצה על טאב של יום
 // בעמוד המתזמן הייתה כותבת את המסמך כולו ל-Firestore — 240 משחקים על שינוי
 // שקיים רק בדפדפן.
-const NO_SAVE = new Set(['sched.day', 'stand.cat', 'stand.team', 'stand.clearteam',
+const NO_SAVE = new Set(['lang.set', 'sched.day', 'stand.cat', 'stand.team',
   'auth.click', 'auth.submit', 'auth.close',
   'pub.preview', 'pub.exit', 'pub.day', 'pub.clearSearch', 'att.day',
   // §8.7 — בחירת יום, רענון, שעת-בדיקה וחישוב ההצעה הקבוצתית אינם משנים
@@ -3088,7 +3175,7 @@ const NO_SAVE = new Set(['sched.day', 'stand.cat', 'stand.team', 'stand.cleartea
 // **ברירת המחדל היא מאסטר** — פעולה חדשה שנוסיף בעתיד ותישכח מהרשימות
 // תיחסם, ולא תיפתח בשקט לציבור.
 const ACT_LEVEL = {};
-for (const a of ['stand.cat', 'stand.team', 'stand.clearteam',
+for (const a of ['lang.set', 'stand.cat', 'stand.team',
                  'auth.click', 'auth.submit', 'auth.close',
                  'pub.day', 'pub.clearSearch', 'pub.exit']) ACT_LEVEL[a] = 0;
 for (const a of ['res.score', 'res.tech']) ACT_LEVEL[a] = 1;   // אדמין = הזנת תוצאות בלבד
@@ -3194,6 +3281,10 @@ Board.init({
   load.classList.add('h');
   document.getElementById('view-app').classList.remove('h');
   restoreRole();   // §7.1 — כניסה שנעשתה בלשונית הזאת שורדת רענון
+  document.documentElement.lang = getLang();   // ‎dir‎ נשאר rtl — ראו league-i18n.js
   paint();
   setSync('ok');
+  // ‎?m=1‎ הוא **קישור הכניסה**, ולכן הוא פותח את הדיאלוג מיד. ביטול משאיר
+  // את הכפתור ברצועה, כך שאין צורך לטעון מחדש כדי לנסות שוב.
+  if (MGR && secured() && !realRole()) openLogin();
 })();

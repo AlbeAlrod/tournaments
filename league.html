@@ -10,7 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700;800;900&display=swap" rel="stylesheet"/>
 <!-- מערכת העיצוב המשותפת. חייבת לבוא ראשונה — league.css מתקן מעליה RTL ועברית. -->
 <link rel="stylesheet" href="styles.css?v=63"/>
-<link rel="stylesheet" href="league.css?v=25"/>
+<link rel="stylesheet" href="league.css?v=28"/>
 </head>
 <body>
 
@@ -55,9 +55,13 @@
         </div>
         <span class="lname" id="header-name">ליגה</span>
       </div>
-      <div class="sync">
-        <span id="sync-dot" class="sync-dot sync-ok"></span>
-        <span id="sync-text" class="sync-text"></span>
+      <div class="tools">
+        <!-- מתג השפה — נבנה ב-league.js מ-LANGS (league-i18n.js) -->
+        <div class="langsw" id="langsw" role="group"></div>
+        <div class="sync">
+          <span id="sync-dot" class="sync-dot sync-ok"></span>
+          <span id="sync-text" class="sync-text"></span>
+        </div>
       </div>
     </header>
     <nav id="main-nav"></nav>
@@ -66,6 +70,6 @@
   <main id="page-body"></main>
 </div>
 
-<script type="module" src="league.js?v=33"></script>
+<script type="module" src="league.js?v=37"></script>
 </body>
 </html>

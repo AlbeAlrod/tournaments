@@ -9,13 +9,15 @@
 
    כאן יושב אך ורק מה שייחודי לליגה:
      0. פלטת המותג (§15.1) — ארבעת קודי פוצ׳ילינה + ברירת מחדל לערכת הנושא
+     0.1 שכבת המוקאפ — סולם הדיו, הקווים, הרדיוסים והצללים; ונעילת
+        הטוקנים של styles.css עליהם, כך שכל רכיב ממוחזר מגיע מעוצב
      1. היפוכי RTL — styles.css נכתב לפריסת LTR
      2. ביטול letter-spacing — באתר הזה כל טקסט הוא עברי (מלכודת 5)
      3. מסך טעינה ורוד (החלטה 14) במקום הלבן של styles.css
      4. מצב סנכרון שלישי: "שומר…"
      5. ארבעה רכיבים שאין להם מקבילה: צ׳יפ רשת, רצועת סלוטים,
         רשימת מפתח-ערך, ובידוד דו-כיווני לתאים מספריים
-     6. מיתוג ויזואלי (שלב 8) — החלת הפלטה על כל העמודים + ליטוש
+     6. שפת העיצוב של המוקאפ המאושר, על כל שבעת העמודים
 
    ❗ לא לגעת ב-styles.css. הוא משרת גם את index.html; כל תיקון RTL שם
    ישבור את האפליקציה הקיימת. כל ההתאמות עוברות דרך הקובץ הזה.
@@ -65,6 +67,67 @@
   --rs: 10px;
   --shadow-sm: 0 1px 2px rgba(0,11,25,0.05), 0 2px 10px rgba(0,11,25,0.04);
   --shadow-md: 0 2px 8px rgba(0,11,25,0.07), 0 10px 30px rgba(0,11,25,0.06);
+}
+
+/* ── 0.1 שכבת המוקאפ — מערכת אחת לכל העמודים ─────────────────────────────
+   נגזר מהמוקאפ המאושר (746c2798). תפקיד אחד לכל צבע מותג:
+     צהוב   → העפלה, ושום דבר אחר
+     מגנטה  → זהות + אינטראקציה
+     כחול   → נתון (תוצאה, הפרש חיובי)
+     כהה    → טקסט ועוגן
+   מעליהם סולם דיו אחד ושני קווים — כל השאר נגזר מהם.
+
+   ‏‎:root:root‎ ולא ‎:root‎: applyTheme() (common.js) מזריק ‎<style id="theme-style">‎
+   לסוף ה-head, כלומר מאוחר מהקובץ הזה, ולכן ‎:root‎ בודד היה נדרס ברגע
+   שהמסמך נטען. עוצמה (0,2,0) גוברת על (0,1,0) בלי תלות בסדר — וכך
+   הנייטרלים נעולים על הפלטה של המוקאפ, בעוד ‎--primary‎ ממשיך לזרום מ-meta
+   (הזהות נשארת ניתנת להחלפה מההגדרות; רק גווני האפור-קר לא). */
+:root:root {
+  --ink:       #000B19;
+  --ink-70:    rgba(0,11,25,.78);
+  --ink-48:    rgba(0,11,25,.60);
+  --ink-32:    rgba(0,11,25,.44);
+  --ink-18:    rgba(0,11,25,.28);
+  --line:      rgba(0,11,25,.14);
+  --line-soft: rgba(0,11,25,.09);
+
+  --ground:  #FFFFFF;   /* רקע הדף והכרטיס */
+  --paper:   #FBFCFE;   /* משטח מוגבה כמעט-לבן */
+  --paper-2: #F3F6FB;   /* מגירה, עמודת שעה, צ׳יפ ניטרלי */
+
+  --data:       #0668D2;              /* נתון: תוצאה מנצחת, הפרש חיובי */
+  --data-track: rgba(0,11,25,.09);
+  --neg:        rgba(0,11,25,.30);
+  --qual:       var(--p-yellow);      /* העפלה — הצהוב לא מופיע בשום תפקיד אחר */
+
+  --hover: rgba(238,43,193,.045);     /* ריחוף שורה */
+  --open:  rgba(238,43,193,.07);      /* שורה פתוחה / נבחרת */
+
+  --pen-tech:     rgba(238,43,193,.13);   /* הפסד טכני */
+  --pen-tech-ink: #B3138C;
+  --pen-abs:      rgba(7,117,237,.13);    /* היעדרות */
+  --pen-abs-ink:  #0559B4;
+
+  /* נעילת הטוקנים של styles.css על אותה מערכת — כך כל רכיב ממוחזר
+     (‎.stbl‎, ‎.sett-section‎, ‎.text-inp‎, ‎.modal‎, ‎.bcard‎…) מקבל את הפלטה
+     והגיאומטריה של המוקאפ בלי שכתוב. */
+  --bg:      var(--ground);
+  --bg2:     var(--ground);
+  --bg3:     var(--paper-2);
+  --surface: #E9EFF7;
+  --text:    var(--ink);
+  --text2:   var(--ink-70);
+  --text3:   var(--ink-48);
+  --border:  var(--line-soft);
+  --border2: var(--line);
+  --header-bg: var(--ground);
+  --nav-bg:    var(--ground);
+  --on-primary-shadow: none;   /* במוקאפ אין צל-טקסט */
+
+  --r:  12px;   /* כרטיס  (‎--r-m‎ במוקאפ) */
+  --rs: 7px;    /* פקד וכרטיס-משחק */
+  --shadow-sm: 0 1px 2px rgba(0,11,25,.05), 0 2px 10px rgba(0,11,25,.04);
+  --shadow-md: 0 2px 8px rgba(0,11,25,.07), 0 10px 30px rgba(0,11,25,.06);
 }
 
 /* ── 1. RTL ─────────────────────────────────────────────────────────────
@@ -690,7 +753,12 @@ body.board-dragging * { cursor: grabbing !important; }
    styles.css תוחם את main ל-980px במרכז. פותחים לרוחב מלא (ה-nav/header כבר
    מלאים), אבל שומרים על קריאוּת: תוכן טקסט נתחם למידה נוחה, טבלאות/גריד מנצלים
    את כל הרוחב, ומקטעי הגדרות עוברים לרב-טורי במסך גדול. */
-main { max-width: min(1680px, 100%) !important; padding: 12px 24px 6px !important; }
+/* הריפוד הצידי הוא ה-‎.shell‎ של המוקאפ: clamp(16px,4vw,32px) — אותו מרווח
+   בכותרת, בניווט, בסרגל הספונסרים ובגוף העמוד, כך שהכל מיושר לעמוד אחד. */
+main {
+  max-width: min(1680px, 100%) !important;
+  padding: clamp(18px, 2.4vw, 26px) clamp(16px, 4vw, 32px) 56px !important;
+}
 /* תוכן קריאה — מידה נוחה בתוך הקנבס הרחב */
 .info-box, .scaffold-note, .sett-desc { max-width: 900px; }
 /* עמוד ההגדרות — מקטעים זה לצד זה במסך רחב */
@@ -721,169 +789,564 @@ main { max-width: min(1680px, 100%) !important; padding: 12px 24px 6px !importan
 .board-help .lg-sw, .board-guide .lg-sw { vertical-align: middle; }
 
 /* ============================================================================
-   6. מיתוג ויזואלי — שלב 8 (§14) · §15.1 · החלטה 14
-   מגנטה #EE2BC1 ראשי · צהוב #DAFF00 הדגשה · כחול #0775ED משני · כהה #000B19.
+   6. שפת העיצוב — המוקאפ המאושר (746c2798) על כל עמודי הליגה
+   מגנטה #EE2BC1 זהות ואינטראקציה · צהוב #DAFF00 העפלה · כחול #0775ED נתון ·
+   כהה #000B19 טקסט. הטוקנים ב-§0.1; כאן ההחלה.
 
-   העיקרון: הצבע הראשי כבר זורם מ-meta דרך applyTheme לכל --primary*, ולכן
-   רוב הרכיבים של styles.css כבר מגיעים במגנטה. מה שנשאר כאן הוא (א) שני
-   הצבעים שאין להם דרך להיכנס דרך applyTheme — הצהוב והכהה, (ב) רכיבים
-   שקודדו קשיח בגוון נייטרלי או זהב, ו-(ג) הליטוש: מרווחים, צללים, קריאוּת.
+   שלוש החלטות שהמוקאפ קובע ומחליפות את המיתוג של שלב 8:
+     (א) אין באנר ואין מעבר-צבע דקורטיבי — הכותרת יושבת על רקע הדף,
+         נמוכה, וקו שיער אחד מפריד. הנוכחות המותגית באה מהטיפוגרפיה
+         ומהטבלה עצמה, לא מרצועת צבע.
+     (ב) הפקדים שקטים: שקופים עם קו דק, ומסומנים במגנטה בלבד כשהם פעילים.
+         אין מילוי מלא ואין צל צבעוני.
+     (ג) מספרים הם נתון: tabular-nums בכל האתר, וכל ניקוד/הפרש/שעה
+         באותו רגיסטר.
    ========================================================================= */
 
-/* ── 6.1 פס המותג ─────────────────────────────────────────────────────────
-   שלושת הצבעים כרצועה דקה מתחת לניווט. זה הסימן היחיד באתר שנושא את כל
-   הפלטה במקום אחד, ולכן הוא יושב במקום הכי גלוי — בתחתית הבלוק הדביק,
-   מעל כל עמוד. */
-/* ‎to left‎ ולא ‎90deg‎: מעברי צבע ב-CSS הם פיזיים ואינם מתהפכים ב-RTL.
-   העין העברית מתחילה מימין, ולכן המגנטה (הראשי) חייבת לפתוח בקצה הימני. */
-.sticky-block::after {
-  content: ''; display: block; height: 3px;
-  background: linear-gradient(to left,
-    var(--p-magenta) 0 40%, var(--p-yellow) 40% 62%, var(--p-blue) 62% 100%);
+/* ── 6.0 בסיס ─────────────────────────────────────────────────────────────
+   styles.css פורש על ה-body שתי שכבות רקע — הילה סגלגלה ורשת נקודות 24px.
+   המוקאפ הוא רקע נקי; הנקודות מתחרות עם הקווים הדקים של הטבלה. */
+body {
+  background-image: none;
+  font-feature-settings: "tnum" 1;   /* ספרות ברוחב אחיד — עמודות מתיישרות */
+}
+
+/* תוויות-מיקרו — הרגיסטר של ‎.glab‎/‎.crt‎/‎.mt__meta‎ במוקאפ: זעיר, מודגש,
+   דיו-48. כל התוויות באתר מתלכדות לרגיסטר הזה במקום שבע גדלים שונים. */
+.cat-sett-label, .fmt-lbl, .drawer-h, .sett-desc, .muted, .pub-cat, .pub-when,
+.glab, .wb-grp-h, .len-now, .day-readout, .cost-chip, .asr-time, .neth-cut {
+  letter-spacing: 0;
+}
+.cat-sett-label, .fmt-lbl, .pub-cat, .asr-time {
+  font-size: 10.5px; font-weight: 600; color: var(--ink-48);
+}
+
+/* כותרות — מודגשות וצפופות, כמו ‎.title‎/‎.league__head‎ במוקאפ */
+.pub-head h3, .modal h3, .no-t-wrap h1, .champ-name {
+  letter-spacing: -.028em;
+}
+
+/* ── 6.1 קו ההפרדה של הבלוק הדביק ─────────────────────────────────────────
+   כאן שכבה רצועת מעבר-הצבע של שלב 8. המוקאפ מחליף אותה בקו שיער: הכותרת
+   נשארת קצרה, והמותג נישא בטיפוגרפיה. הצל של ‎.sticky-block‎ מ-styles.css
+   מוחלף אף הוא בקו — צל מרחף מעל רקע לבן נראה כמו לכלוך. */
+.sticky-block::after { content: none; display: none; }
+.sticky-block { box-shadow: none; border-bottom: 1px solid var(--line); }
+body.admin-mode .sticky-block,
+body.master-mode .sticky-block {
+  box-shadow: none; border-bottom: 2px solid var(--p-magenta);
 }
 
 /* ── 6.2 כותרת ולוגו ──────────────────────────────────────────────────────
    ‎#logo-mark‎ מקבל background inline מ-applyTheme (הצבע הראשי) ו-boxShadow
-   ריק, ולכן הצל והרדיוס נשלטים מכאן. האות פ היא placeholder עד שיגיע קובץ
-   הלוגו (§15.1 פריט 2); ‎#logo-img‎ תופס את מקומה אוטומטית כשיוזן logoUrl. */
-.lmark { border-radius: 13px; box-shadow: 0 3px 12px rgba(0,11,25,.20); }
-.lmark span { font-size: 22px; }
+   ריק, ולכן הצל והרדיוס נשלטים מכאן. עם קובץ לוגו (‎#logo-img‎) applyTheme
+   מנקה את הרקע בעצמו, ואז הריבוע נעלם והתמונה עומדת לבד. */
+/* בלי קו בין הכותרת לניווט: במוקאפ הזהות, השם והטאבים הם בלוק אחד שקו
+   שיער אחד סוגר אותו מלמטה (‎.sticky-block‎ ב-6.1). שני קווים = שני בלוקים. */
+header {
+  padding: 12px clamp(16px, 4vw, 32px) 13px;
+  background: var(--ground); border-bottom: 0;
+}
+.lmark { border-radius: 11px; box-shadow: none; }
+.lmark span { font-size: 21px; text-shadow: none; }
 #logo-img { max-width: 168px; }
-.lname { font-size: 21px; }
-header { padding: 13px 20px; }
+/* שם הליגה הוא כותרת הדף — הרגיסטר של ‎.title‎ במוקאפ */
+.lname {
+  font-size: clamp(1.25rem, 2.6vw, 1.6rem); font-weight: 800;
+  letter-spacing: -.032em; line-height: 1.05; color: var(--ink);
+}
+/* "מסונכרן" הוא המצב ב-99% מהזמן, והנקודה הירוקה כבר אומרת אותו. המילה
+   נשארת רק כשיש מה לומר — "שומר…" או שגיאה. */
+.sync-text { font-size: 11.5px; color: var(--ink-48); }
+.sync-dot.sync-ok + .sync-text { display: none; }
+
+/* מתג השפה (‎.langsw‎ במוקאפ) — שלוש אותיות מופרדות בקו שיער, בלי תפריט
+   נפתח. הקו מוזרק כצל פנימי ולא כ-border, כדי שלא יזוז ב-RTL. */
+.tools { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+.langsw { display: inline-flex; align-items: center; }
+.langsw__b {
+  padding: 3px 8px 4px; border: 0; background: transparent;
+  font: inherit; font-size: 11px; font-weight: 600; letter-spacing: 0;
+  color: var(--ink-48); cursor: pointer; transition: color .15s ease;
+}
+.langsw__b + .langsw__b { box-shadow: inset -1px 0 0 var(--line); }
+.langsw__b:hover { color: var(--ink); }
+.langsw__b.is-on { color: var(--p-magenta); }
 
 /* ── 6.3 סרגל הספונסרים ───────────────────────────────────────────────────
    ‎#sponsor-bar‎ מוסתר ב-league.js כשאין ספונסרים, ולכן אין מה לשמור לו מקום
-   בעמוד עצמו — הוא ייכנס ברגע שיוזנו נכסים (§15.1 פריט 3). מה שמוגדר כאן
-   הוא הצורה הסופית: לוגואים בצבע מלא (החלטה 15 — לא שחור-לבן), גובה קבוע
-   כדי שהרצועה לא תקפוץ, וקו מותג דק מתחת. */
+   בעמוד עצמו — הוא ייכנס ברגע שיוזנו נכסים (§15.1 פריט 3). לוגואים בצבע
+   מלא (החלטה 15), גובה קבוע כדי שהרצועה לא תקפוץ, וקו שיער מתחת. */
 .sponsor-bar {
-  gap: 26px; padding: 9px 20px; min-height: 54px;
-  border-bottom: 1px solid var(--border);
+  gap: 26px; padding: 9px clamp(16px, 4vw, 32px); min-height: 54px;
+  background: var(--ground); border-bottom: 1px solid var(--line-soft);
 }
 .sponsor-logo { height: 34px; filter: none; opacity: 1; }
-.sponsor-text { font-size: 13px; color: var(--text2); }
+.sponsor-text { font-size: 12.5px; color: var(--ink-48); }
 /* התצוגה המקדימה בהגדרות — משבצת הספונסר מקבלת מסגרת מקווקוות כדי
    שברור שזה שטח שמור ולא תמונה חסרה */
-.sp-thumb { border: 1px dashed var(--border2); }
+.sp-thumb { border: 1px dashed var(--line); }
 
 /* ── 6.4 ניווט וטאבים ─────────────────────────────────────────────────────
-   הקו התחתון של הטאב הפעיל עולה ל-3px ומקבל מילוי מגנטה עדין, במקום
-   ה-rgba שחור של styles.css שנראה אפור על רקע מותגי. */
-.tab { font-size: 14px; padding: 13px 18px; border-bottom-width: 3px; }
-.tab:hover  { color: var(--primary-text);
-  background: color-mix(in srgb, var(--p-magenta) 6%, transparent); }
-.tab.on     { color: var(--primary-text);
-  background: color-mix(in srgb, var(--p-magenta) 10%, transparent); }
-nav { border-bottom: 0; }   /* פס המותג (6.1) מחליף את קו ההפרדה */
+   המוקאפ: טאב = טקסט עם קו תחתון של 2px כשהוא פעיל. בלי מילוי, בלי רקע
+   מטושטש — הרצועה שקטה והמגנטה מסמנת מקום אחד בלבד. */
+nav {
+  background: var(--ground); backdrop-filter: none;
+  padding: 0 clamp(10px, 3vw, 26px); gap: 2px; border-bottom: 0;
+}
+.tab {
+  font-size: 13.5px; font-weight: 500; color: var(--ink-70);
+  padding: 9px 12px 11px; border-bottom-width: 2px; background: none;
+  transition: color .15s ease, border-color .15s ease;
+}
+.tab:hover { color: var(--ink); background: none; }
+.tab.on {
+  color: var(--p-magenta); border-bottom-color: var(--p-magenta);
+  font-weight: 600; background: none;
+}
 
 /* ── 6.5 כפתורים וגלולות ──────────────────────────────────────────────────
-   הגלולה הנבחרת כבר מגנטה מ-styles.css; מה שמתווסף הוא הרמה (צל בגוון
-   הצבע עצמו) ומצב מיקוד. הגלולות של מסנן הליגות בלוח נשארות כהות —
-   שם הצבע שמור לסימון משמעות — ולכן מקבלות צל כהה במקום מגנטה. */
-.filter-btn.on, .cf-btn.on {
-  box-shadow: 0 2px 10px color-mix(in srgb, var(--p-magenta) 34%, transparent);
-}
-.league-filter .filter-btn.on {
-  box-shadow: 0 2px 10px color-mix(in srgb, var(--p-dark) 26%, transparent);
+   רגיסטר אחד לכל הפקדים: שקוף + קו דק. פעיל = מגנטה (קו, טקסט, ומילוי
+   של 8% בלבד). styles.css ממלא אותם בצבע הראשי ומוסיף צל וצל-טקסט —
+   שניהם מבוטלים כאן, כי על רקע לבן הם צועקים. */
+.filter-btn, .cf-btn {
+  background: transparent; border: 1px solid var(--ink-18);
+  color: var(--ink-70); font-size: 12.5px; font-weight: 600;
+  padding: 5px 13px; box-shadow: none; text-shadow: none;
+  transition: color .14s ease, border-color .14s ease, background .14s ease;
 }
 .filter-btn:hover:not(.on), .cf-btn:hover:not(.on) {
-  border-color: var(--border2); color: var(--primary-text);
-  background: color-mix(in srgb, var(--p-magenta) 5%, var(--bg2));
+  color: var(--ink); border-color: var(--ink-32); background: transparent;
 }
+.filter-btn.on, .cf-btn.on {
+  background: color-mix(in srgb, var(--p-magenta) 8%, transparent);
+  border-color: var(--p-magenta); color: var(--p-magenta);
+  box-shadow: none; text-shadow: none;
+}
+/* מסנן הליגות בלוח נשאר כהה — שם הצבע שמור לסימון משמעות (§5) */
+.league-filter .filter-btn.on {
+  background: var(--p-dark); border-color: var(--p-dark);
+  color: #fff; box-shadow: none;
+}
+/* כפתור ראשי מלא — היחיד שנשאר מגנטה מלאה, כדי שתהיה פעולה אחת דומיננטית */
+.mbtn-ok { box-shadow: none; text-shadow: none; }
 /* "+ קבוצה" / "+ ספונסר" — פעולת הוספה, ולכן מקווקוות ולא מלאה */
-.add-cat-btn { border-style: dashed; color: var(--primary-text); font-weight: 700; }
+.add-cat-btn { border-style: dashed; color: var(--p-magenta); font-weight: 600; }
 .add-cat-btn:hover {
   border-color: var(--p-magenta); border-style: solid;
   background: color-mix(in srgb, var(--p-magenta) 8%, transparent);
 }
 
-/* מיקוד מקלדת — כחול המותג, גלוי על כל משטח. ‎:where‎ שומר על עוצמה 0 כך
-   שכל כלל צבע קיים גובר, ורק המתאר מתווסף. */
+/* שדות — קו דק על רקע הדף, ומגנטה במיקוד (במוקאפ ‎.search‎) */
+.text-inp, .modal-input, .res-inp, .fmt-num, .att-time, .att-note, .phone-inp {
+  background: transparent; border-width: 1px; border-color: var(--ink-18);
+  border-radius: var(--rs); color: var(--ink);
+}
+.text-inp:focus, .modal-input:focus, .res-inp:focus,
+.fmt-num:focus, .att-time:focus, .att-note:focus, .phone-inp:focus {
+  border-color: var(--p-magenta); background: var(--ground); box-shadow: none;
+}
+.text-inp::placeholder { color: var(--ink-32); }
+
+/* מיקוד מקלדת — מגנטה, כמו במוקאפ. ‎:where‎ שומר על עוצמה 0 כך שכל כלל
+   צבע קיים גובר, ורק המתאר מתווסף. */
 :where(button, a, summary, input, select, textarea, [tabindex]):focus-visible {
-  outline: 2px solid var(--p-blue); outline-offset: 2px;
+  outline: 2px solid var(--p-magenta); outline-offset: 2px;
 }
 
 /* ── 6.6 כרטיסים ──────────────────────────────────────────────────────────
-   ‎.sett-section-title‎ ב-styles.css הוא קו מגנטה ברוחב מלא. בעברית, ואחרי
-   שביטלנו את ה-letter-spacing (§2), הכותרת היא כותרת רגילה — ולכן קו הפרדה
-   דק בכל הרוחב, ומעליו מקטע מודגש קצר בשני צבעי המותג. */
-.sett-section { padding: 20px 22px; box-shadow: var(--shadow-sm); }
-.sett-card    { box-shadow: var(--shadow-sm); }
+   משפחה אחת לכל המשטחים: רקע הדף, קו שיער, רדיוס ‎--r‎, וצל רק ברמה
+   העליונה. כרטיס בתוך כרטיס מקבל קו בלבד — צל על צל הוא בוץ.
+   ‎.sett-section-title‎ ב-styles.css הוא תווית לטינית זעירה עם קו מגנטה
+   ברוחב מלא; במוקאפ כותרת מקטע היא כותרת: מודגשת, צפופה, וקו שיער מתחת.
+   (המקטע המודגש הדו-צבעי של שלב 8 הוסר — המוקאפ לא מכיר עיטורים.) */
+.sett-section {
+  padding: 18px 20px; margin-bottom: 14px;
+  border-color: var(--line-soft); box-shadow: var(--shadow-sm);
+}
+.sett-card { border-color: var(--line-soft); box-shadow: none; }
+.sett-card-title { font-size: 14px; font-weight: 800; color: var(--ink); letter-spacing: -.02em; }
 /* ‎:not(summary)‎ — בעמוד ההגדרות אותה מחלקה יושבת על ה-summary של האקורדיון
    (§5), שם היא כותרת לחיצה עם קארט משלה ו-padding משלה. קו ומרווח כאן היו
    פותחים חלל מת בתוך מקטע סגור. */
+.sett-section-title {
+  font-size: 15px; font-weight: 800; letter-spacing: -.022em;
+  color: var(--ink); text-transform: none; border-bottom: 0;
+}
 .sett-section-title:not(summary) {
-  position: relative; border-bottom: 1px solid var(--border);
-  padding-bottom: 9px; margin-bottom: 16px;
+  border-bottom: 1px solid var(--line-soft);
+  padding-bottom: 9px; margin-bottom: 14px;
 }
-.sett-section-title:not(summary)::after {
-  content: ''; position: absolute; bottom: -1px; inset-inline-start: 0;
-  width: 58px; height: 3px; border-radius: 2px;
-  background: linear-gradient(to left, var(--p-magenta), var(--p-blue));   /* ראו 6.1 */
-}
-/* קופסת מידע — הכחול המשני כפס-צד. ‎border-inline-start‎ = ימין ב-RTL.
-   ‎.scaffold-note‎ מוחרג: הוא מקווקו בכוונה (כרטיס זמני). */
+/* קופסת מידע — הכחול כפס-צד (כחול = נתון/מידע). ‎border-inline-start‎ = ימין
+   ב-RTL. ‎.scaffold-note‎ מוחרג: הוא מקווקו בכוונה (כרטיס זמני). */
+.info-box { background: var(--paper); border-color: var(--line-soft); }
 .info-box:not(.scaffold-note) {
   border-inline-start: 3px solid var(--p-blue);
-  color: var(--text2); line-height: 1.65;
+  color: var(--ink-70); line-height: 1.65;
 }
 .sett-desc { line-height: 1.55; }
+.sett-row { border-bottom-color: var(--line-soft); }
+.sett-name { font-weight: 500; }
 /* מצב ריק — מסגרת מקווקוות מראה איזה שטח יתמלא (ספונסרים, רוסטר) */
 .sett-empty-note {
-  border: 1px dashed var(--border2); border-radius: var(--rs);
+  border: 1px dashed var(--line); border-radius: var(--rs);
   padding: 13px 16px; margin-top: 8px; font-style: normal;
 }
+/* אקורדיון ופאנלים — אותו כרטיס, הכותרת מקבלת קו מגנטה כשהיא פתוחה */
+.acc, .mpanel, .results-panel, .board-help, .board-guide {
+  border-radius: var(--r); border-color: var(--line-soft);
+}
+.acc[open] > summary, .mpanel[open] > summary { border-bottom: 2px solid var(--p-magenta); }
+.results-panel > summary, .board-help, .board-guide { background: var(--paper); }
+.acc > summary::after, .mpanel > summary::after { color: var(--ink-32); }
 
 /* ── 6.7 טבלאות ───────────────────────────────────────────────────────────
-   ריחוף ובחירה עוברים מאפור נייטרלי לגוון מגנטה, כדי שטבלת הדירוג תרגיש
-   מאותה משפחה כמו הלוח. */
-.stbl th { padding-bottom: 8px; border-bottom: 1px solid var(--border2); }
-.stbl tr.winner td { background: color-mix(in srgb, var(--p-magenta) 6%, transparent); }
-.stand-row:hover td { background: color-mix(in srgb, var(--p-magenta) 7%, transparent); }
-.stand-pts { box-shadow: 0 1px 4px color-mix(in srgb, var(--p-magenta) 30%, transparent); }
+   הכלל של המוקאפ: כותרת העמודה זעירה ומודגשת מעל קו כהה של 2px, שורות
+   מופרדות בקו שיער, וכל מספר tabular. הקו הכהה הוא מה שנותן לטבלה את
+   העוגן שלה בלי מסגרת. */
+.stbl th {
+  font-size: 11px; font-weight: 600; color: var(--ink-70);
+  text-transform: none; padding: 0 8px 9px; vertical-align: bottom;
+  line-height: 1.25; border-bottom: 2px solid var(--ink);
+}
+.stbl td {
+  border-top: 0; border-bottom: 1px solid var(--line-soft);
+  color: var(--ink); font-size: 13px;
+}
+.stbl tr:last-child td { border-bottom: 0; }
+
+/* טבלת הדירוג — הלב של המוקאפ.
+   ‎border-collapse:separate‎ (כמו ‎.standings‎ במוקאפ): במיזוג גבולות, הקו
+   הכהה של הכותרות והקו הצהוב של מסגרת הפיינל פור מתחרים על אותם 2px
+   והצהוב נעלם. עם ‎separate‎ שניהם מצוירים, וגם רדיוס פינה על תא עובד. */
+.stand-tbl { font-variant-numeric: tabular-nums; border-collapse: separate; border-spacing: 0; }
+.stand-tbl .spacer td { height: 8px; padding: 0; border: 0; }
+.stand-tbl td { padding: 0 8px; height: 52px; vertical-align: middle; }
+.stand-name { font-size: 14.5px; font-weight: 500; letter-spacing: -.012em; }
+.stand-tbl th.c-team { text-align: right; }   /* הכותרת מיושרת עם השמות שמתחתיה */
+/* עמודת המיון (נקודות) מסומנת בגוון דיו של 2.8% — לא בצבע */
+.stand-tbl td.c-pts, .stand-tbl th.c-pts { background: rgba(0,11,25,.028); }
+/* ניקוד = מספר גדול, לא גלולה. במוקאפ הגלולה הוחלפה בהיררכיית גופן. */
+.stand-pts {
+  display: inline; padding: 0; border-radius: 0; background: none;
+  box-shadow: none; color: var(--ink);
+  font-size: 1.14rem; font-weight: 700; letter-spacing: -.02em;
+}
+/* ריחוף ובחירה — מגנטה בעוצמה מינימלית (‎--hover‎/‎--open‎) */
+.stand-row td { transition: background .16s ease; }
+.stand-row:hover td { background: var(--hover); }
+.stand-row.sel td, .stand-row.sel.winner td { background: var(--open); }
+/* אפס = נקודה דהויה, לא תא ריק (‎.zero‎ במוקאפ) */
+.stand-tbl td.num:empty::after { content: '·'; color: var(--ink-32); }
+/* הפסד טכני / היעדרות — תגית עדינה, לא מספר עירום */
+.pen {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 22px; height: 22px; padding-inline: 6px;
+  border-radius: 6px; font-size: 12px; font-weight: 700;
+}
+.pen-tech { background: var(--pen-tech); color: var(--pen-tech-ink); }
+.pen-abs  { background: var(--pen-abs);  color: var(--pen-abs-ink); }
+/* הפרש — סרגל דו-כיווני עוגן באפס. חיובי = כחול (נתון), שלילי = דיו דהוי;
+   ירוק/אדום של styles.css יוצא מהפלטה. */
+.stand-tbl .diff-pos  { color: var(--data); font-weight: 600; }
+.stand-tbl .diff-neg  { color: var(--ink-70); }
+.stand-tbl .diff-zero { color: var(--ink-32); }
+.diffwrap { display: flex; align-items: center; gap: 9px; justify-content: center; direction: ltr; }
+.diffbar {
+  position: relative; flex: none; width: 52px; height: 6px;
+  border-radius: 3px; background: var(--data-track); overflow: hidden;
+}
+.diffbar i {
+  position: absolute; top: 0; bottom: 0; border-radius: 3px; font-style: normal;
+}
+.diffbar i.pos { left: 50%; background: var(--data); }
+.diffbar i.neg { right: 50%; background: var(--neg); }
+.diffbar::after {
+  content: ''; position: absolute; inset-block: 0; left: 50%;
+  width: 1px; background: var(--ground);
+}
+.diffnum { min-width: 38px; text-align: left; font-weight: 600; }
+
+/* מסגרת הפיינל פור — הצהוב, ורק כאן. אין תווית ואין מילוי: קו שמקיף את
+   ארבע הראשונות (במוקאפ ‎.tg.is-qual‎). ‎:has‎ מזהה את השורה האחרונה שלפני
+   הגבול, כך שהמסגרת נסגרת נכון גם אם יש פחות מארבע קבוצות.
+
+   ⚠️ מאפיינים פיזיים ולא לוגיים: תאי המספר נושאים ‎.num‎, שקובע
+   ‎direction:ltr‎ (§5, כדי ש-"17:00–22:20" לא ייקרא הפוך) — ולכן
+   ‎border-inline-start‎ בתוכם מתפרש כשמאל ולא כימין, והמסגרת יצאה על
+   הצד ההפוך. בדף RTL קבוע: ראשון = ימין, אחרון = שמאל.
+   הקו המגנטה של ‎.stbl tr.winner‎ (§1, צבע הקטגוריה באפליקציה הראשית)
+   מבוטל כאן — בליגה "winner" הוא העפלה, והצהוב הוא הסימון שלה. */
+.stbl tr.winner td { background: transparent; }
+.stand-tbl tr.winner td:first-child { border-right: 2px solid var(--qual); }
+.stand-tbl tr.winner td:last-child  { border-right: 0; border-left: 2px solid var(--qual); }
+.stand-tbl tbody tr.winner:first-child td { border-top: 2px solid var(--qual); }
+.stand-tbl tbody tr.winner:has(+ tr:not(.winner)) td,
+.stand-tbl tbody tr.winner:last-child td { border-bottom: 2px solid var(--qual); }
+/* פינות המסגרת — 9px, כמו ‎border-start-start-radius‎ במוקאפ (פיזי כאן: ראו
+   ההערה על ‎.num‎ ו-direction למעלה) */
+.stand-tbl tbody tr.winner:first-child td:first-child { border-top-right-radius: 9px; }
+.stand-tbl tbody tr.winner:first-child td:last-child  { border-top-left-radius: 9px; }
+.stand-tbl tbody tr.winner:has(+ tr:not(.winner)) td:first-child,
+.stand-tbl tbody tr.winner:last-child td:first-child { border-bottom-right-radius: 9px; }
+.stand-tbl tbody tr.winner:has(+ tr:not(.winner)) td:last-child,
+.stand-tbl tbody tr.winner:last-child td:last-child { border-bottom-left-radius: 9px; }
+/* תא המגירה הוא גם ראשון וגם אחרון, ולכן שני הכללים למעלה מתנגשים עליו —
+   כאן שתי השפות בכלל אחד. */
+.stand-tbl tr.gdrawer.winner td {
+  border-right: 2px solid var(--qual); border-left: 2px solid var(--qual);
+}
+
+/* ── המגירה: המשחקים של הקבוצה שנלחצה ────────────────────────────────────
+   נפתחת מתחת לשורה עצמה. כל משחק הוא לוח תוצאות של שתי שורות — שורה
+   לקבוצה, הניקוד שלה בקצה השורה שלה — והקבוצה שנפתחה תמיד למעלה. */
+.stand-tbl tr.gdrawer td {
+  height: auto; padding: 0; background: var(--paper-2);
+  border-bottom: 1px solid var(--line-soft);
+}
+.rounds {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 14px 16px; padding: 15px 20px 17px;
+}
+.rnd__t { margin: 0 0 7px; font-size: 10.5px; font-weight: 600; color: var(--ink-48); }
+.rnd__games { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.game {
+  display: grid; gap: 2px; padding: 7px 10px 8px;
+  background: var(--ground); border: 1px solid var(--line-soft); border-radius: var(--rs);
+}
+.game.is-pending { border-style: dashed; }
+.side { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0; }
+.side__team {
+  min-width: 0; font-size: 12.5px; font-weight: 500; color: var(--ink-70);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.side__sc {
+  flex: none; font-size: 12.5px; font-weight: 600; color: var(--ink-70);
+  font-variant-numeric: tabular-nums;
+}
+.side.is-win .side__team { color: var(--ink); font-weight: 700; }
+.side.is-win .side__sc   { color: var(--data); font-weight: 700; }
+.is-pending .side__sc { color: var(--ink-32); }
+.foot { display: block; margin: 0; font-size: 11.5px; color: var(--ink-48); }
+.tscroll + .foot { margin-top: 11px; }
+/* שורת נתונים בלבד מגיבה לריחוף — המגירה אינה לחיצה */
+.stand-tbl tr.gdrawer:hover td { background: var(--paper-2); }
+/* החץ שמסמן שהשורה נפתחת */
+.stand-row .c-team::after {
+  content: '⌄'; margin-inline-start: 7px; color: var(--ink-32);
+  font-size: 13px; line-height: 1; opacity: 0; transition: opacity .18s ease;
+}
+.stand-row:hover .c-team::after,
+.stand-row:focus-visible .c-team::after { opacity: 1; }
+.stand-row.sel .c-team::after { opacity: 1; color: var(--p-magenta); display: inline-block; transform: rotate(180deg); }
 
 /* ── 6.8 פיינל פור והבראקט ────────────────────────────────────────────────
    styles.css צובע את המנצחת באפור ואת האלופה בזהב (‎--gold‎ = #B45309),
-   שניהם מחוץ לפלטה. כאן: מנצחת = מגנטה, אלופה = מגנטה+צהוב. */
-.brnd-title { font-size: 14px; font-weight: 800; color: var(--text2); }
-.bm-label   { color: var(--text3); }
-.bmatch     { border-radius: 12px; border-color: var(--border2); box-shadow: var(--shadow-sm); }
-.bteam.win  {
-  background: color-mix(in srgb, var(--p-magenta) 9%, transparent);
-  color: var(--primary-text); font-weight: 800;
-}
-.bteam.win .bsc { color: var(--primary-text); }
+   שניהם מחוץ לפלטה. במוקאפ: מנצחת = שם כהה ומודגש + תוצאה בכחול (נתון),
+   בלי מילוי; אלופה = מסגרת צהובה, כי אליפות היא סוף מסלול ההעפלה. */
+.brnd-title { font-size: 13px; font-weight: 700; color: var(--ink-48); }
+.bm-label   { color: var(--ink-48); font-size: 10.5px; font-weight: 600; }
+.bmatch     { border-radius: var(--rs); border-color: var(--line-soft); box-shadow: none; }
+.bteam      { border-bottom-color: var(--line-soft); color: var(--ink-70); }
+.bteam.win  { background: transparent; color: var(--ink); font-weight: 700; }
+.bteam.win .bsc { color: var(--data); font-weight: 700; }
+.bteam.tbd  { color: var(--ink-32); }
 .bye-tag {
-  color: var(--secondary-text);
-  background: color-mix(in srgb, var(--p-blue) 12%, transparent);
+  color: var(--pen-abs-ink);
+  background: var(--pen-abs);
 }
 .seed-tag { direction: ltr; unicode-bidi: isolate; }
 .champ-wrap {
-  border: 2px solid var(--p-magenta);
-  background: linear-gradient(135deg,
-    color-mix(in srgb, var(--p-magenta) 11%, var(--bg2)),
-    color-mix(in srgb, var(--p-yellow) 22%, var(--bg2)));
-  box-shadow: var(--shadow-md);
+  border: 2px solid var(--qual);
+  background: var(--ground);
+  border-radius: var(--r); box-shadow: var(--shadow-sm);
 }
-.ci { color: var(--primary-text); }
-.champ-name { color: var(--text); }
+.ci { color: var(--ink-48); font-size: 11px; font-weight: 600; }
+.champ-name { color: var(--ink); font-weight: 800; }
 
 /* ── 6.9 קריאוּת עברית ────────────────────────────────────────────────────
    רווח שורות של styles.css כויל לטקסט לטיני קצר. בעברית, עם ניקוד-סרק
    ואותיות סופיות, פסקה שלמה צריכה יותר אוויר. */
 body { line-height: 1.55; }
 .muted, .sett-name, .kv dd, .board-help ul, .board-guide ul { line-height: 1.6; }
-main { padding-top: 16px !important; }
 
 /* ── 6.10 עמוד המתזמן ─────────────────────────────────────────────────────
    הודעות המתזמן משתמשות ב-red/amber (מצב אמיתי — נשמר). מה שמתמרכז כאן
    הוא צ׳יפ הסיכום "תקין", שהיה ירוק ועובר לכחול המותג כמו בסרגל האזהרות. */
+.q-chip { background: var(--paper-2); color: var(--ink-70); font-size: 12.5px; }
 .q-chip.good {
-  background: color-mix(in srgb, var(--p-blue) 12%, transparent);
-  color: var(--secondary-text);
+  background: var(--pen-abs);
+  color: var(--pen-abs-ink);
 }
-.cost-chip.total { box-shadow: 0 1px 5px color-mix(in srgb, var(--p-magenta) 30%, transparent); }
+.cost-chip { background: var(--paper-2); color: var(--ink-48); }
+.cost-chip b { color: var(--ink); }
+.cost-chip.total { box-shadow: none; }
+.win-pill { background: var(--paper-2); color: var(--ink-70); }
+.net-chip { border-radius: 6px; font-size: 12px; font-weight: 700; padding: 4px 11px; }
+.sg-cell { border-right-width: 3px; }
+.sg-time { color: var(--ink-48); }
+
+/* ‎.pub-*‎ (הלוז הציבורי) ו-‎.prev-bar‎/‎.role-tab‎ מעוצבים ב-§7, שהוא הבעלים
+   שלהם ובא אחרי המקטע הזה בקובץ — שם הם הותאמו לשפת המוקאפ במקום.
+
+   צ׳יפ הרשת הצבוע נשאר בשימוש בהגדרות וברשימת ההצעות של הדחיסה החיה, שם
+   אין כרטיס שיישא את הצבע על השפה. בתוך טבלה הוא מתכווץ. */
+.att-tbl .net-chip { padding: 1px 8px; font-size: 11px; }
+
+/* ── 6.12 לוח הגרירה — אותו כרטיס, אותם קווים ─────────────────────────────
+   שפת הצבעים הפונקציונלית של הלוח (§5: צהוב=אפשר לשים · כהה=מיקוד ·
+   מגנטה=חסימה) היא החלטת משתמשת ונשארת בדיוק כפי שהיא. מה שמתיישר כאן
+   הוא הכרום: קווים, רדיוסים, צללים וגדלי תוויות. */
+.board-scroll { border-color: var(--line-soft); border-radius: var(--r); }
+.board-grid th, .board-grid td { border-color: var(--line-soft); }
+.board-grid thead th { border-bottom: 2px solid var(--ink); }
+.bg-time {
+  background: var(--paper-2); color: var(--ink-48);
+  font-size: 11.5px; font-variant-numeric: tabular-nums;
+}
+.bg-neth {
+  background: var(--ground); color: var(--ink-70);
+  font-size: 11px; font-weight: 600;
+}
+.season-dayh { background: var(--paper-2); color: var(--ink); font-size: 12.5px; font-weight: 800; }
+.board-grid .first-of-day { border-inline-start: 2px solid var(--ink-32); }
+/* כרטיס משחק = ‎.mt‎ של המוקאפ (רדיוס ‎--rs‎, קו שיער, בלי צל במנוחה) */
+.bcard {
+  background: var(--ground); border-color: var(--line-soft);
+  border-radius: var(--rs); box-shadow: none;
+}
+.bcard:hover { box-shadow: var(--shadow-sm); }
+.bc-lg { border-radius: 5px; font-weight: 700; }
+.bc-team { color: var(--ink-70); }
+.team-counter { font-size: 12.5px; color: var(--ink-70); }
+.team-counter b { color: var(--p-magenta); }
+.tap-hint {
+  font-size: 12px; font-weight: 600; color: var(--p-magenta);
+  background: color-mix(in srgb, var(--p-magenta) 8%, transparent);
+}
+.drawer-sec { background: var(--paper); border-color: var(--line-soft); border-radius: var(--r); }
+.drawer-h { font-size: 11px; font-weight: 600; color: var(--ink-48); }
+.drawer-empty { color: var(--ink-32); }
+.tile { background: var(--paper-2); border-color: var(--line); border-radius: var(--rs); }
+.len-headline { color: var(--ink); }
+.len-headline b { color: var(--p-magenta); }
+.len-now { color: var(--ink-48); }
+.len-now b, .day-readout b { color: var(--ink); }
+/* סרגל האזהרות — קו עליון במקום צל צבעוני */
+.warnbar {
+  background: var(--ground); border-top-width: 2px;
+  border-radius: var(--r) var(--r) 0 0; box-shadow: 0 -2px 10px rgba(0,11,25,.06);
+}
+.wb-ok { color: var(--p-blue); font-size: 14px; }
+.wb-prob-main { background: var(--paper); border-color: var(--line-soft); border-radius: var(--rs); }
+.wb-fix { border-radius: var(--rs); }
+.add-slot-btn { border-color: var(--line); background: transparent; color: var(--ink-70); font-weight: 600; }
+
+/* ── 6.12.1 "היום נכנס במסך אחד" ──────────────────────────────────────────
+   ‎fitGrid()‎ (league-board.js) קוצב ל-‎.board-scroll‎ בדיוק את מה שנשאר
+   בחלון — ולכן השאלה אינה כמה גובה יש, אלא כמה גובה היום **צורך**.
+   17 סלוטים × 4 מגרשים חייבים להיכנס לתוך הקצבה הזאת, ושני הצדדים של
+   המשוואה טופלו:
+
+   (א) **הכרום מסביב** — ‎main‎ בעמוד הלוח מוותר על 56px הריפוד התחתון
+       (הם נספרים ב-‎below‎ של fitGrid ויורדים ישירות מהגריד), והפאנלים,
+       סרגל הסלוטים והמקרא מתכווצים.
+   (ב) **התא** — שורה לכל קבוצה, בלי גלישה. שלישייה ("אביגיל כהן יובל כהן
+       גאיה כהן") גלשה ל-3 שורות והכתיבה 58px לשורת סלוט שלמה; עכשיו כל
+       קבוצה היא שורה אחת עם חיתוך, והכרטיס קבוע בשתי שורות.
+   אם למרות זאת היום לא נכנס (מסך נמוך במיוחד) — הגריד גולל פנימית כמו
+   קודם. שום דבר לא נחתך, רק צריך לגלול. */
+main:has(.board-main) { padding-block: 10px 10px !important; }
+/* בעמוד הלוח הכותרת מתכווצת — כל פיקסל שלה יורד ישירות מהיום */
+body:has(.board-main) header { padding-block: 7px 8px; }
+body:has(.board-main) .lmark { width: 34px; height: 34px; }
+body:has(.board-main) #logo-img { height: 30px !important; }
+body:has(.board-main) nav .tab { padding-block: 7px 9px; }
+/* (‎.mpanels‎/‎.mpanel‎ עצמם מכווצים ב-§7.4 — שם הבעלות שלהם, והוא מאוחר
+    יותר בקובץ.) */
+.board-help, .board-guide { margin-top: 2px; padding: 0 12px; }
+.board-help > summary, .board-guide > summary { padding: 3px 0; font-size: 11.5px; }
+.board-toolbar, .board-subbar { margin-bottom: 3px; }
+.board-toolbar .filter-btn, .board-toolbar .cf-btn,
+.board-subbar .filter-btn, .board-subbar .cf-btn { padding: 3px 11px; }
+.board-subbar .text-inp { padding: 3px 9px; }
+.add-slot-bar { padding: 1px 4px 0; }
+.add-slot-btn { padding: 0 12px; font-size: 11.5px; }
+.warnbar { padding: 5px 14px; }
+.wb-toggle { padding: 3px 12px; font-size: 13px; }
+
+.day-grid .bcell  { padding: 0; }
+.day-grid .bcard  { padding: 0 6px; border-radius: 5px; }
+.day-grid .bc-lg  { font-size: 8.5px; padding: 0 5px; margin: 0 0 0 4px; }
+.day-grid .bc-sep { display: none; }
+.day-grid .bc-team {
+  display: block; font-size: 11px; line-height: 1.05;
+  white-space: nowrap; text-overflow: ellipsis;
+  /* ‎clip‎ ולא ‎hidden‎: בגובה שורה 1.05 תיבת השורה קטנה מהגופן, ו-‎hidden‎
+     היה גוזם את הרגל של ף/ץ/ק. ‎overflow-clip-margin‎ נותן 2px דליפה
+     אנכית ומשאיר את החיתוך האופקי (והשלוש נקודות) בדיוק כפי שהוא. */
+  overflow: hidden;
+  overflow: clip; overflow-clip-margin: 2px;
+}
+.day-grid .bg-time { font-size: 11px; padding: 0 4px; }
+.day-grid .bg-neth { padding: 3px 6px; font-size: 11px; }
+.day-grid .bc-lock { font-size: 10px; top: 0; left: 0; }
+
+/* ── 6.13 קבוצות · הגדרות · מצב המערכת ────────────────────────────────────
+   אותם פרימיטיבים, שלא יישארו מאחור: המספר העגול של הקבוצה הוא ‎.dotb‎
+   של המוקאפ, ורצועת הסלוטים ורשימת המפתח-ערך עוברות לרגיסטר התוויות. */
+.team-row { border-bottom-color: var(--line-soft); }
+.team-num {
+  min-width: 26px; height: 26px; font-size: 12px; font-weight: 700;
+  background: var(--p-magenta); color: var(--p-dark); text-shadow: none;
+}
+.team-meta { color: var(--ink-48); }
+.slot { background: var(--paper-2); border-radius: var(--rs); color: var(--ink-48); }
+.slot b { color: var(--ink); }
+.kv dt { color: var(--ink-48); font-weight: 600; }
+.kv dd { color: var(--ink); }
+.gtag { background: var(--paper-2); color: var(--ink-48); border-radius: 5px; }
+/* תגי מצב — אותו מסלול שבו ‎.q-chip.good‎ עבר מירוק לכחול (§6.10): "מאושר"
+   ו"מפורסם" הם נתון ולכן כחולים, "ממתין/מוסתר" הוא היעדר נתון ולכן ניטרלי.
+   ‎badge-rejected‎ נשאר אדום — בעיה אמיתית, כמו הודעות המתזמן. */
+.status-badge { border-radius: 6px; font-size: 11px; }
+.badge-approved { background: var(--pen-abs); color: var(--pen-abs-ink); }
+.badge-pending  { background: var(--paper-2); color: var(--ink-48); }
+code { background: var(--paper-2); color: var(--ink); }
+footer { border-top-color: var(--line-soft); color: var(--ink-32); }
+/* שורת ההזנה — התוצאה המנצחת בכחול, כמו ‎.side.is-win‎ במוקאפ */
+.res-row { border-bottom-color: var(--line-soft); }
+.res-team.win { color: var(--ink); font-weight: 700; }
+.res-score b { color: var(--ink-32); }
+.tech-menu > summary { background: var(--paper-2); color: var(--ink-70); }
+.tech-menu[open] > summary { background: var(--p-magenta); color: var(--p-dark); }
+.tech-pop {
+  background: var(--ground); border-color: var(--line);
+  border-radius: var(--r); box-shadow: var(--shadow-md);
+}
+.tech-pop button { border-radius: var(--rs); }
+.stand-day-hdr { color: var(--ink); border-bottom-color: var(--line-soft); font-size: 12.5px; }
+
+/* ── 6.14 טבלת הדירוג במסך צר ─────────────────────────────────────────────
+   המוקאפ משיר עמודות במקום לגלול: 11 עמודות ב-375px הופכות כל שם לשתי
+   אותיות. הסדר שבו הן נושרות הוא סדר חשיבות הפוך — "לזכות/לחובה" הן
+   פירוט של ההפרש שכבר מוצג, "טכני/היעדרות" אינן משפיעות על המיון,
+   ו"משחקים" נגזר מניצחונות+הפסדים. */
+@media (max-width: 960px) {
+  .stand-tbl .c-opt, .stand-tbl .c-pen { display: none; }
+  .stand-tbl td { height: 48px; }
+  .stand-name { font-size: 14px; }
+}
+@media (max-width: 620px) {
+  .stand-tbl .c-played { display: none; }
+  .diffbar { display: none; }
+  .diffwrap { gap: 0; }
+  .diffnum { min-width: 0; text-align: center; }
+  .stbl th { font-size: 10.5px; padding-inline: 4px; }
+  .stand-tbl td { padding-inline: 4px; height: 46px; }
+  .stand-pts { font-size: 1.05rem; }
+  .pen { min-width: 20px; height: 20px; font-size: 11px; }
+}
 /* "מחיקת הלוז" יורש את ‎.team-del‎, שהוא כפתור ×‎ בגודל 24×24 — הטקסט העברי
    נשבר לשתי שורות וגולש. כאן הוא חוזר להיות כפתור טקסט מלא. */
 .sched-clear {
@@ -948,15 +1411,17 @@ main { padding-top: 16px !important; }
   .acc > summary { padding: 14px 16px; }
   .acc-body { padding: 6px 16px 18px; }
 
-  /* שלב 8 — המיתוג בטלפון: סימן הטעינה קטן יותר, הטאבים צפופים יותר כדי
-     ששבעה מהם ייכנסו בלי לגלול, והכותרת לא נמחצת. */
+  /* הכרום בטלפון: סימן הטעינה קטן יותר, הטאבים צפופים יותר כדי ששבעה מהם
+     ייכנסו בלי לגלול, והכותרת לא נמחצת. */
   #view-loading .no-t-wrap::before { width: 68px; height: 68px; border-radius: 20px; font-size: 34px; }
-  .tab { font-size: 13px; padding: 12px 12px; }
-  .lname { font-size: 17px; }
-  .lmark { width: 36px; height: 36px; border-radius: 11px; }
-  .lmark span { font-size: 18px; }
-  .sett-section { padding: 16px 16px; }
+  .tab { font-size: 12.5px; padding: 9px 10px 11px; }
+  .lname { font-size: 1.14rem; }
+  .lmark { width: 34px; height: 34px; border-radius: 10px; }
+  .lmark span { font-size: 17px; }
+  header { padding: 10px 16px 11px; }
+  .sett-section { padding: 15px 16px; }
   .sponsor-bar { gap: 16px; min-height: 46px; }
+  .filter-btn, .cf-btn { font-size: 12px; padding: 4px 11px; }
 }
 
 /* ============================================================================
@@ -968,47 +1433,56 @@ main { padding-top: 16px !important; }
 
 /* ── 7.1 כפתור הכניסה ברצועת הטאבים ───────────────────────────────────────
    נראה כטאב אבל אינו טאב: אין לו עמוד, ולכן הוא נדחף לקצה ומקבל צבע משלו. */
-.role-tab { margin-inline-start: auto; opacity: .75; }
-.role-tab:hover { opacity: 1; }
-.role-tab.on { opacity: 1; color: var(--primary-text); font-weight: 800; }
-.role-tab.warn { opacity: 1; color: var(--red); font-weight: 700; }
+.role-tab { margin-inline-start: auto; color: var(--ink-48); }
+.role-tab:hover { color: var(--ink); }
+.role-tab.on { color: var(--p-magenta); font-weight: 600; }
+.role-tab.warn { color: var(--red); font-weight: 600; }
 
 /* ── 7.2 תצוגת השחקניות (§8.5) ───────────────────────────────────────────
    פס דביק כדי שאי אפשר יהיה לשכוח שאת בתוך תצוגה מקדימה ולתהות למה שום
    כפתור לא עובד. */
 .prev-bar { position: sticky; top: 0; z-index: 30; display: flex; flex-wrap: wrap;
   gap: 8px 14px; align-items: center; justify-content: space-between;
-  margin-bottom: 14px; padding: 10px 16px; border-radius: var(--rs);
-  background: color-mix(in srgb, var(--p-yellow) 45%, var(--bg2));
-  border: 1px solid var(--border2); font-size: 13px; color: var(--text); }
+  margin-bottom: 14px; padding: 10px 16px; border-radius: var(--r);
+  background: color-mix(in srgb, var(--p-yellow) 38%, var(--ground));
+  border: 1px solid var(--line); font-size: 13px; color: var(--ink); }
 
 /* ── 7.3 הלוז הציבורי (§7.2) ─────────────────────────────────────────────
    שורה לכל סלוט, עם השעה בעמודה קבועה — זה מה שהופך את הרשימה לסריקה
-   מהירה של "מתי אני משחקת" בלי טבלת גריד ברוחב 4 מגרשים בטלפון. */
+   מהירה של "מתי אני משחקת" בלי טבלת גריד ברוחב 4 מגרשים בטלפון.
+
+   הכרטיס עצמו הוא ‎.mt‎ של המוקאפ: קו שיער, רדיוס קטן, וצבע המגרש נישא על
+   השפה המובילה בלבד (‎--net‎, נכתב מ-league.js:pubGameRow). כך הצבע מזהה
+   את המגרש גם כשהכרטיס נערם בטלפון, ושם המגרש חוזר להיות תווית-מיקרו
+   קריאה במקום גלולה צבועה שמתחרה עם שמות הקבוצות. */
 .pub-head { margin-bottom: 12px; }
-.pub-head h3 { font-size: 19px; font-weight: 800; color: var(--text); }
+.pub-head h3 { font-size: 18px; font-weight: 800; color: var(--ink); letter-spacing: -.028em; }
 .pub-search { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 14px; }
 .pub-search .text-inp { width: 240px; max-width: 100%; }
-.pub-slot { display: flex; gap: 12px; align-items: flex-start; padding: 8px 0;
-  border-top: 1px solid var(--border); }
+.pub-slot { display: flex; gap: 12px; align-items: flex-start; padding: 7px 0;
+  border-top: 1px solid var(--line-soft); }
 .pub-slot:first-of-type { border-top: 0; }
-.pub-time { width: 54px; flex-shrink: 0; padding-top: 7px;
-  font-size: 14px; font-weight: 800; color: var(--primary-text); }
+.pub-time { width: 54px; flex-shrink: 0; padding-top: 9px;
+  font-size: 12.5px; font-weight: 600; color: var(--ink-70);
+  font-variant-numeric: tabular-nums; }
 .pub-games { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px; }
-.pub-game { display: flex; flex-wrap: wrap; gap: 6px 9px; align-items: center;
-  padding: 7px 11px; border: 1px solid var(--border); border-radius: var(--rs);
-  background: var(--bg2); font-size: 13.5px; }
-.pub-net { padding: 2px 9px; border-radius: 999px; font-size: 11px; font-weight: 800;
-  flex-shrink: 0; }
-.pub-when { font-size: 12px; color: var(--text3); font-weight: 600; }
-.pub-team { flex: 1; min-width: 90px; font-weight: 600; color: var(--text); }
+.pub-game { display: flex; flex-wrap: wrap; gap: 5px 9px; align-items: center;
+  padding: 8px 11px 9px; border: 1px solid var(--line-soft); border-radius: var(--rs);
+  border-inline-start: 3px solid var(--net, var(--line));
+  background: var(--ground); font-size: 13.5px; }
+.pub-net { flex-shrink: 0; padding: 0; border-radius: 0; background: none;
+  font-size: 10.5px; font-weight: 600; color: var(--ink-48); }
+.pub-when { font-size: 10.5px; color: var(--ink-48); font-weight: 600; }
+.pub-team { flex: 1; min-width: 90px; font-weight: 500; color: var(--ink-70); }
+.pub-team.win { color: var(--ink); font-weight: 700; }
 /* .pub-score הוא flex ב-RTL: הילד הראשון (sa) יושב מימין, צמוד לקבוצה א׳ —
    בדיוק כמו בשורת ההזנה של שלב 4. בלי זה 18:14 היה נקרא הפוך. */
 .pub-score { display: flex; align-items: center; gap: 3px; flex-shrink: 0;
-  font-weight: 800; color: var(--text); }
-.pub-score i { font-style: normal; color: var(--text3); }
-.pub-score.pub-vs { color: var(--text3); font-weight: 600; font-size: 12px; }
-.pub-cat { font-size: 11px; color: var(--text3); flex-shrink: 0; }
+  font-weight: 600; color: var(--ink-70); font-variant-numeric: tabular-nums; }
+.pub-score b.win { color: var(--data); font-weight: 700; }
+.pub-score i { font-style: normal; color: var(--ink-32); }
+.pub-score.pub-vs { color: var(--ink-32); font-weight: 600; font-size: 11.5px; }
+.pub-cat { font-size: 10.5px; font-weight: 600; color: var(--ink-48); flex-shrink: 0; }
 .pub-game.hide, .pub-slot.hide { display: none; }
 .team-counter.no { color: var(--red); }
 
@@ -1016,11 +1490,17 @@ main { padding-top: 16px !important; }
    אותה התנהגות של אקורדיון ההגדרות, אבל **לא** מחלקת .acc: הכלל
    `#page-body:has(.acc)` הופך את העמוד לשני טורים במסך רחב, וזה נכון
    להגדרות ושובר את לוח הגרירה. לכן מחלקה משלהם, צרה יותר בגובה. */
-.mpanels { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
-.mpanel { padding: 0; flex: 1; min-width: 260px; }
+/* קומפקטי במכוון: שלוש השורות האלה יושבות מעל היום, וכל פיקסל שלהן יורד
+   מגובה הגריד (ראו 6.12.1). ‎align-items:start‎ — בלי זה כל שלושת הפאנלים
+   נמתחים לגובה הגבוה מביניהם. הכותרת היא שורה אחת: הפירוט שאחריה חוזר
+   בתוך הפאנל כשהוא נפתח. */
+.mpanels { display: flex; flex-wrap: wrap; align-items: start; gap: 6px; margin-bottom: 6px; }
+.mpanel { padding: 0; flex: 1; min-width: 260px; margin-bottom: 0; }
 .mpanel[open] { flex-basis: 100%; }
 .mpanel > summary { cursor: pointer; list-style: none; user-select: none;
-  padding: 9px 16px; font-size: 13.5px; display: flex; align-items: center; gap: 8px; }
+  padding: 5px 14px; font-size: 12.5px; line-height: 1.35;
+  white-space: nowrap; overflow: hidden;
+  display: flex; align-items: center; gap: 7px; }
 .mpanel > summary::-webkit-details-marker { display: none; }
 .mpanel > summary::after { content: '⌄'; margin-inline-start: auto; font-size: 18px;
   line-height: 1; color: var(--text3); transition: transform .18s; }
@@ -1031,13 +1511,15 @@ main { padding-top: 16px !important; }
 /* ── 7.5 פאנל הפרסום (§8.5) ──────────────────────────────────────────── */
 .pub-bar-body, .att-body { display: flex; flex-direction: column; gap: 12px; }
 .pub-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+/* "מפורסם" הוא מצב, לא אזהרה — ולכן כחול (נתון) ולא ירוק, שהוא מחוץ
+   לפלטה. הנקודה נושאת את המצב, הקו רק מסמן שהצ׳יפ פעיל. */
 .pub-chip { display: inline-flex; align-items: center; gap: 7px; cursor: pointer;
-  padding: 7px 14px; border-radius: 999px; border: 1px solid var(--border2);
-  background: transparent; font: inherit; font-size: 12.5px; font-weight: 700;
-  color: var(--text3); }
-.pub-chip-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--border2); }
-.pub-chip.on { color: var(--text); border-color: color-mix(in srgb, var(--green) 45%, var(--border2)); }
-.pub-chip.on .pub-chip-dot { background: var(--green); }
+  padding: 6px 13px; border-radius: 999px; border: 1px solid var(--ink-18);
+  background: transparent; font: inherit; font-size: 12.5px; font-weight: 600;
+  color: var(--ink-48); }
+.pub-chip-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ink-18); }
+.pub-chip.on { color: var(--ink); border-color: var(--p-blue); }
+.pub-chip.on .pub-chip-dot { background: var(--p-blue); }
 .pub-chip .muted { font-size: 11px; }
 .pub-tools { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; }
 .pub-none { color: var(--red); }
