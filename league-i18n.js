@@ -129,7 +129,7 @@ const DICT = {
 
     'stand.emptyH': 'אין עדיין דירוג',
     'stand.emptyP': 'הדירוג יופיע כשיהיו קבוצות ומשחקים.',
-    'stand.foot':   'מיון: נקודות ← הפרש ← מפגש ישיר ← מיני־ליגה (3.10)',
+    'stand.foot':   'מיון: נקודות ← הפרש ← מפגש ישיר ← מיני־ליגה',
     'stand.tie':    'שוויון מלא בין {n} קבוצות על מקומות {places}. התקנון לא מכריע — נדרשת החלטה ידנית',
     'stand.tieF4':  ' (נוגע לגבול הפיינל פור, מקומות 4–5)',
     'stand.tieT':   'שוויון לא מוכרע',
@@ -187,7 +187,7 @@ const DICT = {
 
     'stand.emptyH': 'No standings yet',
     'stand.emptyP': 'The table appears once there are teams and games.',
-    'stand.foot':   'Sorted by: points ← difference ← head-to-head ← mini-league (3.10)',
+    'stand.foot':   'Sorted by: points ← difference ← head-to-head ← mini-league',
     'stand.tie':    '{n} teams are fully tied for places {places}. The rulebook does not break it — a manual decision is needed',
     'stand.tieF4':  ' (on the Final Four line, places 4–5)',
     'stand.tieT':   'Unbroken tie',
@@ -245,7 +245,7 @@ const DICT = {
 
     'stand.emptyH': 'Ainda não há classificação',
     'stand.emptyP': 'A tabela aparece quando houver equipes e jogos.',
-    'stand.foot':   'Ordem: pontos ← saldo ← confronto direto ← mini-liga (3.10)',
+    'stand.foot':   'Ordem: pontos ← saldo ← confronto direto ← mini-liga',
     'stand.tie':    '{n} equipes empatadas nas posições {places}. O regulamento não desempata — é preciso uma decisão manual',
     'stand.tieF4':  ' (na linha do Final Four, posições 4–5)',
     'stand.tieT':   'Empate não resolvido',

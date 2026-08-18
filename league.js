@@ -17,7 +17,7 @@ import {
 
 // שלוש השפות של העמודים הציבוריים. ראו league-i18n.js — כולל ההחלטה
 // שהכיוון נשאר RTL בכל שפה, כי שמות הקבוצות נשארים עברית.
-import { t, tData, getLang, setLang, LANGS } from './league-i18n.js?v=2';
+import { t, tData, getLang, setLang, LANGS } from './league-i18n.js?v=3';
 
 // המתזמן — שלב 3. מודול טהור: הוא לא מכיר את L, את ה-DOM או את Firestore,
 // והוא מקבל תמונת מצב ומחזיר משחקים ודוח. ראו league-sched.js.
@@ -28,7 +28,7 @@ import {
 // לוח הגרירה — שלב 5. מודול תצוגה+שליטה שמקבל את המצב החי דרך Board.init().
 // אין לו window.* globals; פעולותיו בקידומת board.* ומוזרקות ל-ACT (ראו start()).
 import Board from './league-board.js?v=11';
-import KO from './league-ko.js?v=1';
+import KO from './league-ko.js?v=2';
 
 // ============ זהות הליגה ============
 // ⚠️ המזהה הזה מופיע בכתובת הציבורית שכל 72 השחקניות מקבלות. הוא לא זמני.
@@ -1147,7 +1147,6 @@ function renderTeams() {
   const shared = Object.values(usage).filter(l => l.length > 1).length;
 
   // הטלפונים נטענים מהדוק הפרטי רק כאן ורק עכשיו (§5.4, אפשרות ב׳).
-  ensurePhones();
 
   const cards = L.categories.map(c => {
     const list = L.roster[c.id] || [];
@@ -1157,18 +1156,11 @@ function renderTeams() {
       const fields = [0, 1, 2].map(s => {
         const pid  = isPid(p[s]) ? p[s] : '';
         const rest = (usage[pid] || []).filter(x => x.team.id !== t.id);
-        // שדה הטלפון מופיע רק כשיש מזהה שחקנית (הטלפון מוצמד למזהה) ורק
-        // כשהדוק הפרטי כבר בזיכרון — אחרת היה נראה כאילו הטלפון נמחק.
-        const phone = (pid && phoneState === 'ready')
-          ? `<input class="text-inp phone-inp" type="tel" inputmode="tel" autocomplete="off"
-                    value="${escH(phoneOf(pid))}" placeholder="טלפון"
-                    data-act="team.phone" data-pid="${escH(pid)}"/>` : '';
         return `
         <label class="player-slot${rest.length ? ' shared' : ''}"${rest.length ? ` title="${escH(sharedTip(rest))}"` : ''}>
           <input class="text-inp team-player-inp" list="players-reg" autocomplete="off"
                  value="${escH(slotName(p[s]))}" placeholder="${PH[s]}"
                  data-act="team.player" data-id="${escH(t.id)}" data-slot="${s}"/>
-          ${phone}
         </label>`;
       }).join('');
       return `
@@ -1191,23 +1183,12 @@ function renderTeams() {
     </div>`;
   }).join('');
 
-  const phoneNote =
-      phoneState === 'loading' ? '<span class="muted">טוען טלפונים…</span>'
-    : phoneState === 'error'   ? '<span class="pub-none">הטלפונים לא נטענו — נסי לרענן.</span>'
-    : `הטלפונים נשמרים ב<strong>מסמך נפרד</strong> (<code>${escH(PRIVATE_ID)}</code>) שהאתר
-       הציבורי אינו טוען כלל, ונראים <strong>רק בעמוד הזה</strong> (§5.4).
-       העמוד כולו פתוח למאסטר בלבד.`;
-
   return `
   <datalist id="players-reg">${playerOptions()}</datalist>
   <div class="info-box">
-    רשימת הקבוצות הרשמית מתפרסמת אחרי <strong>12.8.2026</strong> (נספח ב׳ לתקנון).
-    עד אז אפשר להזין ידנית. לפי 2.11.2 מותר להחליף או להוסיף שחקנית אחת עד
-    <strong>27.8.2026</strong> — שינוי שם הקבוצה כאן מתעדכן אוטומטית בכל משחקיה,
-    כי המשחקים מצביעים על המזהה ולא על השם.
-    <br/>שחקנית שכבר הוזנה מוצעת להשלמה בזמן ההקלדה: בחירה בה מסמנת
+    שחקנית שכבר הוזנה מוצעת להשלמה בזמן ההקלדה — בחירה בה מסמנת
     ש<strong>זו אותה שחקנית</strong> בשתי הקבוצות.
-    <br/>${phoneNote}
+    שינוי שם מתעדכן מאליו בכל משחקי הקבוצה.
   </div>
   <div id="shared-note" class="sett-empty-note${shared ? '' : ' h'}">
     ${shared} שחקניות רשומות בשתי קבוצות — מסומנות ⇄.
@@ -1366,19 +1347,15 @@ function renderSched() {
 
   const intro = `
   <div class="info-box">
-    <strong>שלב 3 — המתזמן.</strong> שלושת השלבים של §6.1 רצים בנפרד:
-    <b>א׳</b> מחזורי RR בשיטת המעגל · <b>ב׳</b> חלוקה ל-${days.length} ימים שווים ·
-    <b>ג׳</b> אריזה לגריד סלוט×רשת עם פאס תיקון. הקצב 4-3-4-3 של §6.1.ג.2
-    <em>נגזר</em> מכלל אי־הרצף ולא מקודד: בליגה של N קבוצות שני סלוטים סמוכים
-    יכולים להכיל יחד ⌊N/2⌋ משחקים לכל היותר, כי הם דורשים קבוצות שונות.
+    שלושת השלבים רצים בנפרד, וכל אחד שומר את מה שלפניו:
+    קביעת המפגשים · חלוקה ל-${days.length} ימים · סידור על הגריד.
   </div>`;
 
   if (!anyTeams) return intro + `
     <div class="sett-section empty">
       <h3>אין עדיין קבוצות</h3>
-      <p>המתזמן צריך לפחות שתי קבוצות פעילות בליגה אחת. רשימת הקבוצות
-         מתפרסמת אחרי <strong>12.8.2026</strong> (§15.4); עד אז אפשר להזין אותן
-         בעמוד <b>קבוצות</b>.</p>
+      <p>המתזמן צריך לפחות שתי קבוצות פעילות בליגה אחת.
+         אפשר להזין אותן בעמוד <b>קבוצות</b>.</p>
       ${DEV ? `<div class="sett-add-row"><button class="add-cat-btn" data-act="sched.seed">
          מילוי רוסטר בדיקה (15 · 15 · 6)</button></div>` : ''}
     </div>`;
@@ -1392,13 +1369,13 @@ function renderSched() {
       <button class="cf-btn" data-act="sched.all"${busy}>צור לוז מלא</button>
       <button class="filter-btn" data-act="sched.rr"${busy}>קבע מי נגד מי</button>
       <button class="filter-btn" data-act="sched.days"${busy}${st.rr ? '' : ' disabled'}>חלק לימים</button>
-      <button class="filter-btn" data-act="sched.pack"${busy}${st.days ? '' : ' disabled'}>סדר בגרייד</button>
+      <button class="filter-btn" data-act="sched.pack"${busy}${st.days ? '' : ' disabled'}>סדר בגריד</button>
       <button class="team-del sched-clear" data-act="sched.clear"${busy}>מחיקת הלוז</button>
     </div>
     <div class="sched-state">
-      ${chip('א׳ RR', st.rr, st.games ? `${st.games} משחקים` : '')}
-      ${chip('ב׳ ימים', st.days, st.days ? `${days.length} מחזורים` : '')}
-      ${chip('ג׳ גריד', st.pack, '')}
+      ${chip('מפגשים', st.rr, st.games ? `${st.games} משחקים` : '')}
+      ${chip('ימים', st.days, st.days ? `${days.length} מחזורים` : '')}
+      ${chip('סידור', st.pack, '')}
       ${schedBusy ? '<span class="status-badge badge-pending">מחשב…</span>' : ''}
       ${schedLast?.ms != null ? `<span class="muted">ההרצה האחרונה: ${schedLast.ms} מ״ש</span>` : ''}
     </div>
@@ -1697,9 +1674,8 @@ function rrTable() {
         <th>לכל קבוצה</th></tr></thead>
       <tbody>${rows}</tbody>
     </table></div>
-    <span class="sett-desc" style="margin-top:10px">כל קבוצה פוגשת כל קבוצה אחרת
-      בליגה שלה (3.4). המשחקים האלה מתחלקים על פני הימים בשלב ב׳, כך שכל יום יוצא
-      מאוזן — 3.6 מתיר 1–5 משחקים לקבוצה במחזור.</span>
+    <span class="sett-desc" style="margin-top:10px">המשחקים האלה מתחלקים
+      על פני הימים, כך שכל יום יוצא מאוזן.</span>
   </div>`;
 }
 
@@ -1895,7 +1871,7 @@ function renderSettings() {
     </div>` : ''}
     ${row('סיסמת אדמין', 'הזנת תוצאות וסימון טכני בלבד.',
       `<input class="text-inp" type="password" style="width:200px" placeholder="${m.adminPasswordHash ? '•••••• (מוגדרת)' : 'לא מוגדרת'}" data-act="pw.admin"/>`)}
-    ${row('סיסמת מאסטר', 'גישה מלאה: לוח הגרירה, פרסום, קבוצות, טלפונים והגדרות.',
+    ${row('סיסמת מאסטר', 'גישה מלאה: לוח הגרירה, פרסום, קבוצות והגדרות.',
       `<input class="text-inp" type="password" style="width:200px" placeholder="${m.managerPasswordHash ? '•••••• (מוגדרת)' : 'לא מוגדרת'}" data-act="pw.manager"/>`)}
     ${row('הרמה הנוכחית', 'שדה ריק מוחק את הסיסמה ומחזיר את האתר למצב פתוח.',
       `<span class="status-badge ${realRole() === 2 ? 'badge-approved' : realRole() === 1 ? 'badge-pending' : 'badge-rejected'}"
@@ -1903,8 +1879,7 @@ function renderSettings() {
     <div class="info-box" style="margin:12px 0 0">
       הסיסמאות נשמרות כ-SHA-256 בלבד. עם זאת — אין Firebase Auth, וההרשאות
       נאכפות בדפדפן. מי שיודעת את מזהה הליגה יכולה לקרוא את המסמך הגולמי כולל
-      ה-hash. ראו <code>SECURITY.md</code>. <strong>לא לשמור טלפונים כאן.</strong>
-      הם יושבים במסמך נפרד ונטענים רק בעמוד הקבוצות (§5.4).
+      ה-hash.
     </div>`;
 
   return `
@@ -1961,11 +1936,11 @@ function renderStatus() {
   return `
   <div class="sett-section">
     <div class="sett-section-title">מצב המערכת</div>
-    <span class="sett-desc">שלב 1 מתוך §14: מודל הנתונים וסנכרון חי. העמוד הזה קיים כדי
+    <span class="sett-desc">העמוד הזה קיים כדי
        שאפשר יהיה לראות שהמודל נטען נכון ושהסנכרון עובד — הוא לא חלק מהאתר הסופי.</span>
     <dl class="kv" style="margin-top:14px">
       <dt>מזהה הליגה</dt><dd><code class="num">tournaments/${escH(LEAGUE_ID)}</code></dd>
-      <dt>קבוצות רשומות</dt><dd>${teams} <span class="muted">— הרשימה מתפרסמת אחרי 12.8.2026</span></dd>
+      <dt>קבוצות רשומות</dt><dd>${teams}</dd>
       <dt>משחקים</dt><dd>${L.games.length} <span class="muted">— המתזמן נבנה בשלב 3</span></dd>
       <dt>חסימות בלוז</dt><dd>${L.blocks.length}</dd>
       <dt>שוברי שוויון</dt><dd>${m.tieBreak.join(' ← ')} <span class="muted">— נעול לפי 3.10</span></dd>
@@ -1989,7 +1964,7 @@ function renderStatus() {
       <tbody>${dayRows}</tbody>
     </table></div>
     <span class="sett-desc" style="margin-top:12px">16 סלוטים × 20 דקות = 5:20.
-      16 × 4 רשתות = 64 תאים; הלוז המלא תופס 60 (§4.3).</span>
+      16 × 4 רשתות = 64 תאים.</span>
     <div class="slot-strip">${slotList}</div>
   </div>
 
@@ -2061,7 +2036,7 @@ function renderGameEntry(g) {
     <span class="res-score">${box('sa', sa)}<b>:</b>${box('sb', sb)}</span>
     <span class="res-team${winB ? ' win' : ''}">${escH(nameB)}</span>
     <span class="res-meta">${badge}${menu}</span>
-    ${invalid ? `<span class="score-err">תוצאה לא חוקית — עד ${fmt.to}${fmt.cap ? `, תקרה ${fmt.cap}` : ', ללא תקרה'}, הפרש 2 (§10.1)</span>` : ''}
+    ${invalid ? `<span class="score-err">תוצאה לא חוקית — עד ${fmt.to}${fmt.cap ? `, תקרה ${fmt.cap}` : ', ללא תקרה'}, הפרש 2</span>` : ''}
   </div>`;
 }
 

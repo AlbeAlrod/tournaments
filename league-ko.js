@@ -401,7 +401,7 @@ function entryCard(S) {
   return `<div class="sett-section">
     <div class="sett-section-title">הזנת תוצאות</div>
     ${cards}
-    <span class="sett-desc" style="margin-top:12px">כל תוצאה בהפרש 2 (§10.1).
+    <span class="sett-desc" style="margin-top:12px">כל תוצאה בהפרש 2.
       מנצחת חצי גמר עולה לגמר, מפסידה יורדת למשחק על מקום 3–4 — אוטומטית.
       שינוי בטבלת הליגה מזיז את המשובצות; משחק ששני משתתפיו התחלפו מתאפס.</span>
   </div>`;
@@ -443,7 +443,7 @@ function matchEntry(S, key) {
       <span class="res-team${w === 'b' ? ' win' : ''}" style="text-align:left">${nameB}</span>
       <span class="res-meta"><span class="muted">עד ${to}</span></span>
       ${bad ? `<span class="score-err">תוצאה לא חוקית — עד ${to}${
-        f.cap ? `, תקרה ${f.cap}` : ', ללא תקרה'}, הפרש 2 (§10.1)</span>` : ''}
+        f.cap ? `, תקרה ${f.cap}` : ', ללא תקרה'}, הפרש 2</span>` : ''}
     </div>`;
   };
 
@@ -611,7 +611,7 @@ function crossHtml() {
           <span class="muted">(ב׳ · מקום ${p.b.rank})</span></span>
         <span class="res-meta"><span class="muted">עד ${f.to}</span></span>
         ${bad ? `<span class="score-err">תוצאה לא חוקית — עד ${f.to}${
-          f.cap ? `, תקרה ${f.cap}` : ', ללא תקרה'}, הפרש 2 (§10.1)</span>` : ''}
+          f.cap ? `, תקרה ${f.cap}` : ', ללא תקרה'}, הפרש 2</span>` : ''}
       </div>
     </div>`;
   }).join('');

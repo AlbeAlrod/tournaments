@@ -181,15 +181,14 @@ body, .lname, .tab, .pill, .admin-toggle, .filter-btn, .cat-btn, .cf-btn,
 #view-loading .no-t-wrap p { color: inherit; }
 #view-loading .no-t-wrap { gap: 22px; }
 
-/* סימן המותג במסך הטעינה — placeholder. אין עדיין קובץ לוגו (§15.1 פריט 2),
-   ולכן האות פ בריבוע לבן, באותה שפה של ‎.lmark‎ בכותרת. כשיגיע הנכס: להחליף
-   את ה-content ברקע תמונה. */
+/* סימן המותג במסך הטעינה — הבאדג׳ בריבוע לבן, באותה שפה של ‎.lmark‎ בכותרת.
+   ⚠️ נתיב קבוע ולא ‎meta.logoUrl‎: המסך הזה מצויר לפני ש-Firestore נענה,
+   ולכן המסמך — וה-logoUrl שבתוכו — עוד לא בזיכרון.
+   ⚠️ ‎logo-mark.png‎ ולא ‎logo.svg‎: הראשון 11KB, השני 465KB ונושא טבעת ליים. */
 #view-loading .no-t-wrap::before {
-  content: 'פ';
+  content: '';
   width: 88px; height: 88px; border-radius: 26px;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 44px; font-weight: 900; line-height: 1;
-  color: var(--p-magenta); background: #fff;
+  background: #fff url('logo-mark.png') center / 62px 62px no-repeat;
   box-shadow: 0 12px 34px rgba(0,11,25,.22);
 }
 #view-loading .no-t-wrap p { font-size: 16px; font-weight: 700; opacity: .88; }
@@ -1436,7 +1435,7 @@ footer { border-top-color: var(--line-soft); color: var(--ink-32); }
 
   /* הכרום בטלפון: סימן הטעינה קטן יותר, הטאבים צפופים יותר כדי ששבעה מהם
      ייכנסו בלי לגלול, והכותרת לא נמחצת. */
-  #view-loading .no-t-wrap::before { width: 68px; height: 68px; border-radius: 20px; font-size: 34px; }
+  #view-loading .no-t-wrap::before { width: 68px; height: 68px; border-radius: 20px; background-size: 48px 48px; }
   .tab { font-size: 12.5px; padding: 9px 10px 11px; }
   .lname { font-size: 1.14rem; }
   .lmark { width: 34px; height: 34px; border-radius: 10px; }
@@ -1600,3 +1599,24 @@ footer { border-top-color: var(--line-soft); color: var(--ink-32); }
   .att-tbl { min-width: 560px; }
   .role-tab { margin-inline-start: 0; }
 }
+
+
+/* ── 8. גדלי מגע בטלפון ──────────────────────────────────────────────────
+   נמדד באתר החי: גלולות הליגה ומתג השפה יצאו 24px מול תקן של 44px.
+   שני טיפולים שונים, כי המגבלות שונות. */
+
+/* ‎.court-filter‎ הוא בורר הליגה בעמודים הציבוריים — הפקד הראשי של שחקנית
+   בטלפון. הוא גדל בפועל. מכוון: ‎.board-toolbar‎/‎.board-subbar‎ **אינם**
+   נכללים — שם הכרום דק בכוונה כדי שהיום ייכנס בלי גלילת-דף (§640px). */
+@media (max-width: 640px) {
+  .court-filter { gap: 8px; }
+  .court-filter .cf-btn,
+  .court-filter .filter-btn {
+    min-height: 44px; padding-block: 0; display: inline-flex; align-items: center;
+  }
+}
+
+/* מתג השפה יושב בכותרת, ו-44px אמיתיים היו מגביהים אותה. לכן שטח המגע
+   מורחב בשכבה שקופה מעל, בלי לגעת בפריסה. ‎-11px‎ אנכית: 24 + 22 = 46. */
+.langsw__b { position: relative; }
+.langsw__b::after { content: ''; position: absolute; inset: -11px -3px; }
