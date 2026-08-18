@@ -265,11 +265,21 @@ function dragMove(g, day, slot, net, opts = {}) {
 // החלפת מיקום בין שני משחקים (מחוות הקשה-הקשה). אחד מהם יכול להיות במגירה.
 function swapGames(a, b) {
   if (a.locked || b.locked) { alert('אחד המשחקים נעול 📌.'); return false; }
+  // צילום ההפרות החוסמות **לפני** ההחלפה, בדיוק כמו ב-place(). בלי זה בעיה
+  // שכבר קיימת ביום — ושאין לה שום קשר לשני המשחקים האלה — פסלה כל החלפה
+  // ביום כולו, כולל תא שהמערכת עצמה סימנה בצהוב כחוקי.
+  const days = [...new Set([a.day, b.day].filter(Boolean))];
+  const before = new Set(days.flatMap(dayViolations)
+                             .filter(v => v.cls === 'block').map(violSig));
   const A = { day: a.day, slot: a.slot, net: a.net };
   a.day = b.day; a.slot = b.slot; a.net = b.net;
   b.day = A.day; b.slot = A.slot; b.net = A.net;
-  for (const d of new Set([a.day, b.day].filter(Boolean)))
-    if (dayViolations(d).some(v => v.cls === 'block')) { alert('ההחלפה יוצרת התנגשות. לא בוצעה.'); return false; }
+  for (const d of days)
+    for (const v of dayViolations(d))
+      if (v.cls === 'block' && !before.has(violSig(v))) {
+        alert('ההחלפה יוצרת התנגשות:\n' + v.text + '\n\nלא בוצעה.');
+        return false;
+      }
   return true;
 }
 

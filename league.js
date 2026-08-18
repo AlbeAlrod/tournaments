@@ -27,7 +27,7 @@ import {
 
 // לוח הגרירה — שלב 5. מודול תצוגה+שליטה שמקבל את המצב החי דרך Board.init().
 // אין לו window.* globals; פעולותיו בקידומת board.* ומוזרקות ל-ACT (ראו start()).
-import Board from './league-board.js?v=12';
+import Board from './league-board.js?v=13';
 import KO from './league-ko.js?v=4';
 
 // ============ זהות הליגה ============
@@ -3186,12 +3186,31 @@ function koGate(e) {
 }
 document.addEventListener('click',  koGate, true);
 document.addEventListener('change', koGate, true);
-// זכירת המקטעים הפתוחים באקורדיון ההגדרות
+// אקורדיון ההגדרות — **מקטע אחד פתוח בכל רגע**. קודם אפשר היה לפתוח כמה,
+// ואז מקטע גבוה (״ליגות״) דחף את כל השאר הרחק למטה והמנהלת איבדה את מקומה.
+// עכשיו פתיחה סוגרת את האחרים והמקטע הפתוח נשאר צמוד לראש הרשימה.
+// חל רק על עמוד ההגדרות; פאנלי המאסטר בלוז (publish/att/live) הם details
+// נפרדים ואינם חלק מהאקורדיון.
+const SETT_ACC = new Set(['general', 'leagues', 'nets', 'days', 'access']);
 document.addEventListener('toggle', e => {
   const d = e.target;
   if (d.tagName !== 'DETAILS' || !d.id.startsWith('sec-')) return;
   const id = d.id.slice(4);
-  d.open ? openSections.add(id) : openSections.delete(id);
+  if (!d.open) { openSections.delete(id); return; }
+  if (SETT_ACC.has(id))
+    for (const other of SETT_ACC) if (other !== id) openSections.delete(other);
+  openSections.add(id);
+  if (SETT_ACC.has(id)) {
+    // סוגרים את האחרים ב-DOM בלי paint() — paint באמצע אירוע toggle היה
+    // מחליף את ה-details שמתחתיו ומבטל את הפתיחה שהמשתמשת בדיוק עשתה.
+    for (const other of SETT_ACC) {
+      if (other === id) continue;
+      const el = document.getElementById('sec-' + other);
+      if (el) el.open = false;
+    }
+    // המקטע שנפתח עולה לראש אזור התוכן, כדי שלא יישאר מתחת לקפל.
+    requestAnimationFrame(() => d.scrollIntoView({ block: 'start', behavior: 'smooth' }));
+  }
 }, true);
 
 // חיבור לוח הגרירה (שלב 5): מזריק את המצב החי ואת הכלים ש-league.js מחזיק
