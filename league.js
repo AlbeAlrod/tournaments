@@ -28,7 +28,7 @@ import {
 // לוח הגרירה — שלב 5. מודול תצוגה+שליטה שמקבל את המצב החי דרך Board.init().
 // אין לו window.* globals; פעולותיו בקידומת board.* ומוזרקות ל-ACT (ראו start()).
 import Board from './league-board.js?v=11';
-import KO from './league-ko.js?v=2';
+import KO from './league-ko.js?v=4';
 
 // ============ זהות הליגה ============
 // ⚠️ המזהה הזה מופיע בכתובת הציבורית שכל 72 השחקניות מקבלות. הוא לא זמני.
@@ -960,8 +960,9 @@ const PAGES = [
   { id:'ko',        k:'nav.ko',        min:0, gate:ffPublished },
   { id:'teams',     k:'nav.teams',     min:2 },
   { id:'sched',     k:'nav.sched',     min:2 },
-  { id:'settings',  k:'nav.settings',  min:2 },
-  { id:'status',    k:'nav.status',    min:2 }
+  { id:'settings',  k:'nav.settings',  min:2 }
+  // 'status' — עמוד אבחון פנימי. הוסר מהניווט (החלטת המשתמשת 18.8); הרנדרר
+  // נשאר לשימוש ידני, אבל אין אליו דרך מהאתר.
 ];
 
 // מקטעי ההגדרות הפתוחים. בלי זה כל הקלדה סוגרת את כל האקורדיון,
@@ -1735,7 +1736,7 @@ function renderSettings() {
       ${m.logoUrl ? `<img src="${escH(m.logoUrl)}" class="logo-prev-img" alt="" onerror="this.style.display='none'"/>` : ''}`)}
     ${colorRow('primaryColor',   'צבע ראשי',   'כל שאר הצבעים באתר נגזרים ממנו אוטומטית, עם ניגודיות WCAG מובטחת.')}
     ${colorRow('secondaryColor', 'צבע משני',   '')}
-    ${colorRow('loadingColor',   'צבע מסך טעינה', 'ורוד לפי החלטה 14.')}
+    ${colorRow('loadingColor',   'צבע מסך טעינה', 'ורוד.')}
     ${row('פונט', 'שלושתם תומכים בעברית.', `
       <select class="text-inp" style="width:150px" data-act="meta.font">
         ${FONTS.map(f => `<option value="${f}"${m.font === f ? ' selected' : ''}>${f}</option>`).join('')}
@@ -1787,7 +1788,7 @@ function renderSettings() {
 
   const leaguesNote = `<div class="info-box" style="margin-bottom:12px">
     תקרה ריקה = <strong>ללא תקרה</strong>. כך מוגדר חצי הגמר של ליגה שנייה —
-    מערכה עד 21 בהפרש 2 בלי גג (החלטה 18). כל השאר: תקרה 25 לפי 3.5.
+    מערכה עד 21 בהפרש 2 בלי גג. כל השאר: תקרה 25.
   </div>`;
 
   // ── 3. רשתות ──
@@ -1853,21 +1854,14 @@ function renderSettings() {
 
   // ── 5. שוברי שוויון ──
   const tie = `<div class="info-box" style="margin:0">
-    <strong>נעול לפי 3.10 בתקנון — אינו ניתן לשינוי.</strong>
-    <ol style="margin:8px 0 0;padding-inline-start:20px;line-height:1.9">
-      <li>נקודות כלליות</li>
-      <li>הפרש נקודות (3.10.1)</li>
-      <li>שתי קבוצות — מפגש ישיר (3.10.2)</li>
-      <li>שלוש ומעלה — מיני־ליגה בין הקשורות בלבד: נקודות ואז הפרש (3.10.3 והרחבתו)</li>
-    </ol>
+    נקודות ← הפרש ← מפגש ישיר ← מיני־ליגה.
+    <strong>נעול לפי התקנון, אינו ניתן לשינוי.</strong>
   </div>`;
 
   // ── 6. גישה ופעולות ──
   const access = `
     ${!m.managerPasswordHash ? `<div class="info-box scaffold-note">
-      ⚠️ <strong>לא הוגדרה סיסמת מאסטר, ולכן האתר פתוח לכולן</strong> — כל מי
-      שמגיעה לכתובת רואה את ההגדרות, את לוח הגרירה ואת עמוד הקבוצות.
-      הגדרת סיסמה כאן נועלת מיד את הכל חוץ משלושת העמודים הציבוריים.
+      ⚠️ <strong>לא הוגדרה סיסמת מאסטר</strong> — כל מי שמגיעה לכתובת רואה הכל.
     </div>` : ''}
     ${row('סיסמת אדמין', 'הזנת תוצאות וסימון טכני בלבד.',
       `<input class="text-inp" type="password" style="width:200px" placeholder="${m.adminPasswordHash ? '•••••• (מוגדרת)' : 'לא מוגדרת'}" data-act="pw.admin"/>`)}
@@ -1877,9 +1871,8 @@ function renderSettings() {
       `<span class="status-badge ${realRole() === 2 ? 'badge-approved' : realRole() === 1 ? 'badge-pending' : 'badge-rejected'}"
         >${realRole() === 2 ? 'מאסטר' : realRole() === 1 ? 'אדמין' : 'ציבור'}</span>`)}
     <div class="info-box" style="margin:12px 0 0">
-      הסיסמאות נשמרות כ-SHA-256 בלבד. עם זאת — אין Firebase Auth, וההרשאות
-      נאכפות בדפדפן. מי שיודעת את מזהה הליגה יכולה לקרוא את המסמך הגולמי כולל
-      ה-hash.
+      ההרשאה נאכפת בדפדפן בלבד. מי שיודעת את מזהה הליגה יכולה לקרוא את
+      המסמך הגולמי.
     </div>`;
 
   return `
@@ -2398,7 +2391,7 @@ function attPanel() {
       <span class="sett-desc">"מגיעה מ־" ו"עוזבת ב־" הן <strong>בקשות מראש</strong> —
         אילוץ קשיח שהמתזמן מכבד. אחרי שינוי כדאי "סדר מחדש" ליום הזה.
         "נעדרה" הוא מה שקרה <strong>בפועל</strong>: כל משחקיה במחזור נרשמים
-        כהפסד טכני ${L.meta.scoring?.walkoverFor ?? 18}:${L.meta.scoring?.walkoverAgainst ?? 10} לפי 6.3.1.</span>
+        כהפסד טכני ${L.meta.scoring?.walkoverFor ?? 18}:${L.meta.scoring?.walkoverAgainst ?? 10}.</span>
     </div>
   </details>`;
 }

@@ -296,7 +296,7 @@ function qualifiersCard(S) {
       <tbody>${rows}</tbody>
     </table></div>
     <span class="sett-desc" style="margin-top:10px">3.9.1 — ארבעת המקומות הראשונים.
-      "החלפה" (3.9.3) מציבה במקומה של קבוצה שאינה יכולה להשתתף את
+      "החלפה" מציבה במקומה של קבוצה שאינה יכולה להשתתף את
       <b>הקבוצה הגבוהה ביותר שלא העפילה</b>, ומתעדת את זה למטה.</span>
   </div>`;
 }
@@ -483,7 +483,7 @@ function subsLog(S) {
     </tr>`;
   }).join('');
   return `<div class="sett-section">
-    <div class="sett-section-title">החלפות שנרשמו (3.9.3)</div>
+    <div class="sett-section-title">החלפות שנרשמו</div>
     <div class="tscroll"><table class="stbl">
       <thead><tr><th>יצאה</th><th>נכנסה</th><th>מתי</th><th></th></tr></thead>
       <tbody>${rows}</tbody>
@@ -721,9 +721,9 @@ const ACT = {
     const { seeds, ranked, ranks } = seedsFor(cat);
     const out = seeds[i];
     const alt = nextAlternate(ranked, seeds, koOf(cat).substitutions);
-    if (!alt) { alert('אין קבוצה נוספת בטבלה שאפשר להעלות במקומה (3.9.3).'); return false; }
+    if (!alt) { alert('אין קבוצה נוספת בטבלה שאפשר להעלות במקומה.'); return false; }
     if (!confirm(`"${teamName(out)}" (מקום ${ranks[out] ?? '?'}) לא יכולה להשתתף בפיינל פור?\n\n` +
-      `לפי 3.9.3 היא תוחלף ב"${alt.row.name}" — הקבוצה הגבוהה ביותר שלא העפילה (מקום ${alt.rank}).`))
+      `היא תוחלף ב"${alt.row.name}" — הקבוצה הגבוהה ביותר שלא העפילה (מקום ${alt.rank}).`))
       return false;
     (koOf(cat).substitutions ||= []).push({
       out, in: alt.row.id, outRank: ranks[out] ?? null, inRank: alt.rank,
