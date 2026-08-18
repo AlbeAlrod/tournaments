@@ -43,7 +43,18 @@ const INIT      = params.get('init') === '1';   // יצירת דוק חדש — 
 // הפרמטר, ולכן הן רואות ניווט של צופה בלבד: הכפתור "כניסת מנהלת" פשוט אינו
 // שם. זו לא שכבת אבטחה (SECURITY.md — ההרשאה נאכפת בדפדפן ממילא), אלא
 // הסרת פקד שאינו שייך לאף אחת מהן. המנהלת שומרת את הקישור עם ‎?m=1‎.
-const MGR       = params.get('m') === '1';
+// ‎?m=1‎ מסמן את **המכשיר** ולא רק את הטעינה: בלי זה המנהלת מאבדת את הדלת
+// ברגע שהיא מנווטת בלי הפרמטר, וצריכה לזכור את הקישור המדויק. השחקניות
+// לעולם לא מגיעות עם ‎?m=1‎, ולכן הדגל לא נוצר אצלן והכפתור נשאר מוסתר.
+// ‎MGR_LINK‎ (הפרמטר עצמו) הוא מה שפותח את הדיאלוג אוטומטית — אחרת הוא
+// היה נפתח בכל טעינה על המכשיר של המנהלת.
+const MGR_LINK  = params.get('m') === '1';
+const MGR = (() => {
+  try {
+    if (MGR_LINK) localStorage.setItem('futilina-mgr', '1');
+    return localStorage.getItem('futilina-mgr') === '1';
+  } catch (_) { return MGR_LINK; }
+})();
 
 // ============================================================================
 // מודל הנתונים — §5.1
@@ -1844,12 +1855,6 @@ function renderSettings() {
       </div>
     </div>`).join('');
 
-  // ── 5. שוברי שוויון ──
-  const tie = `<div class="info-box" style="margin:0">
-    נקודות ← הפרש ← מפגש ישיר ← מיני־ליגה.
-    <strong>נעול לפי התקנון, אינו ניתן לשינוי.</strong>
-  </div>`;
-
   // ── 6. גישה ופעולות ──
   const access = `
     ${!m.managerPasswordHash ? `<div class="info-box scaffold-note">
@@ -1872,7 +1877,6 @@ function renderSettings() {
   ${section('leagues',  '2 · ליגות',          leaguesNote + leagues)}
   ${section('nets',     '3 · רשתות',          netsNote + nets)}
   ${section('days',     '4 · ימים',           days)}
-  ${section('tie',      '5 · שוברי שוויון',   tie)}
   ${section('access',   '6 · גישה',           access)}`;
 }
 
@@ -3239,5 +3243,5 @@ Board.init({
   setSync('ok');
   // ‎?m=1‎ הוא **קישור הכניסה**, ולכן הוא פותח את הדיאלוג מיד. ביטול משאיר
   // את הכפתור ברצועה, כך שאין צורך לטעון מחדש כדי לנסות שוב.
-  if (MGR && secured() && !realRole()) openLogin();
+  if (MGR_LINK && secured() && !realRole()) openLogin();
 })();
