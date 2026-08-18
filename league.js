@@ -17,7 +17,7 @@ import {
 
 // שלוש השפות של העמודים הציבוריים. ראו league-i18n.js — כולל ההחלטה
 // שהכיוון נשאר RTL בכל שפה, כי שמות הקבוצות נשארים עברית.
-import { t, tData, getLang, setLang, LANGS } from './league-i18n.js?v=3';
+import { t, tData, getLang, setLang, LANGS } from './league-i18n.js?v=4';
 
 // המתזמן — שלב 3. מודול טהור: הוא לא מכיר את L, את ה-DOM או את Firestore,
 // והוא מקבל תמונת מצב ומחזיר משחקים ודוח. ראו league-sched.js.
@@ -254,7 +254,7 @@ function syncTeamNames(d) {
       // ישנה של league.js ושמרה בלי players). לא מוחקים אז את שמות הקבוצות —
       // משאירים את השם האחרון שהיה במסמך עד שהמרשם חוזר.
       if (names.some(n => !n)) continue;
-      t.name = names.join(' ');
+      t.name = names.join(' · ');
     }
 }
 
@@ -1346,11 +1346,7 @@ function renderSched() {
   const anyTeams = rosterCount.some(n => n >= 2);
   const days = regularDays();
 
-  const intro = `
-  <div class="info-box">
-    שלושת השלבים רצים בנפרד, וכל אחד שומר את מה שלפניו:
-    קביעת המפגשים · חלוקה ל-${days.length} ימים · סידור על הגריד.
-  </div>`;
+  const intro = '';
 
   if (!anyTeams) return intro + `
     <div class="sett-section empty">
@@ -1675,8 +1671,6 @@ function rrTable() {
         <th>לכל קבוצה</th></tr></thead>
       <tbody>${rows}</tbody>
     </table></div>
-    <span class="sett-desc" style="margin-top:10px">המשחקים האלה מתחלקים
-      על פני הימים, כך שכל יום יוצא מאוזן.</span>
   </div>`;
 }
 
@@ -2154,7 +2148,6 @@ function standTable(ranked) {
     </table></div>
     <!-- מה שהעמוד כבר מראה לא נכתב שוב: המסגרת הצהובה אומרת "1–4 מעפילות",
          והחץ בשורה אומר "לחיצה פותחת משחקים". נשאר סדר השוברים בלבד. -->
-    <span class="foot">${escH(t('stand.foot'))}</span>
   </div>`;
 }
 
@@ -3087,7 +3080,7 @@ function seedTestRoster() {
   };
   const mkTeam = (cat, i, pids) => ({
     id: `${CAT_PREFIX[cat]}t${String(i + 1).padStart(2, '0')}`,
-    players: pids, name: pids.map(p => reg[p].name).join(' '),
+    players: pids, name: pids.map(p => reg[p].name).join(' · '),
     active: true, withdrewAfterDay: null
   });
   // כל קבוצה שלישית = שלישייה, השאר זוגות

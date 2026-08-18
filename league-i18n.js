@@ -25,11 +25,8 @@ let lang = (() => {
   try {
     const saved = localStorage.getItem(KEY);
     if (LANGS.some(l => l[0] === saved)) return saved;
-    // ניחוש ראשון מהדפדפן: ברזילאית שנוחתת על הקישור מקבלת פורטוגזית
-    // בלי לחפש את המתג. עברית היא ברירת המחדל לכל השאר.
-    const nav = (navigator.languages || [navigator.language || '']).join(',').toLowerCase();
-    if (/\bpt\b|pt-/.test(nav)) return 'pt';
-    if (/\ben\b|en-/.test(nav)) return 'en';
+    // עברית תמיד, בלי ניחוש מהדפדפן (החלטת המשתמשת 18.8). מי שרוצה
+    // אנגלית או פורטוגזית בוחרת במתג, והבחירה נשמרת ל-localStorage.
   } catch (_) {}
   return 'he';
 })();
