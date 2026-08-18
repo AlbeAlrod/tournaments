@@ -25,9 +25,9 @@ td,th{border:1px solid #dde3ea;padding:4px 10px;text-align:right}
 
 <div class="warn">
 ⚠️ <b>יעד הכתיבה: <code id="tid">futilina-seedtest</code></b> — מסמך בדיקה זמני.<br>
-המסמך האמיתי <code>futilina-2026</code> <b>ייווצר מאוחר יותר</b>, כשהרוסטר מוכן (אחרי 12.8) — §5.3.
+המסמך האמיתי <code>futilina-2026</code> — הרוסטר מוכן, אפשר להקים. §5.3.
 הקובץ הזה חוסם כתיבה אליו בקוד; לשחרור, יש לשנות את <code>ALLOW_REAL_DOC</code> ידנית.<br>
-<b>אין כאן roster ואין games</b> — הם נוספים אחרי ההרשמה.
+<b>הרוסטר האמיתי כלול</b> (18.8). <b>games ריק</b> — הלוז נוצר במתזמן שבאתר.
 </div>
 
 <button onclick="seedAll()">▶ Seed / Overwrite</button>
@@ -45,9 +45,11 @@ td,th{border:1px solid #dde3ea;padding:4px 10px;text-align:right}
     <span class="sw" style="background:#000B19"></span>#000B19</td></tr>
   <tr><th>days</th><td>מחזור 1 (22.8) · 2 (29.8) · 3 (5.9) · 4 (12.9) · פיינל פור (19.9) ·
       משחקי הצלבה (מועד טרם נקבע, <code>date:null</code>) — כולם published:false</td></tr>
-  <tr><th>categories</th><td>שואו (rr:2, מגרש קבוע 1) · ליגה ראשונה (rr:1) · ליגה שנייה (rr:1, allowConsecutive)</td></tr>
+  <tr><th>categories</th><td>שואו (rr:2, מגרש קבוע 1) · ליגה ראשונה (rr:1) · ליגה שנייה (<b>rr:2</b>, allowConsecutive) — החלטה 20</td></tr>
   <tr><th>formats</th><td>§2.6 — סדיר 18 · חצי ב׳ 21 ללא תקרה · גמר הטוב מ-3 (18/18/15)</td></tr>
-  <tr><th>ריק בכוונה</th><td>players · roster · availability · attendance · games · blocks · ko · crossover</td></tr>
+  <tr><th>roster</th><td><b>הרוסטר האמיתי (18.8)</b> — ליגה א׳ 15 · ליגה ב׳ 7 · שאו 6 · 55 שחקניות במרשם.
+      מזהי שחקניות נגזרים לפי שם מלא, ולכן 6 צמדי קבוצות חולקים שחקנית (§5.4)</td></tr>
+  <tr><th>ריק בכוונה</th><td>availability · attendance · games · blocks · ko · crossover</td></tr>
 </table>
 
 <script type="module">
@@ -112,6 +114,91 @@ const F_BO3   = { sets:3, to:18, third:15, by:2, cap:25 };  // 3.9.4 / 3.9.6 —
 const F_SET21 = { sets:1, to:21, by:2, cap:null };          // 3.9.5 — חצי גמר ליגה ב׳
 
 // ============================================================================
+// הרוסטר האמיתי — התקבל 18.8.2026
+// ============================================================================
+// מקור: גרפיקות "הקבוצות" של ליגה א׳ (15) וליגה ב׳ (7) + רשימת השאו מהמנהלת.
+//
+// ⚠️ שמות בלבד. מזהי השחקניות (p001…) נגזרים כאן לפי **שם מלא מנורמל**, ולכן
+// שחקנית שמופיעה גם בליגה וגם בשאו מקבלת אוטומטית את אותו מזהה — וזה בדיוק
+// מה שיוצר את האילוץ הקשיח של §5.4. אותה נורמליזציה כמו normName ב-league.js
+// (trim + כיווץ רווחים + lowercase). נבדק: אין שתי שחקניות שונות עם שם זהה.
+//
+// תום מנור פרשה (18.8) ולכן אינה ברוסטר. ים לבנת עברה מקבוצה 5 לקבוצה 1.
+const R_LIGA1 = [
+  ['אלבי אלרוד', 'נורה עמר', 'ים לבנת'],
+  ['גבריאל זרד', 'שירי חובב'],
+  ['קלי לוי', 'עדי יהלום'],
+  ['אלינור אלבז', 'הילה סבג'],
+  ['רביד כהן', 'מוריאל נהרי'],
+  ['ברנדה הורנשטיין', 'בצ׳ינה טוסי'],
+  ['טאיס גנדלמן שטרוק', 'דורון אזולאי', 'פולה חדד'],
+  ['עמית קפלנסקי', 'עלמה זוסמן'],
+  ['אור שרעבי', 'עמית כהן'],
+  ['שי ארני', 'ראקל בן אוליאל'],
+  ['דפני פרידור', 'ליה אורגד'],
+  ['אליה עתאלי', 'שירה מקנזי', 'עמית ג׳נח'],
+  ['מאי גולדמן', 'טל אסולין'],
+  ['אילי לוי', 'מרג׳ורי פינגרמן', 'מאילי גלנטי'],
+  ['רותם קדוש', 'לואנה בוגר']
+];
+
+const R_LIGA2 = [
+  ['גאיה אלון', 'סתו ברקאי', 'אריאל אפרת'],
+  ['מאיה מיזרוח', 'דקל עורבי', 'מיכל וורקנוך'],
+  ['שרלן רוש', 'קרולינה רייטר', 'יעל כץ'],
+  ['אורטל תוהמי', 'עפרי גורן', 'שלי באום'],
+  ['עדן גואטה', 'שירז בואניש', 'דליה אוסטין'],
+  ['גילי יעקובי', 'נטליה אבן עטר', 'סטפני שוסטרמן'],
+  ['גל אליאן', 'עדי וייס']
+];
+
+// ⚠️ חלקי — בנות הזוג טרם התקבלו. המנהלת אישרה (18.8) שכל מי שתתווסף
+// **אינה באף ליגה אחרת**, ולכן הוספתן לא תיצור אילוץ קשיח חדש והלוז שנוצר
+// עכשיו יישאר תקף. שם הקבוצה נגזר מהשחקניות ולכן יתעדכן מאליו (החלטה 7).
+const R_SHOW = [
+  ['אילי לוי', 'מרג׳ורי פינגרמן'],   // שתיהן ליגה א׳ 14
+  ['קלי לוי', 'ים לבנת'],             // א׳03 · א׳01
+  ['אליה עתאלי'],                     // א׳12
+  ['אביב חלפון'],                     // אינה בליגה א׳/ב׳
+  ['שירה מקנזי'],                     // א׳12
+  ['אלבי אלרוד', 'נורה עמר']          // שתיהן ליגה א׳ 01
+];
+
+const CAT_PREFIX = { show:'s', liga1:'l1', liga2:'l2' };
+const normName = s => String(s || '').trim().replace(/\s+/g, ' ').toLowerCase();
+
+// בונה מרשם + רוסטר. מחזיר { players, roster } תואם §5.1/§5.4.
+function buildRoster() {
+  const players = {};
+  const byName  = new Map();   // שם מנורמל -> מזהה
+  let n = 0;
+  const pidOf = name => {
+    const k = normName(name);
+    if (byName.has(k)) return byName.get(k);          // אותה שחקנית — אותו מזהה
+    const id = 'p' + String(++n).padStart(3, '0');
+    players[id] = { name: String(name).trim() };
+    byName.set(k, id);
+    return id;
+  };
+  // סדר הבנייה: ליגה א׳ -> ליגה ב׳ -> שאו. השאו אחרון בכוונה, כדי ששחקניות
+  // הליגה יקבלו את המזהה שלהן קודם והשאו רק ימחזר אותו.
+  const build = (cat, teams) => teams.map((names, i) => {
+    const pids = names.map(pidOf);
+    return {
+      id: `${CAT_PREFIX[cat]}t${String(i + 1).padStart(2, '0')}`,
+      players: pids,
+      name: pids.map(id => players[id].name).join(' '),
+      active: true,
+      withdrewAfterDay: null
+    };
+  });
+  const liga1 = build('liga1', R_LIGA1);
+  const liga2 = build('liga2', R_LIGA2);
+  const show  = build('show',  R_SHOW);
+  return { players, roster: { show, liga1, liga2 } };
+}
+
+// ============================================================================
 // המסמך — §5.1
 // ============================================================================
 function buildDoc() {
@@ -119,7 +206,7 @@ function buildDoc() {
     meta: {
       mode: 'league',                  // כך admin.html ממשיך להציג את הליגה ברשימה
       name: 'ליגת קיץ פוצ׳ילינה 2026',
-      logoUrl: '',                     // §15.2 — הלוגו טרם התקבל
+      logoUrl: 'https://albealrod.github.io/tournaments/logo.svg',   // §15.2
       primaryColor:   BRAND_PRIMARY,
       secondaryColor: BRAND_SECONDARY,
       loadingColor:   BRAND_PINK,      // מסך הטעינה הוורוד
@@ -154,8 +241,11 @@ function buildDoc() {
     categories: [
       { id:'show',  name:'ליגת שואו',   rr:2, order:1, fixedNet:1 },  // RR כפול, מגרש קבוע
       { id:'liga1', name:'ליגה ראשונה', rr:1, order:2 },              // 3.4 — RR יחיד
-      // רק ליגה ב׳ מתירה שני משחקים ברצף (נדיר) — מוצא למתזמן במקום המתנה ארוכה.
-      { id:'liga2', name:'ליגה שנייה',  rr:1, order:3, allowConsecutive:true }
+      // rr:2 — החלטה 20 (18.8): ליגה ב׳ נסגרה על 7 קבוצות, וב-RR יחיד קבוצה
+      // הייתה משחקת 6 משחקים בעונה בלבד. RR כפול => 42 משחקים, 12 לקבוצה.
+      // allowConsecutive קריטי כאן: 7 קבוצות => תקרה של 1.5 משחקים לסלוט
+      // כשאוסרים רצף לחלוטין (§4.1). בלעדיו המחזור נפרס על 8 סלוטים.
+      { id:'liga2', name:'ליגה שנייה',  rr:2, order:3, allowConsecutive:true }
     ],
 
     formats: {
@@ -164,10 +254,8 @@ function buildDoc() {
       liga2: { regular:clone(F_SET18), sf:clone(F_SET21), third:clone(F_SET18), final:clone(F_BO3) }
     },
 
-    // כל אלה ריקים בכוונה — הרוסטר נסגר אחרי ההרשמה (12.8) והלוז נוצר
-    // אחריו במתזמן. זריעה שלהם כאן הייתה מייצרת נתונים שיידרסו.
-    players:      {},
-    roster:       { show:[], liga1:[], liga2:[] },
+    // הרוסטר האמיתי (18.8). games נשאר ריק — הלוז נוצר במתזמן שבאתר.
+    ...buildRoster(),
     availability: {},
     attendance:   {},
     games:        [],
@@ -218,7 +306,10 @@ window.seedAll = async function () {
     log('  יום:        ' + D.meta.days[0].slots + ' סלוטים × ' + D.meta.days[0].slotMin +
         ' דק׳ מ-' + D.meta.days[0].startTime + ' · ' + D.meta.days[0].beach);
     log('  categories: ' + D.categories.map(c => c.name + ' (rr:' + c.rr + ')').join(' · '));
-    log('  roster/games ריקים — יתווספו אחרי ההרשמה.');
+    log('  roster:     ' + ['liga1','liga2','show']
+          .map(c => c + ' ' + D.roster[c].length).join(' · ') +
+        '  |  ' + Object.keys(D.players).length + ' שחקניות במרשם');
+    log('  games ריק — הלוז נוצר במתזמן שבאתר.');
     log('✓ פתח: ' + location.origin + location.pathname.replace(/seed-futilina\.html$/, '') +
         'league.html?l=' + T_ID);
   } catch (e) { log('✗ ' + e.message); console.error(e); }
