@@ -111,7 +111,6 @@ function defaultDoc() {
 
       days: defaultDays(),
 
-      showPastDays: true,
       tieBreak: ['pts','diff','h2h'],   // 3.10 — נעול, לא ניתן לשינוי
 
       // §8.7 — דחיסת לוז חיה (שלב 6ב). כבוי = הלוז יציב לגמרי ואין הצעות.
@@ -912,19 +911,18 @@ async function tryLogin() {
 // day.published הוא המתג היחיד. הציבור והאדמין רואים רק ימים מפורסמים
 // (§7.1); המאסטר תמיד רואה הכל, ולכן הסינון נגזר מ-R() ולא ממשתנה נפרד.
 const todayISO = () => new Date().toISOString().slice(0, 10);
-const isPastDay = d => !!d.date && d.date < todayISO();
 
-// יום נראה לרמה הנוכחית: מפורסם, ואם המחזור כבר עבר — רק כשהמתג הכללי דלוק.
+// יום נראה לרמה הנוכחית: מפורסם. זהו.
+// היה כאן מתג כללי (showPastDays) שהוריד אוטומטית מחזורים שתאריכם עבר —
+// הוסר 18.8: הוא חפף לכפתור ההצגה/הסתרה שיש לכל יום בנפרד (החלטה 16),
+// ושני פקדים על אותה שאלה בלבלו יותר משהועילו.
 function dayVisible(d) {
   if (R() >= 2) return true;
-  if (!d.published) return false;
-  return L.meta.showPastDays !== false || !isPastDay(d);
+  return !!d.published;
 }
 
 // §8.5 — הפרסום חל גם על טאב הפיינל פור. המתג הוא `published` של יום 'ff',
 // אותו שדה ואותה פעולה (`pub.toggle`) של שאר המחזורים — אין מנגנון שני.
-// showPastDays **לא** חל עליו במכוון: הבראקט הוא התוצאה הסופית ואמור להישאר
-// באתר גם אחרי 19.9, בניגוד ללוז של מחזור שהסתיים.
 const ffDay = () => (L.meta.days || []).find(d => d.id === 'ff');
 const ffPublished = () => !!ffDay()?.published;
 
@@ -2290,7 +2288,7 @@ function masterSchedule() {
 function publishBar() {
   const days = (L.meta.days || []).filter(d =>
     d.id !== 'ff' && (L.games || []).some(g => g.day === d.id && g.slot));
-  const isShown = d => d.published && (L.meta.showPastDays !== false || !isPastDay(d));
+  const isShown = d => !!d.published;
   const shown = days.filter(isShown).length;
   const ff = ffDay();
   const summary = (!days.length ? 'פרסום — אין עדיין לוז'
@@ -2315,11 +2313,6 @@ function publishBar() {
     <div class="mpanel-body pub-bar-body">
       <div class="pub-chips">${chips}${ffChip}</div>
       <div class="pub-tools">
-        <label class="toggle-switch" title="מחזור שתאריכו עבר — להשאיר באתר או להוריד">
-          <input type="checkbox"${L.meta.showPastDays !== false ? ' checked' : ''} data-act="pub.past"/>
-          <span class="toggle-slider"></span>
-          <span class="toggle-txt">הצג מחזורים שהסתיימו</span>
-        </label>
         <button class="cf-btn" data-act="pub.preview">👀 איך זה נראה לשחקניות</button>
       </div>
       <span class="sett-desc">כל עוד מחזור מוסתר אפשר לגרור אותו בשקט — השחקניות
@@ -2952,7 +2945,6 @@ const ACT = {
     if (!d) return false;
     d.published = !d.published;
   },
-  'pub.past':    el => { L.meta.showPastDays = el.checked; },
   'pub.preview': () => { previewPublic = true; page = 'schedule'; paint(); return false; },
   'pub.exit':    () => { previewPublic = false; paint(); return false; },
   'pub.day':     el => { pubDay = el.dataset.day; },

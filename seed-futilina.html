@@ -37,7 +37,7 @@ td,th{border:1px solid #dde3ea;padding:4px 10px;text-align:right}
 
 <h3>מה נכתב</h3>
 <table>
-  <tr><th>meta</th><td>שם · mode:'league' · צבעי מותג · scoring · tieBreak · showPastDays · font</td></tr>
+  <tr><th>meta</th><td>שם · mode:'league' · צבעי מותג · scoring · tieBreak · font</td></tr>
   <tr><th>nets</th><td>
     <span class="sw" style="background:#EE2BC1"></span>#EE2BC1 ·
     <span class="sw" style="background:#DAFF00"></span>#DAFF00 ·
@@ -222,7 +222,6 @@ function buildDoc() {
 
       days: buildDays(),
 
-      showPastDays: true,
       tieBreak: ['pts','diff','h2h'],   // 3.10 — נעול, לא ניתן לשינוי
 
       // ניקוד — 3.7 + מקרים יוצאי דופן בסעיף 6.
@@ -343,7 +342,6 @@ window.verifyDoc = async function () {
     ck(JSON.stringify(m.tieBreak) === '["pts","diff","h2h"]', 'tieBreak (3.10)');
     ck(m.scoring?.win === 2 && m.scoring?.loss === 1 && m.scoring?.techLoss === 0 &&
        m.scoring?.unfinished === 1.5, 'scoring (3.7 + 6.2)');
-    ck(m.showPastDays === true, 'showPastDays');
 
     const cats = d.categories || [];
     ck(cats.length === 3 && cats.map(c => c.id).join(',') === 'show,liga1,liga2', 'categories');
