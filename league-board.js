@@ -352,6 +352,7 @@ const overridable = v => ['availability', 'noReferee', 'backToBack', 'tooMany', 
 
 function violText(v, day) {
   const tm = v.team ? teamName(v.team) : '';
+  const ot = v.other ? teamName(v.other) : '';
   const at = v.slot ? slotLabel(day, v.slot) : '';
   const nt = v.net ? X.netName(v.net) : '';
   switch (v.kind) {
@@ -365,6 +366,12 @@ function violText(v, day) {
     case 'longWait':     return `${tm} ממתינה יותר מסלוט אחד.`;
     case 'cellClash':    return `שני משחקים על אותו תא (${at} ${nt}).`;
     case 'blockedCell':  return `משחק על תא חסום (${at} ${nt}).`;
+    // שתי אלה הגיעו קודם מ-v.text של המתזמן, שהוא מודול טהור ולכן מכיר רק
+    // מזהי קבוצות ("st01 ו-l1t14"). הניסוח נבנה כאן, איפה שיש שמות ושעות.
+    case 'sharedPlayerSameSlot':
+      return `שחקנית משותפת — "${tm}" ו"${ot}" משחקות שתיהן ב-${at}.`;
+    case 'sharedPlayerAdjacent':
+      return `שחקנית משותפת — "${tm}" ו"${ot}" משחקות בסלוטים עוקבים סביב ${at}.`;
     default:             return v.text || v.kind;
   }
 }
