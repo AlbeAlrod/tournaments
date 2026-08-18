@@ -360,28 +360,40 @@ function classify(v, allowSet) {
 }
 const overridable = v => ['availability', 'noReferee', 'backToBack', 'tooMany', 'tooFew', 'noGames'].includes(v.kind);
 
+// "איפה המשחק" — מגרש ושעה. האזהרות של המתזמן נושאות slot אבל לא תמיד net,
+// כי הוא מודול טהור שלא מכיר את הלוח; את המגרש שולפים כאן מהמשחקים עצמם.
+function whereOf(dayId, slot, teamId) {
+  if (!slot) return '';
+  const g = gamesOf(dayId).find(x => x.slot === slot && x.net
+                                  && (x.a === teamId || x.b === teamId));
+  return g ? X.netName(g.net) : '';
+}
 function violText(v, day) {
   const tm = v.team ? teamName(v.team) : '';
   const ot = v.other ? teamName(v.other) : '';
   const at = v.slot ? slotLabel(day, v.slot) : '';
   const nt = v.net ? X.netName(v.net) : '';
+  const d  = day?.id || v.dayId;
+  const wA = whereOf(d, v.slot, v.team);
+  const wB = whereOf(d, v.slot, v.other);
+  const posA = wA ? `${wA} ${at}` : at;
   switch (v.kind) {
-    case 'doubleBooked': return `אי אפשר — ל${tm} כבר יש משחק ב-${at}.`;
-    case 'backToBack':   return `${tm} ישחקו פעמיים ברצף (${at}).`;
+    case 'doubleBooked': return `אי אפשר — ל${tm} כבר יש משחק ב-${posA}.`;
+    case 'backToBack':   return `${tm} ישחקו פעמיים ברצף — ${posA} והסלוט שאחריו.`;
     case 'tooMany':      return `ל${tm} יהיו יותר מ-4 משחקים ביום.`;
     case 'tooFew':       return `ל${tm} יהיו פחות מ-3 משחקים ביום.`;
     case 'noGames':      return `${tm} בלי אף משחק ביום.`;
-    case 'availability': return `${tm} ביקשו חלון זמן אחר — המשחק ב-${at} חורג ממנו.`;
+    case 'availability': return `${tm} ביקשו חלון זמן אחר — המשחק ב-${posA} חורג ממנו.`;
     case 'noReferee':    return `שתי הקבוצות ב-${at} ${nt} ממשיכות לסלוט הבא — אין מי שישפוט.`;
-    case 'longWait':     return `${tm} ממתינה יותר מסלוט אחד.`;
+    case 'longWait':     return `${tm} ממתינה יותר מסלוט אחד${at ? ` (${at})` : ''}.`;
     case 'cellClash':    return `שני משחקים על אותו תא (${at} ${nt}).`;
     case 'blockedCell':  return `משחק על תא חסום (${at} ${nt}).`;
     // שתי אלה הגיעו קודם מ-v.text של המתזמן, שהוא מודול טהור ולכן מכיר רק
     // מזהי קבוצות ("st01 ו-l1t14"). הניסוח נבנה כאן, איפה שיש שמות ושעות.
     case 'sharedPlayerSameSlot':
-      return `שחקנית משותפת — "${tm}" ו"${ot}" משחקות שתיהן ב-${at}.`;
+      return `שחקנית משותפת ב-${at} — "${tm}" על ${wA || '?'} ו"${ot}" על ${wB || '?'}.`;
     case 'sharedPlayerAdjacent':
-      return `שחקנית משותפת — "${tm}" ו"${ot}" משחקות בסלוטים עוקבים סביב ${at}.`;
+      return `שחקנית משותפת — "${tm}" ב-${posA}, ו"${ot}" בסלוט הצמוד.`;
     default:             return v.text || v.kind;
   }
 }

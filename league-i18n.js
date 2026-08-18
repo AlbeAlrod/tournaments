@@ -65,9 +65,10 @@ const DATA_EXACT = {
   'משחקי הצלבה':           { en: 'Playoff',     pt: 'Repescagem' },
   'ליגת שואו':             { en: 'Show League', pt: 'Liga Show' },
   'ליגת שאו':              { en: 'Show League', pt: 'Liga Show' },
-  'ליגה ראשונה':           { en: 'League 1',    pt: 'Liga 1' },
-  'ליגה שנייה':            { en: 'League 2',    pt: 'Liga 2' },
-  'ליגה שלישית':           { en: 'League 3',    pt: 'Liga 3' },
+  // מילה ולא מספר — בעברית כתוב "ראשונה", ולכן גם באנגלית ובפורטוגזית.
+  'ליגה ראשונה':           { en: 'First League',  pt: 'Primeira Liga' },
+  'ליגה שנייה':            { en: 'Second League', pt: 'Segunda Liga' },
+  'ליגה שלישית':           { en: 'Third League',  pt: 'Terceira Liga' },
   'חוף בוגרשוב, תל אביב':  { en: 'Bograshov Beach, Tel Aviv', pt: 'Praia Bograshov, Tel Aviv' }
 };
 

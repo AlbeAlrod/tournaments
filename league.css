@@ -765,9 +765,14 @@ main {
 /* תוכן קריאה — מידה נוחה בתוך הקנבס הרחב */
 .info-box, .scaffold-note, .sett-desc { max-width: 900px; }
 /* עמוד ההגדרות — מקטעים זה לצד זה במסך רחב */
+/* §6.9 — פריסת ההגדרות. גריד היה עושה את גובה השורה כגובה המקטע הגבוה בה,
+   ולכן פתיחת "ליגות" דחפה את כל מה שמתחתיו הרחק למטה. עמודות (multi-column)
+   זורמות בנפרד: מקטע שנפתח מאריך את **העמודה שלו בלבד**, והשכן לצידו לא זז.
+   ‎break-inside: avoid‎ מונע ממקטע להישבר לשתי עמודות באמצע. */
 @media (min-width: 1200px) {
-  #page-body:has(.acc) { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; }
-  #page-body:has(.acc) > .info-box { grid-column: 1 / -1; }
+  #page-body:has(.acc) { columns: 2; column-gap: 16px; }
+  #page-body:has(.acc) > .acc { break-inside: avoid; margin: 0 0 16px; display: inline-block; width: 100%; }
+  #page-body:has(.acc) > .info-box { column-span: all; }
 }
 
 /* ── מקרא: זהות ליגות + שפת הצבעים (בתוך "מקרא ועזרה" המקופל) ──────────── */

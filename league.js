@@ -17,7 +17,7 @@ import {
 
 // שלוש השפות של העמודים הציבוריים. ראו league-i18n.js — כולל ההחלטה
 // שהכיוון נשאר RTL בכל שפה, כי שמות הקבוצות נשארים עברית.
-import { t, tData, getLang, setLang, LANGS } from './league-i18n.js?v=4';
+import { t, tData, getLang, setLang, LANGS } from './league-i18n.js?v=5';
 
 // המתזמן — שלב 3. מודול טהור: הוא לא מכיר את L, את ה-DOM או את Firestore,
 // והוא מקבל תמונת מצב ומחזיר משחקים ודוח. ראו league-sched.js.
@@ -27,7 +27,7 @@ import {
 
 // לוח הגרירה — שלב 5. מודול תצוגה+שליטה שמקבל את המצב החי דרך Board.init().
 // אין לו window.* globals; פעולותיו בקידומת board.* ומוזרקות ל-ACT (ראו start()).
-import Board from './league-board.js?v=13';
+import Board from './league-board.js?v=14';
 import KO from './league-ko.js?v=4';
 
 // ============ זהות הליגה ============
@@ -1045,7 +1045,11 @@ function roleTab() {
   const r = realRole();
   if (r) return `<button class="tab role-tab on" data-act="auth.click"
             title="${escH(t('auth.exitT'))}">${escH(t(r === 2 ? 'auth.master' : 'auth.admin'))} ✓</button>`;
-  return MGR ? `<button class="tab role-tab" data-act="auth.click">${escH(t('auth.login'))}</button>` : '';
+  // הכפתור מוצג תמיד כשיש סיסמה. ההסתרה מאחורי ‎?m=1‎ בלבד נכשלה פעמיים
+  // בפועל: המנהלת הגדירה סיסמה, ניווטה בלי הפרמטר, ונשארה בחוץ בלי דלת.
+  // אין כאן ויתור אבטחתי — ההרשאה נאכפת ממילא בדפדפן (SECURITY.md), והכפתור
+  // רק פותח דיאלוג שדורש את הסיסמה. הוא דהוי ויושב בקצה הרצועה.
+  return `<button class="tab role-tab" data-act="auth.click">${escH(t('auth.login'))}</button>`;
 }
 
 // §8.5 — "איך זה נראה לשחקניות". לא סימולציה: R() באמת יורד ל-0, ולכן גם
@@ -3186,31 +3190,14 @@ function koGate(e) {
 }
 document.addEventListener('click',  koGate, true);
 document.addEventListener('change', koGate, true);
-// אקורדיון ההגדרות — **מקטע אחד פתוח בכל רגע**. קודם אפשר היה לפתוח כמה,
-// ואז מקטע גבוה (״ליגות״) דחף את כל השאר הרחק למטה והמנהלת איבדה את מקומה.
-// עכשיו פתיחה סוגרת את האחרים והמקטע הפתוח נשאר צמוד לראש הרשימה.
-// חל רק על עמוד ההגדרות; פאנלי המאסטר בלוז (publish/att/live) הם details
-// נפרדים ואינם חלק מהאקורדיון.
-const SETT_ACC = new Set(['general', 'leagues', 'nets', 'days', 'access']);
+// זכירת המקטעים הפתוחים באקורדיון ההגדרות. כמה מקטעים יכולים להיות פתוחים
+// בו-זמנית — מה שמונע מהם לדחוף זה את זה הוא הפריסה (league.css §6.9), לא
+// סגירה כפויה.
 document.addEventListener('toggle', e => {
   const d = e.target;
   if (d.tagName !== 'DETAILS' || !d.id.startsWith('sec-')) return;
   const id = d.id.slice(4);
-  if (!d.open) { openSections.delete(id); return; }
-  if (SETT_ACC.has(id))
-    for (const other of SETT_ACC) if (other !== id) openSections.delete(other);
-  openSections.add(id);
-  if (SETT_ACC.has(id)) {
-    // סוגרים את האחרים ב-DOM בלי paint() — paint באמצע אירוע toggle היה
-    // מחליף את ה-details שמתחתיו ומבטל את הפתיחה שהמשתמשת בדיוק עשתה.
-    for (const other of SETT_ACC) {
-      if (other === id) continue;
-      const el = document.getElementById('sec-' + other);
-      if (el) el.open = false;
-    }
-    // המקטע שנפתח עולה לראש אזור התוכן, כדי שלא יישאר מתחת לקפל.
-    requestAnimationFrame(() => d.scrollIntoView({ block: 'start', behavior: 'smooth' }));
-  }
+  d.open ? openSections.add(id) : openSections.delete(id);
 }, true);
 
 // חיבור לוח הגרירה (שלב 5): מזריק את המצב החי ואת הכלים ש-league.js מחזיק
