@@ -32,6 +32,7 @@ td,th{border:1px solid #dde3ea;padding:4px 10px;text-align:right}
 
 <button onclick="seedAll()">▶ Seed / Overwrite</button>
 <button class="sec" onclick="verifyDoc()">🔍 בדיקה — קרא ואמת</button>
+<button class="sec" onclick="addLatin()">🔤 הוסף כתיב לטיני (בלי למחוק לוז)</button>
 <a id="open-link" href="./league.html?l=futilina-seedtest" target="_blank"><button class="sec" type="button">↗ פתח את הליגה</button></a>
 <div id="log"></div>
 
@@ -164,6 +165,66 @@ const R_SHOW = [
   ['אלבי אלרוד', 'נורה עמר']          // שתיהן ליגה א׳ 01
 ];
 
+// כתיב לטיני לכל שחקנית — משרת אנגלית ופורטוגזית כאחת. ניתן לתיקון
+// בעמוד קבוצות כשהאתר באנגלית/פורטוגזית, ולכן זו נקודת פתיחה ולא נעילה.
+const LAT = {
+  'אילי לוי': 'Illy Levy',
+  'מרג׳ורי פינגרמן': 'Marjorie Fingerman',
+  'קלי לוי': 'Kelly Levy',
+  'ים לבנת': 'Yam Livnat',
+  'אליה עתאלי': 'Elia Atali',
+  'אביב חלפון': 'Aviv Halfon',
+  'שירה מקנזי': 'Shira Meckenzi',
+  'אלבי אלרוד': 'Albe Alrod',
+  'נורה עמר': 'Nora Amar',
+  'גבריאל זרד': 'Gabriel Zarad',
+  'שירי חובב': 'Shiri Hovav',
+  'עדי יהלום': 'Adi Yahalom',
+  'אלינור אלבז': 'Elinor Elbaz',
+  'הילה סבג': 'Hila Sabag',
+  'רביד כהן': 'Ravid Cohen',
+  'מוריאל נהרי': 'Muriel Nahari',
+  'ברנדה הורנשטיין': 'Brenda Hornstein',
+  'בצ׳ינה טוסי': 'Bechina Tossi',
+  'טאיס גנדלמן שטרוק': 'Taís Gandelman Struck',
+  'דורון אזולאי': 'Doron Azoulay',
+  'פולה חדד': 'Paula Hadad',
+  'עמית קפלנסקי': 'Amit Kaplanski',
+  'עלמה זוסמן': 'Alma Zusman',
+  'אור שרעבי': 'Or Sharabi',
+  'עמית כהן': 'Amit Cohen',
+  'שי ארני': 'Shai Arni',
+  'ראקל בן אוליאל': 'Raquel Ben Oliel',
+  'דפני פרידור': 'Dafni Fridor',
+  'ליה אורגד': 'Lia Orgad',
+  'עמית ג׳נח': 'Amit Janah',
+  'מאי גולדמן': 'Mai Goldman',
+  'טל אסולין': 'Tal Asulin',
+  'מאילי גלנטי': 'Maili Galanti',
+  'רותם קדוש': 'Rotem Kadosh',
+  'לואנה בוגר': 'Luana Boger',
+  'גאיה אלון': 'Gaya Alon',
+  'סתו ברקאי': 'Stav Barkai',
+  'אריאל אפרת': 'Ariel Efrat',
+  'מאיה מיזרוח': 'Maya Mizroh',
+  'דקל עורבי': 'Dekel Orvi',
+  'מיכל וורקנוך': 'Michal Workneh',
+  'שרלן רוש': 'Charlene Roche',
+  'קרולינה רייטר': 'Carolina Reiter',
+  'יעל כץ': 'Yael Katz',
+  'אורטל תוהמי': 'Ortal Tohami',
+  'עפרי גורן': 'Ofri Goren',
+  'שלי באום': 'Shelly Baum',
+  'עדן גואטה': 'Eden Guetta',
+  'שירז בואניש': 'Shiraz Buanish',
+  'דליה אוסטין': 'Dalia Austin',
+  'גילי יעקובי': 'Gili Yaakobi',
+  'נטליה אבן עטר': 'Natalia Even Attar',
+  'סטפני שוסטרמן': 'Stephanie Schusterman',
+  'גל אליאן': 'Gal Elian',
+  'עדי וייס': 'Adi Weiss',
+};
+
 const CAT_PREFIX = { show:'s', liga1:'l1', liga2:'l2' };
 const normName = s => String(s || '').trim().replace(/\s+/g, ' ').toLowerCase();
 
@@ -176,7 +237,8 @@ function buildRoster() {
     const k = normName(name);
     if (byName.has(k)) return byName.get(k);          // אותה שחקנית — אותו מזהה
     const id = 'p' + String(++n).padStart(3, '0');
-    players[id] = { name: String(name).trim() };
+    const nm = String(name).trim();
+    players[id] = LAT[nm] ? { name: nm, lat: LAT[nm] } : { name: nm };
     byName.set(k, id);
     return id;
   };
@@ -285,6 +347,37 @@ function guardTarget() {
   }
   return true;
 }
+
+// מיגרציה נקודתית: מוסיפה כתיב לטיני למרשם של מסמך קיים ולא נוגעת בשום
+// דבר אחר. נחוצה כי הרצת seed מלאה מאפסת את games — ולוז שכבר סודר ביד
+// היה נמחק. מתאימה לפי שם עברי מנורמל, בדיוק כמו normName ב-league.js.
+window.addLatin = async function () {
+  logEl.textContent = '';
+  log('▶ מוסיף כתיב לטיני ל-"' + T_ID + '"…');
+  try {
+    const ref  = doc(db, 'tournaments', T_ID);
+    const snap = await getDoc(ref);
+    if (!snap.exists()) { log('✗ המסמך לא קיים.'); return; }
+    const players = snap.data().players || {};
+    const key = x => String(x || '').trim().replace(/\s+/g, ' ').toLowerCase();
+    const byKey = {};
+    for (const [h, l] of Object.entries(LAT)) byKey[key(h)] = l;
+    let added = 0, already = 0;
+    const miss = [];
+    for (const [id, p] of Object.entries(players)) {
+      const l = byKey[key(p.name)];
+      if (!l) { miss.push(p.name); continue; }
+      if (p.lat === l) { already++; continue; }
+      players[id] = { ...p, lat: l };
+      added++;
+    }
+    if (!added) { log('  אין מה לעדכן (' + already + ' כבר מעודכנות).'); return; }
+    await setDoc(ref, { players, updatedAt: serverTimestamp() }, { merge: true });
+    log('✓ עודכנו ' + added + ' שחקניות. ' + already + ' כבר היו מעודכנות.');
+    if (miss.length) log('⚠ ללא התאמה בטבלה: ' + miss.join(', '));
+    log('  games, roster ו-meta לא נגעו.');
+  } catch (e) { log('✗ ' + e.message); }
+};
 
 window.seedAll = async function () {
   logEl.textContent = '';

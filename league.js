@@ -216,6 +216,16 @@ function slotName(v, reg) {
   return v || '';
 }
 
+// שם השחקנית בשפת התצוגה. ‎name‎ (עברית) הוא מקור האמת ומה שהמרשם מזהה לפיו;
+// ‎lat‎ הוא הכתיב הלטיני, ומשרת גם אנגלית וגם פורטוגזית — אותו אלפבית, אותו שם.
+// בלי ‎lat‎ נופלים לעברית: עדיף שם נכון בעברית מאשר תעתיק אוטומטי שגוי.
+function slotDisp(v, reg) {
+  if (!isPid(v)) return v || '';
+  const p = (reg || L.players || {})[v];
+  if (!p) return '';
+  return (getLang() !== 'he' && p.lat) ? p.lat : (p.name || '');
+}
+
 function nextPlayerId() {
   const used = Object.keys(L.players || {})
     .map(k => parseInt(k.slice(1), 10)).filter(Number.isFinite);
@@ -1165,6 +1175,10 @@ function renderTeams() {
   const cards = L.categories.map(c => {
     const list = L.roster[c.id] || [];
     const PH = ['שחקנית ראשונה', 'שחקנית שנייה', 'שחקנית שלישית (רשות)'];
+    // באנגלית/פורטוגזית השדה עורך את הכתיב הלטיני ולא את הרוסטר עצמו: הרכבת
+    // הקבוצות נעשית בעברית, וכאן רק מתקנים איות. לכן גם בלי ההשלמה האוטומטית.
+    const PH_LAT = ['First player', 'Second player', 'Third player (optional)'];
+    const lat = getLang() !== 'he';
     const rows = list.map((t, i) => {
       const p = teamSlots(t);
       const fields = [0, 1, 2].map(s => {
@@ -1172,8 +1186,8 @@ function renderTeams() {
         const rest = (usage[pid] || []).filter(x => x.team.id !== t.id);
         return `
         <label class="player-slot${rest.length ? ' shared' : ''}"${rest.length ? ` title="${escH(sharedTip(rest))}"` : ''}>
-          <input class="text-inp team-player-inp" list="players-reg" autocomplete="off"
-                 value="${escH(slotName(p[s]))}" placeholder="${PH[s]}"
+          <input class="text-inp team-player-inp"${lat ? '' : ' list="players-reg"'} autocomplete="off"
+                 value="${escH(lat ? slotDisp(p[s]) : slotName(p[s]))}" placeholder="${lat ? PH_LAT[s] : PH[s]}"
                  data-act="team.player" data-id="${escH(t.id)}" data-slot="${s}"/>
         </label>`;
       }).join('');
@@ -1344,7 +1358,17 @@ function runScheduler(phases) {
 const NET_NAME  = id => (L.meta.nets || []).find(n => n.id === id)?.name  || ('רשת ' + id);
 const NET_COLOR = id => (L.meta.nets || []).find(n => n.id === id)?.color || '#888888';
 const CAT_NAME  = id => L.categories.find(c => c.id === id)?.name || id;
-const TEAM_NAME = id => findTeam(id)?.team.name || id;
+// ‎t.name‎ נשאר עברית ומשמש כמקור אמת ובנפילה. באנגלית/פורטוגזית השם נבנה
+// מחדש מהמרשם — כך שתיקון כתיב לטיני מחלחל לכל מקום בלי לגעת ברוסטר.
+const TEAM_NAME = id => {
+  const t = findTeam(id)?.team;
+  if (!t) return id;
+  if (getLang() !== 'he') {
+    const names = teamSlots(t).filter(Boolean).map(v => slotDisp(v));
+    if (names.length && names.every(Boolean)) return names.join(' · ');
+  }
+  return t.name || id;
+};
 
 // חיווט שלב 7 (פיינל פור + הצלבה). מוצב כאן, אחרי CAT_NAME/TEAM_NAME, כדי
 // שלא ליפול ל-TDZ של ה-const-ים (הם לא hoisted). paint()/queueSave/rankStandings/
@@ -2124,7 +2148,7 @@ function standTable(ranked) {
         data-act="stand.team" data-id="${escH(row.id)}" tabindex="0" role="button"
         aria-expanded="${open}">
       <td class="num c-rank">${rank}${tied ? `<span class="tie-mark" title="${escH(t('stand.tieT'))}">=</span>` : ''}</td>
-      <td class="stand-name c-team">${escH(row.name)}</td>
+      <td class="stand-name c-team">${escH(TEAM_NAME(row.id))}</td>
       <td class="num c-played">${row.played}</td>
       <td class="num">${row.wins}</td>
       <td class="num">${row.losses}</td>
@@ -2794,7 +2818,19 @@ const ACT = {
     const f = findTeam(el.dataset.id); if (!f) return false;
     const slots = teamSlots(f.team);
     const slot  = +el.dataset.slot;
-    slots[slot] = resolveSlot(el.value.trim().replace(/\s+/g, ' '), slots[slot], f.cat, f.team.id);
+    const typed = el.value.trim().replace(/\s+/g, ' ');
+    // באנגלית/פורטוגזית: עריכת כתיב בלבד. לא יוצרים שחקנית, לא משנים שיוך,
+    // ולא נוגעים ב-name העברי — אחרת החלפת שפה הייתה משכפלת את כל המרשם.
+    if (getLang() !== 'he') {
+      const pid = slots[slot];
+      if (isPid(pid) && L.players?.[pid]) {
+        if (typed) L.players[pid].lat = typed;
+        else delete L.players[pid].lat;
+      }
+      syncRosterInputs();
+      return;
+    }
+    slots[slot] = resolveSlot(typed, slots[slot], f.cat, f.team.id);
     f.team.players = slots;
     syncTeamNames(L);
     syncRosterInputs();
