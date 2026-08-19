@@ -165,7 +165,7 @@ body, .lname, .tab, .pill, .admin-toggle, .filter-btn, .cat-btn, .cf-btn,
 .brnd-title, .bm-label, .ko-lbl, .rtag, .ci,
 /* שלב 8: שלושה שנשארו מרווחים והם עברית מלאה — כותרות טבלת הדירוג,
    תוויות שדות ההגדרות, ותג ה-bye בבראקט. */
-.stbl th, .cat-sett-label, .bye-tag, .prev-label {
+.stbl th, .cat-sett-label, .bye-tag, .prev-label, .ko-stage {
   letter-spacing: 0;
   text-transform: none;
 }
@@ -1193,6 +1193,46 @@ nav {
 .ci { color: var(--ink-48); font-size: 11px; font-weight: 600; }
 .champ-name { color: var(--ink); font-weight: 800; }
 
+
+/* ── 6.8.1 סימון המגרש והשעה על משחקי הבראקט (§7.3) ───────────────────────
+   הצופָה מקבלת את הבראקט באותה שפה שבה היא מקבלת את הלוז: קו שיער, רדיוס
+   קטן, צבע המגרש על השפה המובילה (‎--net‎), ושם המגרש והשעה כתוויות-מיקרו
+   מעל השמות. זה אותו כרטיס של ‎.pub-game‎ (§7.3) ו-‎.res-card‎ (§7.3.1) —
+   מיחזור ולא דפוס שלישי, כדי שכרטיס על המסך יתאים למגרש שמול העיניים.
+
+   ‎.bmatch-box‎ (שהיה עטיפה חסרת גוף) הופך לכרטיס, ו-‎.bmatch‎ מוותר על
+   המסגרת שלו: אחרת פס הצבע היה רץ לצד השמות בלבד והתווית הייתה יושבת
+   מחוצה לו — כלומר שני גופים במקום כרטיס אחד.
+
+   ‎border-inline-start‎ ולא ‎border-right‎, בדיוק כמו ב-‎.pub-game‎ ו-‎.res-card‎.
+   ‎dir‎ נשאר ‎rtl‎ בכל שלוש השפות (ראו league-i18n.js), ולכן היום שני הכתיבים
+   נותנים אותה תוצאה — הסיבה היא שזה מה שכרטיסי הלוז כותבים. אם יום אחד
+   ייפתח LTR מלא לאנגלית, פס הצבע של הבראקט יזוז יחד עם שלהם ולא נגדם. */
+.ko-box { padding: 7px 10px 8px; background: var(--ground);
+  border: 1px solid var(--line-soft); border-radius: var(--rs);
+  border-inline-start: 3px solid var(--net, var(--line)); }
+.ko-box .bmatch { border: 0; border-radius: 0; background: none; overflow: visible; }
+.ko-box .bteam { padding: 5px 0; min-height: 0; }
+.ko-box .bteam:last-child { border-bottom: 0; }
+.ko-head { display: flex; align-items: center; gap: 8px; min-height: 20px; }
+/* השלב הוא הזהות של הכרטיס — הוא בקצה הקריאה ובמשקל מלא. המגרש והשעה הם
+   הסימון, ולכן הם תוויות-מיקרו באותו גודל וגוון של ‎.pub-net‎ / ‎.pub-when‎,
+   ונדחפות לקצה השני באותו ‎margin-inline-start:auto‎ של ‎.rc-net‎ (הפוך בכיוון,
+   כי שם המגרש פותח את הכרטיס וכאן הוא סוגר אותו). */
+.ko-stage { font-size: 11px; font-weight: 700; color: var(--ink); }
+.ko-net { margin-inline-start: auto; }
+.ko-net, .ko-when { flex-shrink: 0; font-size: 10.5px; font-weight: 600; color: var(--ink-48); }
+/* שורה תחתונה אחת: פירוט המערכות כשיש תוצאה, אחרת הפורמט. ראו matchBox. */
+.ko-foot { display: block; margin-top: 3px; font-size: 10.5px; color: var(--ink-48); }
+/* "מק׳ 1" — מספר בתוך תווית עברית. ‎unicode-bidi:isolate‎ בלבד ולא
+   ‎direction:ltr‎ של ‎.num‎: הכיוון של התווית עצמה עברי, ומה שנדרש הוא רק
+   שהיא לא תתערבב עם הניקוד שאחריה באותה שורה. */
+.ko-seed { font-weight: 600; color: var(--ink-48); unicode-bidi: isolate; }
+/* שני בוררי הדריסה (מאסטר, מעל שורות ההזנה). קומפקטיים במכוון — הם
+   מתארים משבצת בלוז ולא אמורים להתחרות עם התוצאה עצמה. */
+.ko-place { display: flex; flex-wrap: wrap; gap: 6px; margin: 3px 0 7px; }
+.ko-sel { width: auto; min-width: 128px; padding: 5px 8px; font-size: 12px; }
+
 /* ── 6.9 קריאוּת עברית ────────────────────────────────────────────────────
    רווח שורות של styles.css כויל לטקסט לטיני קצר. בעברית, עם ניקוד-סרק
    ואותיות סופיות, פסקה שלמה צריכה יותר אוויר. */
@@ -1693,6 +1733,9 @@ footer { border-top-color: var(--line-soft); color: var(--ink-32); }
   .res-card { font-size: 13px; padding: 7px 10px 8px; }
   .res-card .res-inp { width: 44px; min-height: 44px; padding: 9px 4px; }
   .res-slot-t { font-size: 12px; }
+  /* אותו תקן מגע לבוררי המגרש והשעה של הבראקט (§6.8.1): 128px×2 עדיין
+     נכנסים בשורה אחת ב-375, ולכן רק הגובה עולה. */
+  .ko-sel { min-height: 44px; }
   .att-tbl { min-width: 560px; }
   .role-tab { margin-inline-start: 0; }
 }

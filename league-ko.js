@@ -25,6 +25,11 @@
 // ============================================================================
 
 import { escH } from './common.js?v=2';
+// ‎?v=6‎ — אותה מחרוזת בדיוק כמו ב-league.js, ולא גרסה משלנו: מודול נטען פעם
+// אחת לכל URL, ו-‎lang‎ הוא מצב פנימי שלו. מפרט גרסה אחר יוצר עותק שני של
+// המילון עם שפה משלו, ואז מתג השפה בכותרת מזיז את הדירוג ולא את הבראקט.
+// מי שמעדכנת את ה-‎?v‎ של league-i18n.js חייבת לעדכן גם כאן.
+import { t, tData } from './league-i18n.js?v=7';
 
 // ============================================================================
 // ההקשר המוזרק מ-league.js
@@ -36,6 +41,11 @@ let X = null;   // { getL, queueSave, repaint, rankStandings, teamName, catName,
 // נשמרת. מסך שנראה עריך ואינו עריך גרוע ממסך נעול.
 const ROLE = () => (X?.role ? X.role() : 2);
 const RO   = lvl => ROLE() >= lvl ? '' : ' disabled';
+// ‎RO‎ נועל פקד שכבר מרונדר, וזה נכון לאדמין שרואה כפתור של מאסטר: הוא יודע
+// שהפעולה קיימת ושאיננה שלו. לצופָה זה לא נכון — פקד מנוטרל הוא עדיין
+// הבטחה ("יש כאן משהו, פשוט לא עכשיו"), ולצופָה אין מה להבטיח. ‎ADMIN‎ מחליט
+// מה **נבנה**, ‎RO‎ רק מה שנבנה נעול. הגדר עצמה (‎koGate‎ ב-league.js) לא זזה.
+const ADMIN = () => ROLE() >= 1;
 const L = () => X.getL();
 
 // §10.1 — עותק זהה לזה שב-league.js. league.js לא מייצא אותו (§5.3 נועל את
@@ -87,10 +97,93 @@ const fmtOf = (catId, stage) => (L().formats?.[catId]?.[stage]) || F_FALLBACK[st
 // שליגה ב׳ משחקת חצי גמר עד 21 ואילו הגמר שלה הוא הטוב מ-3.
 function fmtText(f) {
   if (!f) return '';
-  const cap = f.cap == null ? 'ללא תקרה' : `תקרה ${f.cap}`;
+  const cap = f.cap == null ? t('ko.capNone') : t('ko.cap', { n:f.cap });
   return f.sets === 3
-    ? `הטוב מ-3 · ${f.to}/${f.to}/${f.third ?? f.to} · ${cap}`
-    : `מערכה עד ${f.to} · ${cap}`;
+    ? t('ko.bo3', { sets:`${f.to}/${f.to}/${f.third ?? f.to}`, cap })
+    : t('ko.oneSet', { to:f.to, cap });
+}
+
+// ============================================================================
+// מגרש ושעה (§7.3) — נגזרים מיום השלב, עם דריסה ידנית
+// ============================================================================
+//
+// הפיינל פור וההצלבה אינם עוברים במתזמן (§8.5: "הפיינל פור אינו משובץ לגריד"),
+// ולכן למשחקים שלהם אין ‎net‎/‎slot‎ שמגיע מהלוז. אבל הצופָה שנכנסת לעמוד צריכה
+// בדיוק את מה שהלוז הרגיל נותן לה — לאיזה מגרש ללכת ובאיזו שעה — ולכן:
+//
+//   • ברירת מחדל **נגזרת** מיום השלב (‎startTime‎ · ‎slotMin‎ · ‎netIds‎):
+//     שני החצאים במקביל בסלוט הראשון, הגמר ומקום 3–4 במקביל בשני. ארבע
+//     קבוצות ושני מגרשים — זה הסידור היחיד שאין בו קבוצה שממתינה סבב.
+//   • המנהלת יכולה לדרוס, וזה מה שנשמר. ‎null‎ פירושו "אוטומטי", ולכן שינוי
+//     בשעת ההתחלה של היום ממשיך להזיז את כל מה שלא נדרס ידנית.
+//
+// מיקום הפיינל פור נשמר ב-‎K.place‎ ולא על המשחק עצמו: ‎alignMatch‎ מאפס משחק
+// שהזוג בו התחלף, והמגרש הוא תכונה של המשבצת בחוף — לא של הזוג ששיחק בה.
+// בהצלבה יש שני משחקים בלבד ואין מפתח שלב, ולכן שם הוא יושב על המשחק
+// ו-‎syncCross‎ גורר אותו מעבר לאיפוס (ראו שם).
+
+const dayOf = id => (L().meta?.days || []).find(d => d.id === id) || null;
+
+// עותק מקומי של שעון הסלוטים (§4.6). league.js מייצא ‎slotTime‎, אבל §5.3
+// אוסר לייבא ממנו — וזו נוסחה של שורה אחת.
+const hhmmToMin = v => { const [h, m] = String(v || '0:0').split(':').map(Number); return h * 60 + m; };
+const minToHhmm = v => `${String(Math.floor(v / 60)).padStart(2, '0')}:${String(v % 60).padStart(2, '0')}`;
+const slotTime  = (day, slot) => minToHhmm(hhmmToMin(day.startTime) + (slot - 1) * (day.slotMin || 0));
+
+// ברירת המחדל לכל שלב: [אינדקס בתוך מגרשי היום, מספר הסלוט].
+const FF_PLACE    = { sf0:[0, 1], sf1:[1, 1], third:[1, 2], final:[0, 2] };
+const CROSS_PLACE = [[0, 1], [1, 1]];
+
+const dayNets  = day => (day?.netIds?.length ? day.netIds : (L().meta?.nets || []).map(x => x.id));
+const netOf    = id => (L().meta?.nets || []).find(x => x.id === id) || null;
+const netName  = id => (id ? tData(netOf(id)?.name || ('מגרש ' + id)) : '');
+const netColor = id => netOf(id)?.color || '';
+
+// המיקום השמור של שלב בפיינל פור. אין כאן יצירה עצלה — הפונקציה נקראת מתוך
+// רינדור, ומגע במסמך שם היה מייצר שמירה על כל צביעה.
+const savedPlace = (catId, key) => (L().ko?.[catId]?.place || {})[key] || null;
+
+// { net, slot, time } אחרי החלת הדריסה. ‎day‎ יכול להיות ‎null‎ (מסמך בלי היום
+// הזה) — אז אין שעה, והמגרש נופל למגרש הראשון של הליגה.
+function placeOf(day, saved, def) {
+  const nets = dayNets(day);
+  return {
+    net:  saved?.net  ?? (nets[def[0]] ?? nets[0] ?? null),
+    slot: saved?.slot ?? def[1],
+    time: day?.startTime ? slotTime(day, saved?.slot ?? def[1]) : ''
+  };
+}
+
+// הסימון עצמו — אותן שתי תוויות-מיקרו של ‎.pub-game‎ (§7.3): שם המגרש ואחריו
+// השעה. הצבע אינו כאן אלא ב-‎koMarkStyle‎, כי הוא נישא על השפה המובילה של
+// הכרטיס כולו ולא על התווית.
+const koMark = p => (p.net ? `<span class="ko-net">${escH(netName(p.net))}</span>` : '')
+                  + (p.time ? `<span class="ko-when num">${escH(p.time)}</span>` : '');
+const koMarkStyle = p => (p.net && netColor(p.net)) ? ` style="--net:${escH(netColor(p.net))}"` : '';
+
+// שני בוררי הדריסה. בלי כפתור "איפוס": האפשרות הראשונה בכל בורר היא
+// "אוטומטי", ולכן חזרה לברירת המחדל היא בחירה ככל בחירה אחרת ולא פקד שלישי.
+//
+// ‎RO(2)‎ ולא ‎RO(1)‎: ‎KO_LEVEL‎ ב-league.js נותן ברירת מחדל 2 לכל פעולה שאינה
+// רשומה בו, וleague.js אינו שלי כאן. בורר שנראה פתוח ונחסם ב-capture הוא
+// בדיוק המסך שהמשימה הזאת באה לסלק.
+function placeRow(day, saved, def, attrs) {
+  const p    = placeOf(day, saved, def);
+  const nets = dayNets(day);
+  const auto = (label, val) => `<option value=""${val == null ? ' selected' : ''}>אוטומטי · ${escH(label)}</option>`;
+  const slots = Math.max(1, day?.slots || 8);
+
+  return `<div class="ko-place">
+    <select class="text-inp ko-sel" ${attrs} data-f="net"${RO(2)}
+      aria-label="מגרש">${auto(netName(p.net), saved?.net)}${
+      nets.map(id => `<option value="${id}"${saved?.net === id ? ' selected' : ''}>${escH(netName(id))}</option>`).join('')}
+    </select>
+    <select class="text-inp ko-sel" ${attrs} data-f="slot"${RO(2)}
+      aria-label="שעה">${auto(p.time || '—', saved?.slot)}${
+      Array.from({ length:slots }, (_, i) => i + 1).map(sl =>
+        `<option value="${sl}"${saved?.slot === sl ? ' selected' : ''}>${escH(day?.startTime ? slotTime(day, sl) : String(sl))}</option>`).join('')}
+    </select>
+  </div>`;
 }
 
 const emptyMatch = (a, b) => ({ a:a || null, b:b || null, sa:null, sb:null, sets:[], result:'pending' });
@@ -229,7 +322,7 @@ function syncKO(catId) {
 // רינדור — פיינל פור
 // ============================================================================
 
-const KEYS  = { sf0:'חצי גמר ①', sf1:'חצי גמר ②', third:'מקום 3–4', final:'גמר' };
+const KEYS  = { sf0:'ko.sf0', sf1:'ko.sf1', third:'ko.third', final:'ko.final' };
 const STAGE = { sf0:'sf', sf1:'sf', third:'third', final:'final' };
 
 const getMatch = (K, key) => key === 'sf0' ? K.sf?.[0] : key === 'sf1' ? K.sf?.[1] : K[key];
@@ -242,42 +335,44 @@ export function renderFinalFour(container) {
 
 function ffHtml() {
   const list = cats();
-  if (!list.length) return empty('אין ליגות מוגדרות.');
+  if (!list.length) return empty(escH(t('ko.noCats')));
 
   if (!koCat || !list.find(c => c.id === koCat)) koCat = list[0].id;
 
   const nav = `<div class="court-filter">${list.map(c =>
-    `<button class="cf-btn${c.id === koCat ? ' on' : ''}" data-ko="ko.cat" data-cat="${escH(c.id)}">${escH(c.name)}</button>`
+    `<button class="cf-btn${c.id === koCat ? ' on' : ''}" data-ko="ko.cat" data-cat="${escH(c.id)}">${escH(tData(c.name))}</button>`
   ).join('')}</div>`;
 
   const teams = (L().roster?.[koCat] || []).length;
-  if (teams < 4) return nav + empty(
-    `ל${catName(koCat)} יש ${teams} קבוצות. פיינל פור דורש ארבע מעפילות (3.9.1).`);
+  if (teams < 4) return nav + empty(escH(t('ko.few', { cat:tData(catName(koCat)), n:teams })));
 
   const S = syncKO(koCat);
-  if (!S.ready) return nav + empty('הדירוג עוד לא מספק ארבע קבוצות.');
+  if (!S.ready) return nav + empty(escH(t('ko.notReady')));
 
   // §2.5 — שוויון שנוגע לגבול הפיינל פור (מקומות 4–5) חוסם: התקנון לא מכריע
   // מי הרביעית, וההכרעה חייבת להירשם ידנית לפני שהבראקט נבנה.
   const blocking = S.alerts.filter(a => a.touchesF4);
   const seeding  = S.alerts.filter(a => !a.touchesF4 && a.start <= 4);
 
+  // הטווח נשאר ‎<b class="num">‎ (בידוד דו-כיווני) ולכן הוא נבנה כאן ולא במילון;
+  // מחרוזות המילון עצמן הן שלנו, והערכים שנכנסים אליהן הם מספרים או טקסט
+  // שכבר עבר escH.
+  const places = a => `<b class="num">${a.start}–${a.end}</b>`;
   const msgs =
-    blocking.map(a => `<div class="sched-msg err">⛔ שוויון מלא בין ${a.size} קבוצות על מקומות
-        <b class="num">${a.start}–${a.end}</b> — הוא נוגע לגבול הפיינל פור (4–5). התקנון לא מכריע
-        , ולכן הבראקט לא נבנה עד שההכרעה תירשם ידנית בעמוד <b>דירוג</b>.</div>`).join('') +
-    seeding.map(a => `<div class="sched-msg warn">⚠ שוויון לא מוכרע על מקומות
-        <b class="num">${a.start}–${a.end}</b>. כל הארבע מעפילות, אבל סדר השיבוץ (מי מול מי)
-        תלוי בהכרעה.</div>`).join('');
+    blocking.map(a => `<div class="sched-msg err">⛔ ${t('ko.tieBlock', { n:a.size, places:places(a) })}</div>`).join('') +
+    seeding.map(a => `<div class="sched-msg warn">⚠ ${t('ko.tieSeed', { places:places(a) })}</div>`).join('');
 
-  if (blocking.length) return nav + msgs + qualifiersCard(S) + subsLog(S);
+  // §7.1 — הצופָה מקבלת את העץ ואת התוצאות ותו לא. טבלת המעפילות אינה נבנית
+  // לה: היא חוזרת על מה שהבראקט (‎מק׳ N‎) והדירוג כבר מראים, וכפתור "החלפה"
+  // מנוטרל הוא הבטחה שאין לה כיסוי.
+  const mgr = ADMIN();
+
+  if (blocking.length) return nav + msgs + (mgr ? qualifiersCard(S) + subsLog(S) : '');
 
   return nav + msgs
-       + qualifiersCard(S)
-       + choiceCard(S)
+       + (mgr ? qualifiersCard(S) + choiceCard(S) : '')
        + bracket(S)
-       + entryCard(S)
-       + subsLog(S);
+       + (mgr ? entryCard(S) + subsLog(S) : '');
 }
 
 // ── כרטיס המעפילות + כפתור ההחלפה (3.9.1 + 3.9.3) ──────────────────────────
@@ -327,18 +422,18 @@ function bracket(S) {
   const champ = champBox(S);
 
   return `<div class="sett-section">
-    <div class="sett-section-title">הבראקט</div>
+    <div class="sett-section-title">${escH(t('ko.bracket'))}</div>
     <div class="bscroll" data-sk="ko-bracket" id="ko-bracket">
       <div class="btree">
         <div class="bround">
-          <div class="brnd-title">חצאי גמר</div>
+          <div class="brnd-title">${escH(t('ko.rndSemis'))}</div>
           <div class="brnd-matches">
             <div class="bmatch-wrap">${box('sf0')}</div>
             <div class="bmatch-wrap" style="margin-top:46px">${box('sf1')}</div>
           </div>
         </div>
         <div class="bround">
-          <div class="brnd-title">גמר</div>
+          <div class="brnd-title">${escH(t('ko.rndFinal'))}</div>
           <div class="brnd-matches" style="padding-top:56px">
             <div class="bmatch-wrap">${box('final')}</div>
           </div>
@@ -356,9 +451,10 @@ function matchBox(S, key) {
   const f = fmtOf(koCat, STAGE[key]);
   const m = getMatch(S.K, key) || emptyMatch(null, null);
   const d = decide(m, f);
+  const p = placeOf(dayOf('ff'), savedPlace(koCat, key), FF_PLACE[key]);
 
-  const ph = key === 'final' ? ['מנצחת חצי ①', 'מנצחת חצי ②']
-           : key === 'third' ? ['מפסידה חצי ①', 'מפסידה חצי ②']
+  const ph = key === 'final' ? [t('ko.wSf1'), t('ko.wSf2')]
+           : key === 'third' ? [t('ko.lSf1'), t('ko.lSf2')]
            : ['', ''];
 
   const side = (id, i) => {
@@ -370,21 +466,26 @@ function matchBox(S, key) {
     const seed = known && key.startsWith('sf') ? S.seeds.indexOf(id) + 1 : 0;
     return `<div class="bteam${win ? ' win' : ''}${known ? '' : ' tbd'}">
       <span class="bname">${escH(known ? teamName(id) : ph[i])}</span>
-      ${seed ? `<span class="bsc">מק׳ ${seed}</span>` : ''}
-      ${score !== '' ? `<span class="bsc">${score}</span>` : ''}
+      ${seed ? `<span class="bsc ko-seed">${escH(t('ko.seed', { n:seed }))}</span>` : ''}
+      ${score !== '' ? `<span class="bsc num">${score}</span>` : ''}
     </div>`;
   };
 
-  const sets = f.sets === 3 && (m.sets || []).length
-    ? `<span class="sett-desc" style="text-align:center;margin-top:4px">${
-        m.sets.filter(s => s && s.a != null && s.b != null)
-              .map(s => `${s.a}:${s.b}`).join(' · ')}</span>`
+  // שורה תחתונה אחת, לא שתיים: כשיש תוצאה פירוט המערכות הוא מה שקוראים,
+  // וכשאין — הפורמט הוא מה שצריך לדעת. כרטיס ברוחב 165px לא סובל את שתיהן.
+  const setList = f.sets === 3
+    ? (m.sets || []).filter(x => x && x.a != null && x.b != null).map(x => `${x.a}:${x.b}`).join(' · ')
     : '';
+  const foot = setList
+    ? `<span class="ko-foot num">${escH(setList)}</span>`
+    : `<span class="ko-foot">${escH(fmtText(f))}</span>`;
 
-  return `<div class="bmatch-box">
-    <div class="bm-label">${KEYS[key]} · ${escH(fmtText(f))}</div>
+  // אותו כרטיס של ‎.pub-game‎ (§7.3): שם השלב בקצה הקריאה, המגרש והשעה
+  // כתוויות-מיקרו, וצבע המגרש על השפה המובילה דרך ‎--net‎.
+  return `<div class="bmatch-box ko-box"${koMarkStyle(p)}>
+    <div class="ko-head"><span class="ko-stage">${escH(t(KEYS[key]))}</span>${koMark(p)}</div>
     <div class="bmatch">${side(m.a, 0)}${side(m.b, 1)}</div>
-    ${sets}
+    ${foot}
   </div>`;
 }
 
@@ -393,10 +494,10 @@ function champBox(S) {
   if (!d) return '';
   const third = decide(S.K.third, fmtOf(koCat, 'third'));
   return `<div class="champ-wrap">
-    <div class="ci">אלופת ${escH(catName(koCat))}</div>
+    <div class="ci">${escH(t('ko.champOf', { cat:tData(catName(koCat)) }))}</div>
     <div class="champ-name">${escH(teamName(d.win))}</div>
-    <span class="sett-desc" style="margin-top:8px">מקום 2: ${escH(teamName(d.lose))}${
-      third ? ` · מקום 3: ${escH(teamName(third.win))}` : ''}</span>
+    <span class="sett-desc" style="margin-top:8px">${escH(t('ko.place2'))}: ${escH(teamName(d.lose))}${
+      third ? ` · ${escH(t('ko.place3'))}: ${escH(teamName(third.win))}` : ''}</span>
   </div>`;
 }
 
@@ -419,9 +520,12 @@ function matchEntry(S, key) {
   const d = decide(m, f);
 
   const head = `<div class="sett-card-title" style="margin-bottom:2px">
-    ${KEYS[key]} <span class="muted">· ${escH(fmtText(f))}</span>
+    ${escH(t(KEYS[key]))} <span class="muted">· ${escH(fmtText(f))}</span>
     ${d ? `<span class="status-badge badge-approved">הסתיים</span>` : ''}
-  </div>`;
+  </div>`
+    // אותו מגרש ואותה שעה שהצופָה רואה בעץ — כאן הם ניתנים לדריסה.
+    + placeRow(dayOf('ff'), savedPlace(koCat, key), FF_PLACE[key],
+               `data-ko="ko.place" data-cat="${escH(koCat)}" data-key="${key}"`);
 
   if (!m.a || !m.b) return `<div style="margin-bottom:18px">${head}
     <span class="sett-desc">ממתין לתוצאות חצאי הגמר.</span></div>`;
@@ -520,8 +624,8 @@ function crossPlan() {
     ok:true, N, M, A, B,
     down:  [fromEnd(2), fromEnd(1)],          // N−1 ו-N — יורדות אוטומטית (3.11.1)
     up:    [B[0], B[1]],                      // 1 ו-2 — עולות אוטומטית (3.11.2)
-    pairs: [ { a:fromEnd(3), b:B[2], label:'שלישית מהסוף מול מקום 3' },   // 3.11.3
-             { a:fromEnd(4), b:B[3], label:'רביעית מהסוף מול מקום 4' } ], // 3.11.4
+    pairs: [ { a:fromEnd(3), b:B[2], label:'ko.x.pair3' },   // 3.11.3
+             { a:fromEnd(4), b:B[3], label:'ko.x.pair4' } ], // 3.11.4
     alerts: [...r1.alerts.map(a => ({ ...a, cat:'liga1' })),
              ...r2.alerts.map(a => ({ ...a, cat:'liga2' }))]
   };
@@ -535,7 +639,14 @@ function syncCross(P) {
   const next = P.pairs.map((p, i) => {
     const a = p.a?.row.id || null, b = p.b?.row.id || null;
     const cur = arr[i];
-    return (cur && cur.a === a && cur.b === b) ? cur : { a, b, sa:null, sb:null };
+    if (cur && cur.a === a && cur.b === b) return cur;
+    // המשבצת (מגרש · שעה) שייכת ללוז ולא לזוג: זוג שהתחלף מאפס את התוצאה,
+    // אבל המשחק עדיין באותה שעה ובאותו מגרש. נכתב רק אם נדרס בפועל, כדי
+    // שהמסמך לא יתמלא ב-‎null‎ עבור מה שממילא נגזר.
+    const g = { a, b, sa:null, sb:null };
+    if (cur?.net  != null) g.net  = cur.net;
+    if (cur?.slot != null) g.slot = cur.slot;
+    return g;
   });
   L().crossover = next;
   if (JSON.stringify(next) !== before) X.queueSave();
@@ -550,17 +661,18 @@ export function renderCrossover(container) {
 
 function crossHtml() {
   const has1 = (L().roster?.liga1 || []).length, has2 = (L().roster?.liga2 || []).length;
-  if (!has1 || !has2) return empty('משחקי ההצלבה נגזרים משתי הטבלאות הסופיות של ליגה ראשונה וליגה שנייה.');
+  if (!has1 || !has2) return empty(escH(t('ko.x.empty')));
 
   const P = crossPlan();
 
-  if (!P.ok) return `<div class="sched-msg err">⛔ ליגה ראשונה עם ${P.N} קבוצות בלבד${
-      P.M < MIN_M ? ` וליגה שנייה עם ${P.M}` : ''} — מנגנון ההצלבה של 3.11 לא ישים
-      (דורש N ≥ ${MIN_N} ו-M ≥ ${MIN_M}). המערכת לא מחשבת אוטומטית; נדרשת החלטה.</div>`
-      + finalTables(P);
+  if (!P.ok) return `<div class="sched-msg err">⛔ ${escH(t('ko.x.small', {
+      cat1:tData(catName('liga1')), n1:P.N,
+      more:P.M < MIN_M ? t('ko.x.smallAlso', { cat2:tData(catName('liga2')), n2:P.M }) : '',
+      minN:MIN_N, minM:MIN_M }))}</div>` + finalTables(P);
 
   const games = syncCross(P);
   const f = fmtOf('liga1', 'regular');
+  const mgr = ADMIN();
 
   // אזהרת §2.5 רק כששוויון לא מוכרע נוגע למקומות שהמנגנון קורא בהם.
   const hot1 = new Set([P.N, P.N - 1, P.N - 2, P.N - 3]);
@@ -569,67 +681,91 @@ function crossHtml() {
     const hot = a.cat === 'liga1' ? hot1 : hot2;
     for (let r = a.start; r <= a.end; r++) if (hot.has(r)) return true;
     return false;
-  }).map(a => `<div class="sched-msg warn">⚠ שוויון לא מוכרע ב${escH(catName(a.cat))} על מקומות
-      <b class="num">${a.start}–${a.end}</b> — הוא נוגע לגבול העלייה/ירידה. ההכרעה חייבת
-      להירשם לפני שההצלבה נקבעת (§2.5).</div>`).join('');
+  }).map(a => `<div class="sched-msg warn">⚠ ${t('ko.x.tie', { cat:escH(tData(catName(a.cat))),
+      places:`<b class="num">${a.start}–${a.end}</b>` })}</div>`).join('');
 
   const auto = `<div class="sett-section">
-    <div class="sett-section-title">אוטומטי — בלי משחק</div>
+    <div class="sett-section-title">${escH(t('ko.x.autoT'))}</div>
     <div class="tscroll"><table class="stbl">
-      <thead><tr><th>קבוצה</th><th>מאיפה</th><th>מקום</th><th>לאן</th></tr></thead>
+      <thead><tr><th>${escH(t('col.team'))}</th><th>${escH(t('ko.x.from'))}</th>
+        <th>${escH(t('ko.x.rank'))}</th><th>${escH(t('ko.x.to'))}</th></tr></thead>
       <tbody>
         ${P.down.map((r, i) => `<tr>
-          <td class="stand-name">${escH(r.row.name)}</td>
-          <td>${escH(catName('liga1'))}</td>
-          <td class="num">${r.rank} <span class="muted">(${i === 0 ? 'שנייה מהסוף' : 'אחרונה'})</span></td>
-          <td><span class="status-badge badge-rejected">⬇ יורדת לליגה שנייה</span></td></tr>`).join('')}
+          <td class="stand-name">${escH(teamName(r.row.id))}</td>
+          <td>${escH(tData(catName('liga1')))}</td>
+          <td class="num">${r.rank} <span class="muted">(${escH(t(i === 0 ? 'ko.x.last2' : 'ko.x.last'))})</span></td>
+          <td><span class="status-badge badge-rejected">${escH(t('ko.x.down', { cat:tData(catName('liga2')) }))}</span></td></tr>`).join('')}
         ${P.up.map(r => `<tr>
-          <td class="stand-name">${escH(r.row.name)}</td>
-          <td>${escH(catName('liga2'))}</td>
+          <td class="stand-name">${escH(teamName(r.row.id))}</td>
+          <td>${escH(tData(catName('liga2')))}</td>
           <td class="num">${r.rank}</td>
-          <td><span class="status-badge badge-approved">⬆ עולה לליגה ראשונה</span></td></tr>`).join('')}
+          <td><span class="status-badge badge-approved">${escH(t('ko.x.up', { cat:tData(catName('liga1')) }))}</span></td></tr>`).join('')}
       </tbody>
     </table></div>
-    <span class="sett-desc" style="margin-top:10px">הספירה מלמטה:
-      ב-${P.N} קבוצות בליגה ראשונה, "שתי האחרונות" הן מקומות
-      <b class="num">${P.N - 1}</b> ו-<b class="num">${P.N}</b> — המספרים האלה תוצאה של החישוב,
-      לא קלט לו (§2.7).</span>
+    <span class="sett-desc" style="margin-top:10px">${t('ko.x.autoFoot', {
+      n:P.N, cat:escH(tData(catName('liga1'))),
+      places:`<b class="num">${P.N - 1}</b> · <b class="num">${P.N}</b>` })}</span>
   </div>`;
 
+  // הצופָה מקבלת בדיוק את כרטיס הלוז (§7.3) — מגרש, שעה, ותוצאה. המנהלת
+  // מקבלת את שורת ההזנה, עם אותו סימון ועם בוררי הדריסה מעליה.
   const rows = P.pairs.map((p, i) => {
     const g = games[i];
     const dec = decide({ ...g, sets:[] }, f);
-    const nameA = escH(p.a.row.name), nameB = escH(p.b.row.name);
-    const filled = g.sa != null && g.sb != null;
-    const bad = filled && !dec;
-    const inp = side => `<input class="text-inp res-inp" type="number" min="0" max="60"
-        id="ko-cross-${i}-${side}" value="${(side === 'sa' ? g.sa : g.sb) ?? ''}"
-        data-ko="ko.cross" data-i="${i}" data-side="${side}"${RO(1)}/>`;
-    return `<div style="margin-bottom:16px">
-      <div class="sett-card-title" style="margin-bottom:2px">הצלבה ${i + 1}
-        <span class="muted">· ${escH(p.label)} · ${escH(fmtText(f))}</span>
-        ${dec ? `<span class="status-badge badge-approved">הסתיים</span>` : ''}</div>
-      <div class="res-row${bad ? ' invalid' : ''}">
-        <span class="res-team${dec?.win === g.a ? ' win' : ''}">${nameA}
-          <span class="muted">(א׳ · מקום ${p.a.rank})</span></span>
-        <span class="res-score">${inp('sa')}<b>:</b>${inp('sb')}</span>
-        <span class="res-team${dec?.win === g.b ? ' win' : ''}" style="text-align:left">${nameB}
-          <span class="muted">(ב׳ · מקום ${p.b.rank})</span></span>
-        <span class="res-meta"><span class="muted">עד ${f.to}</span></span>
-        ${bad ? `<span class="score-err">תוצאה לא חוקית — עד ${f.to}${
-          f.cap ? `, תקרה ${f.cap}` : ', ללא תקרה'}, הפרש 2</span>` : ''}
-      </div>
-    </div>`;
+    const pl = placeOf(dayOf('cross'), g, CROSS_PLACE[i]);
+    return mgr ? crossEntry(p, g, dec, f, i, pl) : crossCard(p, g, dec, i, pl);
   }).join('');
 
   const play = `<div class="sett-section">
-    <div class="sett-section-title">משחקי ההצלבה</div>
-    ${rows}
-    <span class="sett-desc">המנצחת בכל הצלבה תשחק בליגה הראשונה, המפסידה בשנייה.
-      סה״כ שני משחקים, במועד נפרד אחרי הפיינל פור (3.11.6).</span>
+    <div class="sett-section-title">${escH(t('ko.x.gamesT'))}</div>
+    ${mgr ? rows : `<div class="pub-games">${rows}</div>`}
+    <span class="sett-desc" style="margin-top:10px">${escH(t('ko.x.gamesFoot', {
+      cat1:tData(catName('liga1')), cat2:tData(catName('liga2')) }))}</span>
   </div>`;
 
   return warn + auto + play + nextSeason(P, games, f) + finalTables(P);
+}
+
+// כרטיס קריאה למשחק הצלבה — ‎.pub-game‎ עצמו, בלי עותק שני של הדפוס (§7.3).
+function crossCard(p, g, dec, i, pl) {
+  const wa = !!dec && dec.win === g.a, wb = !!dec && dec.win === g.b;
+  const done = g.sa != null && g.sb != null;
+  const score = done
+    ? `<span class="pub-score"><b class="num${wa ? ' win' : ''}">${g.sa}</b><i>:</i><b class="num${wb ? ' win' : ''}">${g.sb}</b></span>`
+    : `<span class="pub-score pub-vs">${escH(t('sched.vs'))}</span>`;
+  return `<div class="pub-game"${koMarkStyle(pl)}>
+    <span class="pub-net">${escH(netName(pl.net))}</span>
+    ${pl.time ? `<span class="pub-when num">${escH(pl.time)}</span>` : ''}
+    <span class="pub-team${wa ? ' win' : ''}">${escH(teamName(p.a.row.id))}</span>
+    ${score}
+    <span class="pub-team${wb ? ' win' : ''}">${escH(teamName(p.b.row.id))}</span>
+    <span class="pub-cat">${escH(t(p.label))}</span>
+  </div>`;
+}
+
+// שורת ההזנה (אדמין ומעלה) — כפי שהייתה, עם שורת המיקום מעליה.
+function crossEntry(p, g, dec, f, i, pl) {
+  const nameA = escH(teamName(p.a.row.id)), nameB = escH(teamName(p.b.row.id));
+  const bad = g.sa != null && g.sb != null && !dec;
+  const inp = side => `<input class="text-inp res-inp" type="number" min="0" max="60"
+      id="ko-cross-${i}-${side}" value="${(side === 'sa' ? g.sa : g.sb) ?? ''}"
+      data-ko="ko.cross" data-i="${i}" data-side="${side}"${RO(1)}/>`;
+  return `<div style="margin-bottom:16px">
+    <div class="sett-card-title" style="margin-bottom:2px">${escH(t('ko.x.game', { n:i + 1 }))}
+      <span class="muted">· ${escH(t(p.label))} · ${escH(fmtText(f))}</span>
+      ${dec ? `<span class="status-badge badge-approved">הסתיים</span>` : ''}</div>
+    ${placeRow(dayOf('cross'), g, CROSS_PLACE[i], `data-ko="ko.xplace" data-i="${i}"`)}
+    <div class="res-row${bad ? ' invalid' : ''}">
+      <span class="res-team${dec?.win === g.a ? ' win' : ''}">${nameA}
+        <span class="muted">(א׳ · מקום ${p.a.rank})</span></span>
+      <span class="res-score">${inp('sa')}<b>:</b>${inp('sb')}</span>
+      <span class="res-team${dec?.win === g.b ? ' win' : ''}" style="text-align:left">${nameB}
+        <span class="muted">(ב׳ · מקום ${p.b.rank})</span></span>
+      <span class="res-meta"><span class="muted">עד ${f.to}</span></span>
+      ${bad ? `<span class="score-err">תוצאה לא חוקית — עד ${f.to}${
+        f.cap ? `, תקרה ${f.cap}` : ', ללא תקרה'}, הפרש 2</span>` : ''}
+    </div>
+  </div>`;
 }
 
 // הרכב הליגות לעונה הבאה — נגזר, ומופיע ברגע ששתי ההצלבות הוכרעו.
@@ -647,10 +783,11 @@ function nextSeason(P, games, f) {
     else { loseTo2.add(A); winTo1.add(d.win); }
   });
 
-  const inA = P.A.filter(r => !downIds.has(r.row.id) && !loseTo2.has(r.row.id)).map(r => r.row.name)
-    .concat(P.up.map(r => r.row.name), P.B.filter(r => winTo1.has(r.row.id)).map(r => r.row.name));
-  const inB = P.A.filter(r => downIds.has(r.row.id) || loseTo2.has(r.row.id)).map(r => r.row.name)
-    .concat(P.B.filter(r => !upIds.has(r.row.id) && !winTo1.has(r.row.id)).map(r => r.row.name));
+  const nm = r => teamName(r.row.id);
+  const inA = P.A.filter(r => !downIds.has(r.row.id) && !loseTo2.has(r.row.id)).map(nm)
+    .concat(P.up.map(nm), P.B.filter(r => winTo1.has(r.row.id)).map(nm));
+  const inB = P.A.filter(r => downIds.has(r.row.id) || loseTo2.has(r.row.id)).map(nm)
+    .concat(P.B.filter(r => !upIds.has(r.row.id) && !winTo1.has(r.row.id)).map(nm));
 
   const col = (title, names) => `<div class="sett-card">
     <div class="sett-card-title">${escH(title)} <span class="muted">(${names.length})</span></div>
@@ -659,11 +796,10 @@ function nextSeason(P, games, f) {
     </ol></div>`;
 
   return `<div class="sett-section">
-    <div class="sett-section-title">הרכב הליגות לעונה הבאה</div>
-    ${done ? '' : `<div class="sched-msg warn">ממתין לתוצאות ההצלבה — ההרכב למטה מניח
-      שהמצב הנוכחי נשמר, ויתעדכן ברגע שיוזנו התוצאות.</div>`}
+    <div class="sett-section-title">${escH(t('ko.x.nextT'))}</div>
+    ${done ? '' : `<div class="sched-msg warn">${escH(t('ko.x.nextWait'))}</div>`}
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px">
-      ${col(catName('liga1'), inA)}${col(catName('liga2'), inB)}
+      ${col(tData(catName('liga1')), inA)}${col(tData(catName('liga2')), inB)}
     </div>
   </div>`;
 }
@@ -673,16 +809,17 @@ function finalTables(P) {
   const tbl = (title, rows) => `<div class="sett-card">
     <div class="sett-card-title">${escH(title)}</div>
     <div class="tscroll"><table class="stbl">
-      <thead><tr><th>#</th><th>קבוצה</th><th>נק׳</th><th>הפרש</th></tr></thead>
+      <thead><tr><th>${escH(t('col.rank'))}</th><th>${escH(t('col.team'))}</th>
+        <th>${escH(t('col.pts'))}</th><th>${escH(t('col.diff'))}</th></tr></thead>
       <tbody>${rows.map(r => `<tr><td class="num">${r.rank}</td>
-        <td class="stand-name">${escH(r.row.name)}</td>
+        <td class="stand-name">${escH(teamName(r.row.id))}</td>
         <td class="num">${r.row.pts}</td>
         <td class="num">${r.row.diff > 0 ? '+' : ''}${r.row.diff}</td></tr>`).join('')}</tbody>
     </table></div></div>`;
   return `<div class="sett-section">
-    <div class="sett-section-title">הטבלאות הסופיות</div>
+    <div class="sett-section-title">${escH(t('ko.x.tablesT'))}</div>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px">
-      ${tbl(catName('liga1'), P.A)}${tbl(catName('liga2'), P.B)}
+      ${tbl(tData(catName('liga1')), P.A)}${tbl(tData(catName('liga2')), P.B)}
     </div>
   </div>`;
 }
@@ -693,8 +830,8 @@ function finalTables(P) {
 
 export function render(container) {
   const nav = `<div class="court-filter">
-    <button class="cf-btn${tab === 'ff' ? ' on' : ''}" data-ko="ko.tab" data-tab="ff">פיינל פור</button>
-    <button class="cf-btn${tab === 'cross' ? ' on' : ''}" data-ko="ko.tab" data-tab="cross">משחקי הצלבה</button>
+    <button class="cf-btn${tab === 'ff' ? ' on' : ''}" data-ko="ko.tab" data-tab="ff">${escH(t('ko.tab.ff'))}</button>
+    <button class="cf-btn${tab === 'cross' ? ' on' : ''}" data-ko="ko.tab" data-tab="cross">${escH(t('ko.tab.cross'))}</button>
   </div>`;
   const html = nav + (tab === 'ff' ? ffHtml() : crossHtml());
   if (container) container.innerHTML = html;
@@ -771,6 +908,20 @@ const ACT = {
       ? (m.sets[i] && m.sets[i].a != null && m.sets[i].b != null)
       : (m.sa != null && m.sb != null);
     if (!complete && !wasOk) { X.queueSave(); return false; }
+  },
+
+  // דריסת המגרש/השעה. ערך ריק = "אוטומטי", ולכן הוא נמחק מהמסמך ולא נשמר
+  // כ-‎null‎ — מסמך שלא נגעו בו נשאר בדיוק כפי שהיה לפני השלב הזה.
+  'ko.place': el => {
+    const P = (koOf(el.dataset.cat).place ||= {});
+    const rec = (P[el.dataset.key] ||= {});
+    if (el.value === '') delete rec[el.dataset.f]; else rec[el.dataset.f] = +el.value;
+  },
+
+  'ko.xplace': el => {
+    const g = (L().crossover || [])[+el.dataset.i];
+    if (!g) return false;
+    if (el.value === '') delete g[el.dataset.f]; else g[el.dataset.f] = +el.value;
   },
 
   // ניקוד הצלבה — מערכה יחידה, מודל { a, b, sa, sb } (§5.1).

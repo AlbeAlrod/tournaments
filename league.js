@@ -17,7 +17,7 @@ import {
 
 // שלוש השפות של העמודים הציבוריים. ראו league-i18n.js — כולל ההחלטה
 // שהכיוון נשאר RTL בכל שפה, כי שמות הקבוצות נשארים עברית.
-import { t, tData, getLang, setLang, LANGS } from './league-i18n.js?v=6';
+import { t, tData, getLang, setLang, LANGS } from './league-i18n.js?v=7';
 
 // המתזמן — שלב 3. מודול טהור: הוא לא מכיר את L, את ה-DOM או את Firestore,
 // והוא מקבל תמונת מצב ומחזיר משחקים ודוח. ראו league-sched.js.
@@ -28,7 +28,7 @@ import {
 // לוח הגרירה — שלב 5. מודול תצוגה+שליטה שמקבל את המצב החי דרך Board.init().
 // אין לו window.* globals; פעולותיו בקידומת board.* ומוזרקות ל-ACT (ראו start()).
 import Board from './league-board.js?v=16';
-import KO from './league-ko.js?v=6';
+import KO from './league-ko.js?v=7';
 
 // ============ זהות הליגה ============
 // ⚠️ המזהה הזה מופיע בכתובת הציבורית שכל 72 השחקניות מקבלות. הוא לא זמני.
