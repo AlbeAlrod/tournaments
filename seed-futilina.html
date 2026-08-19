@@ -34,6 +34,16 @@ td,th{border:1px solid #dde3ea;padding:4px 10px;text-align:right}
 <button class="sec" onclick="verifyDoc()">🔍 בדיקה — קרא ואמת</button>
 <button class="sec" onclick="addLatin()">🔤 הוסף כתיב לטיני (בלי למחוק לוז)</button>
 <a id="open-link" href="./league.html?l=futilina-seedtest" target="_blank"><button class="sec" type="button">↗ פתח את הליגה</button></a>
+
+<div style="margin-top:14px;padding:12px;border:1px solid #dde3ea;border-radius:8px">
+  <b>שכפול לארגז חול</b> — עותק מלא של <code id="src-id">futilina-seedtest</code> (כולל הלוז) למסמך נפרד,
+  <b>בלי סיסמאות</b>, כדי שמישהי תוכל לשחק עם הסידור בלי לגעת במקור.
+  <div style="margin-top:8px">
+    <input id="dup-target" value="futilina-sandbox" style="font:inherit;padding:8px 10px;border:1px solid #dde3ea;border-radius:8px;width:220px"/>
+    <button class="sec" onclick="duplicateDoc()">⧉ שכפל</button>
+    <a id="dup-link" href="#" target="_blank" style="margin-inline-start:8px"></a>
+  </div>
+</div>
 <div id="log"></div>
 
 <h3>מה נכתב</h3>
@@ -334,6 +344,7 @@ function buildDoc() {
 // UI
 // ============================================================================
 document.getElementById('tid').textContent = T_ID;
+document.getElementById('src-id').textContent = T_ID;
 document.getElementById('open-link').href  = './league.html?l=' + T_ID;
 
 const logEl = document.getElementById('log');
@@ -408,6 +419,39 @@ window.seedAll = async function () {
 };
 
 // אימות — קורא את מה שבאמת יושב ב-Firestore ומשווה מול המפרט.
+// שכפול מלא למסמך ארגז-חול. המקור נקרא בלבד. הסיסמאות מנוקות בעותק, כי
+// המטרה היא שמישהי תיכנס ותשחק — ובלי סיסמה realRole() מחזיר מאסטר לכולן.
+// שני שומרים: אסור לכתוב על המקור, ואסור לכתוב על המסמך האמיתי.
+window.duplicateDoc = async function () {
+  logEl.textContent = '';
+  const target = (document.getElementById('dup-target').value || '').trim();
+  const link = document.getElementById('dup-link');
+  link.textContent = '';
+  if (!target)              { log('✗ חסר שם יעד.'); return; }
+  if (target === T_ID)      { log('✗ היעד זהה למקור — זה היה דורס אותו.'); return; }
+  if (target === REAL_DOC)  { log('✗ חסום: ' + REAL_DOC + ' הוא המסמך האמיתי.'); return; }
+  if (!/^[a-z0-9-]+$/.test(target)) { log('✗ שם יעד: אותיות קטנות, ספרות ומקפים בלבד.'); return; }
+  log('▶ משכפל "' + T_ID + '" → "' + target + '"…');
+  try {
+    const src = await getDoc(doc(db, 'tournaments', T_ID));
+    if (!src.exists()) { log('✗ המקור לא קיים.'); return; }
+    const dst = await getDoc(doc(db, 'tournaments', target));
+    if (dst.exists() && !confirm('"' + target + '" כבר קיים. לדרוס?')) { log('✗ בוטל'); return; }
+    const D = src.data();
+    D.meta = { ...(D.meta || {}), name: (D.meta?.name || 'ליגה') + ' — ארגז חול',
+               adminPasswordHash: '', managerPasswordHash: '' };
+    await setDoc(doc(db, 'tournaments', target), { ...D, updatedAt: serverTimestamp() });
+    const games = (D.games || []).length;
+    const teams = Object.values(D.roster || {}).reduce((n, l) => n + (l || []).length, 0);
+    log('✓ נוצר "' + target + '".');
+    log('  ' + teams + ' קבוצות · ' + Object.keys(D.players || {}).length + ' שחקניות · ' + games + ' משחקים');
+    log('  סיסמאות נוקו — הנכנסת מקבלת מאסטר אוטומטית.');
+    log('  המקור לא נגע.');
+    const url = './league.html?l=' + target;
+    link.href = url; link.textContent = '↗ פתח את ' + target;
+  } catch (e) { log('✗ ' + e.message); }
+};
+
 window.verifyDoc = async function () {
   logEl.textContent = '';
   log('🔍 קורא "' + T_ID + '"…');
