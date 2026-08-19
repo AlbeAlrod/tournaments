@@ -2075,7 +2075,13 @@ function renderGameEntry(g) {
   const netLbl = g.net ? tData(NET_NAME(g.net)) : '';
   const netVar = g.net ? ` style="--net:${escH(NET_COLOR(g.net))}"` : '';
 
-  return `<div class="res-card${invalid ? ' invalid' : ''}${tech ? ' tech' : ''}"${netVar}>
+  // אותן שלוש התכונות של ‎.pub-game‎, כדי ש-‎pubFilter‎ יסנן את שתי הרשימות
+  // באותו פרדיקט בדיוק. המנהלת בחוף מחפשת משחק בדיוק כמו שחקנית — ההבדל
+  // היחיד הוא שאצלה יש תיבת ניקוד בסוף.
+  const rcSearch = `${TEAM_NAME(g.a)} ${TEAM_NAME(g.b)}`.toLowerCase();
+
+  return `<div class="res-card${invalid ? ' invalid' : ''}${tech ? ' tech' : ''}"
+       data-s="${escH(rcSearch)}" data-net="${escH(g.net)}" data-cat="${escH(g.cat)}"${netVar}>
     <span class="rc-head">
       <span class="rc-net">${escH(netLbl)}</span>
       <span class="rc-cat">${escH(tData(CAT_NAME(g.cat)))}</span>
@@ -2357,7 +2363,7 @@ function renderPublicSchedule() {
 
   setTimeout(pubFilter, 0);   // מחיל את החיפוש הזכור מיד אחרי שה-HTML נכנס ל-DOM
   return `${live}<div class="sett-section pub-sched">
-    ${picker}${head}${entry}${netBtns}${catBtns}${search}
+    ${picker}${head}${netBtns}${catBtns}${search}${entry}
     ${list || `<div class="empty">${escH(t('sched.noGames'))}</div>`}
   </div>`;
 }
@@ -2367,18 +2373,28 @@ function renderPublicSchedule() {
 function pubFilter() {
   const q = pubQuery.trim().toLowerCase();
   const filtered = !!q || pubNet !== null || pubCat !== null;
+  // חיתוך ולא איחוד: מגרש **וגם** ליגה **וגם** חיפוש.
+  // ‎+el.dataset.net‎ — g.net הוא מספר ו-dataset תמיד מחרוזת.
+  const match = el => (!q || (el.dataset.s || '').includes(q))
+                   && (pubNet === null || +el.dataset.net === pubNet)
+                   && (pubCat === null || el.dataset.cat === pubCat);
+
   let n = 0;
   document.querySelectorAll('.pub-game').forEach(el => {
-    // חיתוך ולא איחוד: מגרש **וגם** ליגה **וגם** חיפוש.
-    // ‎+el.dataset.net‎ — g.net הוא מספר ו-dataset תמיד מחרוזת.
-    const hit = (!q || (el.dataset.s || '').includes(q))
-             && (pubNet === null || +el.dataset.net === pubNet)
-             && (pubCat === null || el.dataset.cat === pubCat);
+    const hit = match(el);
     el.classList.toggle('hide', !hit);
     if (hit) n++;
   });
   document.querySelectorAll('.pub-slot').forEach(row =>
     row.classList.toggle('hide', !row.querySelector('.pub-game:not(.hide)')));
+
+  // אותו סינון על כרטיסי ההזנה של המנהלת. שתי הרשימות מוצגות יחד באותו
+  // עמוד, ולכן סינון שחל רק על אחת מהן היה נראה שבור. המונה סופר את רשימת
+  // הקריאה בלבד — היא המקור, וההזנה היא אותם משחקים בדיוק.
+  document.querySelectorAll('.res-card').forEach(el =>
+    el.classList.toggle('hide', !match(el)));
+  document.querySelectorAll('.res-slot').forEach(row =>
+    row.classList.toggle('hide', !row.querySelector('.res-card:not(.hide)')));
   const c = document.getElementById('pub-count');
   if (c) {
     // המונה מוצג גם על סינון ולא רק על חיפוש — אחרת צמצום למגרש אחד נראה
