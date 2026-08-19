@@ -522,7 +522,7 @@ function scratch(ctx) {
   return ctx._s = {
     teams, ti, T, S, nets, N, netPos, blocked, availFrom, availTo, lo, hi,
     allowConsec, fairPrior, linked, partners,
-    G, gA, gB, gFixedNet, gCat, gLocked, teamGames,
+    G, gA, gB, gFixedNet, gNetStrict, gCat, gLocked, teamGames,
     tc:       new Int32Array(T * (S + 2)),      // קבוצה × סלוט
     cc:       new Int32Array((S + 2) * N),      // סלוט × רשת — כמה משחקים
     cellCat:  new Int32Array((S + 2) * N),      // סלוט × רשת — איזו ליגה (לקוהרנטיות)
@@ -544,7 +544,7 @@ export function emptyPlacement(ctx) {
 function evalDay(pl, ctx, collect) {
   const s = scratch(ctx), W = WEIGHTS;
   const { T, S, N, tc, cc, cellCat, blocked, availFrom, availTo, lo, hi,
-          gA, gB, gFixedNet, gCat, allowConsec, fairPrior, teamNets } = s;
+          gA, gB, gFixedNet, gNetStrict, gCat, allowConsec, fairPrior, teamNets } = s;
 
   tc.fill(0); cc.fill(0); cellCat.fill(0); teamNets.fill(0);
   let lastSlot = 0, placed = 0;

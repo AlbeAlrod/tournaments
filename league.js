@@ -23,11 +23,11 @@ import { t, tData, getLang, setLang, LANGS } from './league-i18n.js?v=5';
 // והוא מקבל תמונת מצב ומחזיר משחקים ודוח. ראו league-sched.js.
 import {
   generateSeason, buildDayContext, dayCost, dayLength, slotLabel
-} from './league-sched.js?v=10';
+} from './league-sched.js?v=11';
 
 // לוח הגרירה — שלב 5. מודול תצוגה+שליטה שמקבל את המצב החי דרך Board.init().
 // אין לו window.* globals; פעולותיו בקידומת board.* ומוזרקות ל-ACT (ראו start()).
-import Board from './league-board.js?v=14';
+import Board from './league-board.js?v=16';
 import KO from './league-ko.js?v=5';
 
 // ============ זהות הליגה ============
@@ -2284,6 +2284,11 @@ function renderPublicSchedule() {
       <div class="pub-games">${gs.map(g => pubGameRow(g)).join('')}</div>
     </div>`).join('');
 
+  // §8.7 — הדחיסה החיה היא כלי של מי שעומדת במגרשים, ולכן אדמין ומעלה ולא
+  // מאסטר בלבד. אצל המאסטר הפאנל כבר מרונדר ב-masterSchedule(), ולכן כאן
+  // רק לרמה 1 — אחרת הוא היה מופיע פעמיים.
+  const live = R() === 1 ? livePanel() : '';
+
   // הזנת תוצאות = אדמין ומעלה (§7.1). אותו רכיב של שלב 4, בלי עותק שני.
   const entry = R() >= 1 ? `<details class="results-panel" open>
     <summary class="sett-section-title">הזנת תוצאות · ${escH(tData(day.label))}
@@ -2292,7 +2297,7 @@ function renderPublicSchedule() {
   </details>` : '';
 
   setTimeout(pubFilter, 0);   // מחיל את החיפוש הזכור מיד אחרי שה-HTML נכנס ל-DOM
-  return `<div class="sett-section pub-sched">
+  return `${live}<div class="sett-section pub-sched">
     ${picker}${head}${search}
     ${list || `<div class="empty">${escH(t('sched.noGames'))}</div>`}
   </div>${entry}`;
@@ -3195,7 +3200,11 @@ const ACT_LEVEL = {};
 for (const a of ['lang.set', 'stand.cat', 'stand.team',
                  'auth.click', 'auth.submit', 'auth.close',
                  'pub.day', 'pub.clearSearch', 'pub.exit']) ACT_LEVEL[a] = 0;
-for (const a of ['res.score', 'res.tech']) ACT_LEVEL[a] = 1;   // אדמין = הזנת תוצאות בלבד
+for (const a of ['res.score', 'res.tech']) ACT_LEVEL[a] = 1;   // אדמין = הזנת תוצאות
+// §8.7 — האדמין עומדת במגרשים ולכן היא זו שמקדימה משחקים בפועל. הפעולות
+// עצמן פתוחות לה; ‎live.toggle‎ **לא** — הדלקת הפיצ׳ר היא מדיניות של המאסטר.
+for (const a of ['live.day', 'live.refresh', 'live.now', 'live.group', 'live.apply'])
+  ACT_LEVEL[a] = 1;
 
 function handle(e, kinds) {
   const el = e.target.closest('[data-act]');

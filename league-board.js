@@ -23,7 +23,7 @@
 import { escH } from './common.js?v=2';
 import {
   generateSeason, buildDayContext, dayCost, dayLength, slotLabel, availWindow
-} from './league-sched.js?v=10';
+} from './league-sched.js?v=11';
 
 // ============================================================================
 // ההקשר המוזרק מ-league.js
