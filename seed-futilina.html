@@ -278,7 +278,9 @@ function buildDoc() {
     meta: {
       mode: 'league',                  // כך admin.html ממשיך להציג את הליגה ברשימה
       name: 'ליגת קיץ פוצ׳ילינה 2026',
-      logoUrl: 'https://albealrod.github.io/tournaments/logo.svg',   // §15.2
+      // logo-mark.png ולא logo.svg: 11KB מול 465KB. הלוגו נמשך בכל טעינת דף,
+      // ונמדד 4.7 שניות מהרשת — הוא היה הדבר האיטי היחיד באתר.
+      logoUrl: 'https://albealrod.github.io/tournaments/logo-mark.png',
       primaryColor:   BRAND_PRIMARY,
       secondaryColor: BRAND_SECONDARY,
       loadingColor:   BRAND_PINK,      // מסך הטעינה הוורוד

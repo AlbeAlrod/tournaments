@@ -400,7 +400,9 @@ export function planSlotCounts(ctx, opts = {}) {
       if (take > 0) {
         // רק המספרים חשובים כאן; הרשת האמיתית נבחרת ב-greedyFill. הרשת המועדפת
         // נמחקת ראשונה כך שהיא תישאר לשאו כשאפשר.
-        const nets = orderNets([...free[s - 1]], cat.fixedNet);
+        const nets = cat.netStrict && cat.fixedNet
+          ? [...free[s - 1]].filter(n => n === cat.fixedNet)
+          : orderNets([...free[s - 1]], cat.fixedNet);
         for (let i = 0; i < take && i < nets.length; i++) free[s - 1].delete(nets[i]);
       }
     }
@@ -460,15 +462,18 @@ function scratch(ctx) {
   const G = ctx.games.length;
   const gA = new Int32Array(G), gB = new Int32Array(G);
   const gFixedNet = new Int32Array(G);          // 0 = ללא רשת קבועה
+  const gNetStrict = new Uint8Array(G);        // 1 = הרשת הקבועה היא חובה
   const gLocked = new Uint8Array(G);
   const gCat = new Int32Array(G);               // אינדקס הליגה (1-based) — לקוהרנטיות רשת
   const catIdx = new Map(ctx.cats.map((c, i) => [c.id, i + 1]));
-  const fixedOf = new Map(ctx.cats.map(c => [c.id, c.fixedNet || 0]));
+  const fixedOf  = new Map(ctx.cats.map(c => [c.id, c.fixedNet || 0]));
+  const strictOf = new Map(ctx.cats.map(c => [c.id, c.netStrict ? 1 : 0]));
   const teamGames = Array.from({ length: T }, () => []);
   for (let i = 0; i < G; i++) {
     const g = ctx.games[i];
     gA[i] = ti.get(g.a); gB[i] = ti.get(g.b);
     gFixedNet[i] = fixedOf.get(g.cat) || 0;
+    gNetStrict[i] = strictOf.get(g.cat) || 0;
     gCat[i] = catIdx.get(g.cat) || 0;
     gLocked[i] = g.locked ? 1 : 0;
     teamGames[gA[i]].push(i); teamGames[gB[i]].push(i);
@@ -697,9 +702,15 @@ function evalDay(pl, ctx, collect) {
     const sl = pl.slot[i]; if (!sl) continue;
     const net = pl.net[i], np = s.netPos.get(net);
     if (gFixedNet[i] && net !== gFixedNet[i]) {
-      showNet += W.showNotNet1;
-      if (V) V.push({ kind:'showNotNet1', cost:W.showNotNet1, slot:sl, net, key:ctx.games[i].key,
-                      text:'שאו לא על הרשת המועדפת' });
+      if (gNetStrict[i]) {
+        hard += W.hard;
+        if (V) V.push({ kind:'netOffFixed', cost:W.hard, slot:sl, net, key:ctx.games[i].key,
+                        text:'הליגה הזאת אמורה לשחק על רשת אחת בלבד' });
+      } else {
+        showNet += W.showNotNet1;
+        if (V) V.push({ kind:'showNotNet1', cost:W.showNotNet1, slot:sl, net, key:ctx.games[i].key,
+                        text:'שאו לא על הרשת המועדפת' });
+      }
     }
     if (np != null && sl < S && cc[(sl + 1) * N + np] > 0
         && tc[gA[i] * (S + 2) + sl + 1] > 0 && tc[gB[i] * (S + 2) + sl + 1] > 0) {
@@ -870,7 +881,11 @@ function greedyFill(ctx, plan, rng) {
       );
 
       // §6.2: הרשת המועדפת (שאו→1) בראש, אבל שאר הרשתות זמינות כשהיא תפוסה.
-      const nets = orderNets(freeNets(s), cat.fixedNet);
+      // netStrict: הרשת הקבועה בלבד. בלי זה האורז היה בוחר רשת פנויה אחרת
+      // ומייצר הפרה קשיחה שהוא עצמו יצטרך לתקן אחר כך.
+      const nets = cat.netStrict && cat.fixedNet
+        ? freeNets(s).filter(n => n === cat.fixedNet)
+        : orderNets(freeNets(s), cat.fixedNet);
       const chosen = pickSlotGames(list, s, Math.min(want, nets.length));
       chosen.forEach((g, i) => { put(g, s, nets[i]); list.splice(list.indexOf(g), 1); });
 
@@ -1404,6 +1419,10 @@ export function buildDayContext(input, day, dayGames, bounds) {
   const cats = (input.categories || [])
     .filter(c => dayGames.some(g => g.cat === c.id))
     .map(c => ({ id: c.id, name: c.name, order: c.order, fixedNet: c.fixedNet,
+                 // netStrict הופך את fixedNet מהעדפה רכה (150) לאילוץ קשיח.
+                 // שאו נשאר רך במכוון (§6.2) — הוא מוותר על הרשת כדי לא
+                 // להאריך את היום. ליגה שנבחרה כ"רשת אחת בלבד" לא מוותרת.
+                 netStrict: !!c.netStrict,
                  allowConsecutive: !!c.allowConsecutive, teams: c.teams || [] }));
 
   const present = new Set(cats.flatMap(c => c.teams));

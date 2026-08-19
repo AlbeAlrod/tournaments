@@ -23,7 +23,7 @@ import { t, tData, getLang, setLang, LANGS } from './league-i18n.js?v=5';
 // והוא מקבל תמונת מצב ומחזיר משחקים ודוח. ראו league-sched.js.
 import {
   generateSeason, buildDayContext, dayCost, dayLength, slotLabel
-} from './league-sched.js?v=9';
+} from './league-sched.js?v=10';
 
 // לוח הגרירה — שלב 5. מודול תצוגה+שליטה שמקבל את המצב החי דרך Board.init().
 // אין לו window.* globals; פעולותיו בקידומת board.* ומוזרקות ל-ACT (ראו start()).
@@ -1276,7 +1276,7 @@ let schedLast = null;     // הדוח של ההרצה האחרונה (זמן ר�
 function schedInput() {
   return {
     categories: L.categories.map(c => ({
-      id: c.id, name: c.name, rr: c.rr, order: c.order, fixedNet: c.fixedNet,
+      id: c.id, name: c.name, rr: c.rr, order: c.order, fixedNet: c.fixedNet, netStrict: c.netStrict,
       allowConsecutive: !!c.allowConsecutive,
       teams: (L.roster[c.id] || []).filter(t => t.active !== false).map(t => t.id)
     })),
@@ -1402,12 +1402,17 @@ function renderSched() {
   <div class="sett-section">
     <div class="sett-section-title">הרצה</div>
     <div class="sched-actions">
-      <button class="cf-btn" data-act="sched.all"${busy}>צור לוז מלא</button>
-      <button class="filter-btn" data-act="sched.rr"${busy}>קבע מי נגד מי</button>
+      <button class="cf-btn" data-act="sched.all"${busy}${st.games ? ' disabled' : ''}>צור לוז מלא</button>
+      <button class="filter-btn" data-act="sched.rr"${busy}${st.games ? ' disabled' : ''}>קבע מי נגד מי</button>
       <button class="filter-btn" data-act="sched.days"${busy}${st.rr ? '' : ' disabled'}>חלק לימים</button>
       <button class="filter-btn" data-act="sched.pack"${busy}${st.days ? '' : ' disabled'}>סדר בגריד</button>
       <button class="team-del sched-clear" data-act="sched.clear"${busy}>מחיקת הלוז</button>
     </div>
+    ${st.games ? `<div class="info-box" style="margin:0 0 10px">
+      <strong>הלוז כבר קיים (${st.games} משחקים).</strong> יצירה מחדש תמחק אותו —
+      כולל כל סידור ידני ותוצאות שהוזנו. כדי להריץ מחדש צריך קודם
+      <b>מחיקת הלוז</b>.
+    </div>` : ''}
     <div class="sched-state">
       ${chip('מפגשים', st.rr, st.games ? `${st.games} משחקים` : '')}
       ${chip('ימים', st.days, st.days ? `${days.length} מחזורים` : '')}
@@ -1813,6 +1818,11 @@ function renderSettings() {
         <select class="text-inp" style="width:110px" data-act="cat.rr" data-cat="${escH(c.id)}">
           <option value="1"${c.rr === 1 ? ' selected' : ''}>סיבוב יחיד</option>
           <option value="2"${c.rr === 2 ? ' selected' : ''}>סיבוב כפול</option>
+        </select>
+        <select class="text-inp" style="width:130px" data-act="cat.net" data-cat="${escH(c.id)}"
+                title="ליגה שמשחקת על רשת אחת בלבד תישאר עליה גם במחיר סידור צפוף יותר">
+          <option value="0"${!c.fixedNet ? ' selected' : ''}>כל הרשתות</option>
+          ${(L.meta.nets || []).map(n => `<option value="${n.id}"${c.fixedNet === n.id ? ' selected' : ''}>רק ${escH(n.name)}</option>`).join('')}
         </select>
       </div>
       <div class="cat-settings-grid">${fields}</div>
@@ -2866,6 +2876,14 @@ const ACT = {
   // ── ליגות ופורמטים ──
   'cat.name': el => { const c = L.categories.find(x => x.id === el.dataset.cat); if (c) c.name = el.value.trim(); },
   'cat.rr':   el => { const c = L.categories.find(x => x.id === el.dataset.cat); if (c) c.rr = +el.value; },
+  // בחירת רשת בהגדרות = **חובה** (netStrict). ההעדפה הרכה נשארת רק לשאו,
+  // שנזרע עם fixedNet בלי netStrict כדי לא להאריך את היום (§6.2).
+  'cat.net':  el => {
+    const c = L.categories.find(x => x.id === el.dataset.cat); if (!c) return;
+    const n = +el.value;
+    if (n) { c.fixedNet = n; c.netStrict = true; }
+    else   { delete c.fixedNet; delete c.netStrict; }
+  },
   'fmt.sets': el => {
     const f = L.formats[el.dataset.cat][el.dataset.stage];
     f.sets = +el.value;
