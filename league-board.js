@@ -727,14 +727,39 @@ function lenCounter() {
 // ============================================================================
 // הזנת תוצאות בתוך "לוז" (הועברה מ"דירוג") — מחזר renderGameEntry
 // ============================================================================
+// מסנן המגרש של פאנל התוצאות בלבד. לא משותף עם הגריד: שם ארבעת המגרשים הם
+// העמודות עצמן, והסתרת עמודה הייתה שוברת את תמונת היום.
+let resNet = null;
+
 function resultsPanel(dayId) {
   const gs = gamesOf(dayId).filter(g => g.slot).sort((a, b) => (a.slot - b.slot) || ((a.net || 0) - (b.net || 0)));
   if (!gs.length) return '';
-  const filtered = selTeam ? gs.filter(g => g.a === selTeam || g.b === selTeam) : gs;
+
+  // הפאנל מכבד עכשיו את **אותם פקדים** שכבר קיימים בסרגל הלוח — מסנן הליגה
+  // והחיפוש. קודם הוא הגיב רק ל-selTeam, ולכן מנהלת שסיננה לליגה אחת עדיין
+  // ראתה 44 כרטיסי הזנה וחשבה שהמסנן שבור.
+  const q = teamQuery.trim().toLowerCase();
+  const filtered = gs.filter(g =>
+       (!selTeam       || g.a === selTeam || g.b === selTeam)
+    && (!leagueFilter  || g.cat === leagueFilter)
+    && (resNet === null || g.net === resNet)
+    && (!q || `${teamName(g.a)} ${teamName(g.b)}`.toLowerCase().includes(q)));
+
+  const nets = [...new Set(gs.map(g => g.net).filter(Boolean))].sort((a, b) => a - b);
+  const pill = (on, val, label) =>
+    `<button class="filter-btn${on ? ' on' : ''}" data-act="board.resNet" data-v="${escH(val)}">${escH(label)}</button>`;
+  const netBtns = nets.length > 1 ? `<div class="board-subbar res-nets">
+    ${pill(resNet === null, '', 'כל המגרשים')}
+    ${nets.map(n => pill(resNet === n, n, X.netName(n))).join('')}
+  </div>` : '';
+
   const nsd = selTeam ? `<button class="filter-btn nsd-btn" data-act="res.noshowDay" data-team="${escH(selTeam)}" data-day="${escH(dayId)}">היעדרות ליום זה</button>` : '';
   return `<details class="results-panel" open>
-    <summary class="sett-section-title">תוצאות ${escLabel(dayId)}${selTeam ? ' — ' + escH(teamName(selTeam)) : ''} <span class="muted">${filtered.length}</span>${nsd}</summary>
-    <div class="results-body">${filtered.map(X.renderGameEntry).join('')}</div></details>`;
+    <summary class="sett-section-title">תוצאות ${escLabel(dayId)}${selTeam ? ' — ' + escH(teamName(selTeam)) : ''} <span class="muted">${filtered.length}${filtered.length !== gs.length ? ' מתוך ' + gs.length : ''}</span>${nsd}</summary>
+    ${netBtns}
+    <div class="results-body">${filtered.length
+      ? filtered.map(X.renderGameEntry).join('')
+      : '<div class="empty">אין משחק שמתאים לסינון.</div>'}</div></details>`;
 }
 
 // ============================================================================
@@ -865,6 +890,10 @@ ACT['board.undo'] = () => { if (!undoStack.length) return false; redoStack.push(
 ACT['board.redo'] = () => { if (!redoStack.length) return false; undoStack.push(snapshot()); restore(redoStack.pop()); commit(); return false; };
 // מסנן ליגה (§5)
 ACT['board.league'] = el => { leagueFilter = el.dataset.cat || null; pick = null; boardRepaint(); return false; };
+// מסנן המגרש של פאנל התוצאות. הקידומת ‎board.‎ אינה קישוט: ‎handle()‎ ב-league.js
+// מדלג על ‎queueSave()‎ לכל ‎board.*‎, ובלעדיה כל לחיצה על גלולה הייתה כותבת
+// את המסמך כולו — 177 משחקים על מסנן שקיים רק בדפדפן.
+ACT['board.resNet'] = el => { resNet = el.dataset.v === '' ? null : +el.dataset.v; boardRepaint(); return false; };
 // §4: קישור-קבוצה מסרגל האזהרות — מדליק/מכבה את כל משחקי הקבוצה (selTeam → hl-a).
 ACT['board.highlightTeam'] = el => { const t = el.dataset.team; selTeam = selTeam === t ? null : t; pick = null; boardRepaint(); return false; };
 // §4: בחירת משחק-קופסה של הקבוצה → מציג לאן אפשר לשבצו (תאים מוארים).

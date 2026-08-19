@@ -27,7 +27,7 @@ import {
 
 // לוח הגרירה — שלב 5. מודול תצוגה+שליטה שמקבל את המצב החי דרך Board.init().
 // אין לו window.* globals; פעולותיו בקידומת board.* ומוזרקות ל-ACT (ראו start()).
-import Board from './league-board.js?v=16';
+import Board from './league-board.js?v=17';
 import KO from './league-ko.js?v=7';
 
 // ============ זהות הליגה ============
