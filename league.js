@@ -28,7 +28,7 @@ import {
 // לוח הגרירה — שלב 5. מודול תצוגה+שליטה שמקבל את המצב החי דרך Board.init().
 // אין לו window.* globals; פעולותיו בקידומת board.* ומוזרקות ל-ACT (ראו start()).
 import Board from './league-board.js?v=14';
-import KO from './league-ko.js?v=4';
+import KO from './league-ko.js?v=5';
 
 // ============ זהות הליגה ============
 // ⚠️ המזהה הזה מופיע בכתובת הציבורית שכל 72 השחקניות מקבלות. הוא לא זמני.
@@ -1374,8 +1374,10 @@ const TEAM_NAME = id => {
 // שלא ליפול ל-TDZ של ה-const-ים (הם לא hoisted). paint()/queueSave/rankStandings/
 // validSet הן function declarations ולכן מותרות. הפעולות של המודול נושאות data-ko
 // עם מאזין משלו — לא דרך handle() — כדי שהחלפת לשונית לא תכתוב את המסמך.
+// ‎role‎ מועבר כדי שהמסך יוכל להיראות לקריאה בלבד ולא רק להתנהג ככה: ‎koGate‎
+// חוסם את האירוע, אבל שדה פתוח שאפשר להקליד לתוכו נראה כאילו הוא נשמר.
 KO.init({ getL: () => L, queueSave, repaint: paint, rankStandings,
-          teamName: TEAM_NAME, catName: CAT_NAME, validSet });
+          teamName: TEAM_NAME, catName: CAT_NAME, validSet, role: () => R() });
 
 function renderSched() {
   const st = schedState();

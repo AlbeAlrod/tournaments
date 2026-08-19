@@ -29,7 +29,13 @@ import { escH } from './common.js?v=2';
 // ============================================================================
 // ההקשר המוזרק מ-league.js
 // ============================================================================
-let X = null;   // { getL, queueSave, repaint, rankStandings, teamName, catName, validSet }
+let X = null;   // { getL, queueSave, repaint, rankStandings, teamName, catName, validSet, role }
+
+// רמת ההרשאה של הצופָה. ‎koGate‎ ב-league.js כבר חוסם את האירוע, אבל בלי זה
+// הפקדים נראים פעילים: אפשר להקליד תוצאה ולראות אותה על המסך, והיא פשוט לא
+// נשמרת. מסך שנראה עריך ואינו עריך גרוע ממסך נעול.
+const ROLE = () => (X?.role ? X.role() : 2);
+const RO   = lvl => ROLE() >= lvl ? '' : ' disabled';
 const L = () => X.getL();
 
 // §10.1 — עותק זהה לזה שב-league.js. league.js לא מייצא אותו (§5.3 נועל את
@@ -284,7 +290,7 @@ function qualifiersCard(S) {
         ? ` <span class="status-badge badge-pending">מחליפה</span>` : ''}</td>
       <td class="num">${S.ranks[id] ?? '—'}</td>
       <td style="text-align:left">
-        <button class="cf-btn" data-ko="ko.sub" data-cat="${escH(koCat)}" data-i="${i}">החלפה</button>
+        <button class="cf-btn" data-ko="ko.sub" data-cat="${escH(koCat)}" data-i="${i}"${RO(2)}>החלפה</button>
       </td>
     </tr>`;
   }).join('');
@@ -305,7 +311,7 @@ function qualifiersCard(S) {
 function choiceCard(S) {
   const cur = S.K.sfSlotChoice === 2 ? 2 : 1;
   const btn = n => `<button class="cf-btn${cur === n ? ' on' : ''}"
-      data-ko="ko.choice" data-cat="${escH(koCat)}" data-slot="${n}">חצי גמר ${n === 1 ? '①' : '②'}</button>`;
+      data-ko="ko.choice" data-cat="${escH(koCat)}" data-slot="${n}"${RO(2)}>חצי גמר ${n === 1 ? '①' : '②'}</button>`;
   return `<div class="sett-section">
     <div class="sett-section-title">בחירת חצי הגמר — מקום 1</div>
     <div class="court-filter" style="margin-bottom:8px">${btn(1)}${btn(2)}</div>
@@ -424,7 +430,7 @@ function matchEntry(S, key) {
 
   const inp = (i, sideKey, val, disabled) => `<input class="text-inp res-inp" type="number" min="0" max="60"
       id="ko-${escH(koCat)}-${key}-${i}-${sideKey}" value="${val ?? ''}"
-      data-ko="ko.score" data-cat="${escH(koCat)}" data-key="${key}" data-i="${i}"
+      data-ko="ko.score" data-cat="${escH(koCat)}" data-key="${key}" data-i="${i}"${RO(1)}
       data-side="${sideKey}"${disabled ? ' disabled' : ''}/>`;
 
   const rowFor = (i, sa, sb) => {
@@ -478,7 +484,7 @@ function subsLog(S) {
       <td class="stand-name">${escH(teamName(s.in))}${
         stale ? ` <span class="muted">(הדירוג השתנה — ההחלפה כבר לא חלה)</span>` : ''}</td>
       <td class="num">${escH(s.at || '')}</td>
-      <td style="text-align:left"><button class="cf-btn" data-ko="ko.unsub"
+      <td style="text-align:left"><button class="cf-btn"${RO(2)} data-ko="ko.unsub"
         data-cat="${escH(koCat)}" data-i="${i}">ביטול</button></td>
     </tr>`;
   }).join('');
@@ -598,7 +604,7 @@ function crossHtml() {
     const bad = filled && !dec;
     const inp = side => `<input class="text-inp res-inp" type="number" min="0" max="60"
         id="ko-cross-${i}-${side}" value="${(side === 'sa' ? g.sa : g.sb) ?? ''}"
-        data-ko="ko.cross" data-i="${i}" data-side="${side}"/>`;
+        data-ko="ko.cross" data-i="${i}" data-side="${side}"${RO(1)}/>`;
     return `<div style="margin-bottom:16px">
       <div class="sett-card-title" style="margin-bottom:2px">הצלבה ${i + 1}
         <span class="muted">· ${escH(p.label)} · ${escH(fmtText(f))}</span>
