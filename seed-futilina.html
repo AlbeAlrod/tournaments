@@ -43,6 +43,15 @@ td,th{border:1px solid #dde3ea;padding:4px 10px;text-align:right}
     <button class="sec" onclick="duplicateDoc()">⧉ שכפל</button>
     <a id="dup-link" href="#" target="_blank" style="margin-inline-start:8px"></a>
   </div>
+  <hr style="border:0;border-top:1px solid #eef1f4;margin:14px 0"/>
+  <b>ייבוא סידור בחזרה</b> — לוקח מארגז החול <b>רק את מיקומי המשחקים</b>
+  (יום · סלוט · מגרש) ומחיל אותם על <code id="imp-dst">futilina-seedtest</code>.
+  התוצאות שהוזנו אצלך <b>נשארות</b>.
+  <div style="margin-top:8px">
+    <input id="imp-source" value="futilina-sandbox" style="font:inherit;padding:8px 10px;border:1px solid #dde3ea;border-radius:8px;width:220px"/>
+    <button class="sec" onclick="importPlacement(true)">👁 בדיקה יבשה</button>
+    <button class="sec" onclick="importPlacement(false)">⬅ ייבא</button>
+  </div>
 </div>
 <div id="log"></div>
 
@@ -347,6 +356,7 @@ function buildDoc() {
 // ============================================================================
 document.getElementById('tid').textContent = T_ID;
 document.getElementById('src-id').textContent = T_ID;
+document.getElementById('imp-dst').textContent = T_ID;
 document.getElementById('open-link').href  = './league.html?l=' + T_ID;
 
 const logEl = document.getElementById('log');
@@ -451,6 +461,52 @@ window.duplicateDoc = async function () {
     log('  המקור לא נגע.');
     const url = './league.html?l=' + target;
     link.href = url; link.textContent = '↗ פתח את ' + target;
+  } catch (e) { log('✗ ' + e.message); }
+};
+
+// ייבוא הסידור מארגז החול חזרה. **רק מיקום** — day/slot/net/locked — לפי
+// ה-key היציב של המשחק (cat|a|b|leg). התוצאות (sa/sb/sets/result) ומזהי
+// המשחקים נשארים של מסמך היעד, ולכן אפשר לייבא סידור גם אחרי שהוזנו תוצאות.
+// dry=true מדפיס מה יקרה בלי לכתוב כלום.
+window.importPlacement = async function (dry) {
+  logEl.textContent = '';
+  const src = (document.getElementById('imp-source').value || '').trim();
+  if (!src)         { log('✗ חסר מקור.'); return; }
+  if (src === T_ID) { log('✗ המקור זהה ליעד.'); return; }
+  log((dry ? '👁 בדיקה יבשה: ' : '▶ מייבא: ') + '"' + src + '" → "' + T_ID + '"…');
+  try {
+    const [a, b] = await Promise.all([
+      getDoc(doc(db, 'tournaments', src)),
+      getDoc(doc(db, 'tournaments', T_ID))
+    ]);
+    if (!a.exists()) { log('✗ "' + src + '" לא קיים.'); return; }
+    if (!b.exists()) { log('✗ "' + T_ID + '" לא קיים.'); return; }
+    const from = new Map((a.data().games || []).map(g => [g.key, g]));
+    const games = (b.data().games || []).map(g => ({ ...g }));
+    // רק קבוצות שקיימות אצלי — אם ארגז החול נבנה על רוסטר אחר, לא נשתול זבל.
+    const teams = new Set(Object.values(b.data().roster || {})
+                    .flatMap(l => (l || []).map(t => t.id)));
+    let moved = 0, same = 0, missing = 0, bad = 0, withResult = 0;
+    for (const g of games) {
+      const f = from.get(g.key);
+      if (!f) { missing++; continue; }
+      if (!teams.has(g.a) || !teams.has(g.b)) { bad++; continue; }
+      if (g.day === f.day && g.slot === f.slot && g.net === f.net) { same++; continue; }
+      if (g.result && g.result !== 'pending') withResult++;
+      g.day = f.day ?? null; g.slot = f.slot ?? null;
+      g.net = f.net ?? null; g.locked = !!f.locked;
+      moved++;
+    }
+    log('  ' + games.length + ' משחקים אצלי · ' + from.size + ' בארגז החול');
+    log('  יזוזו: ' + moved + ' · כבר זהים: ' + same +
+        (missing ? ' · לא נמצאו במקור: ' + missing : '') +
+        (bad ? ' · קבוצה לא מוכרת: ' + bad : ''));
+    if (withResult) log('  ⚠ ' + withResult + ' מהם כבר עם תוצאה — התוצאה נשמרת, רק המיקום זז.');
+    if (dry) { log('  (בדיקה יבשה — לא נכתב כלום.)'); return; }
+    if (!moved) { log('  אין מה לשנות.'); return; }
+    if (!confirm('להזיז ' + moved + ' משחקים ב-"' + T_ID + '"?')) { log('✗ בוטל'); return; }
+    await setDoc(doc(db, 'tournaments', T_ID), { games, updatedAt: serverTimestamp() }, { merge: true });
+    log('✓ יובאו ' + moved + ' מיקומים. roster · players · meta · תוצאות — לא נגעו.');
   } catch (e) { log('✗ ' + e.message); }
 };
 
