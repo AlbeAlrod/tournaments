@@ -1486,6 +1486,11 @@ footer { border-top-color: var(--line-soft); color: var(--ink-32); }
    קריאה במקום גלולה צבועה שמתחרה עם שמות הקבוצות. */
 .pub-head { margin-bottom: 12px; }
 .pub-head h3 { font-size: 18px; font-weight: 800; color: var(--ink); letter-spacing: -.028em; }
+/* "מחזור 1" ו-"22.08" הם שני דברים, ורווח יחיד הדביק אותם למחרוזת אחת.
+   מרווח אמיתי + משקל וגוון קלים יותר — התאריך נקרא כלוואי ולא כהמשך השם.
+   מאפיין פיזי ולא ‎margin-inline-start‎: ‎.num‎ נושא ‎direction:ltr‎ (§5),
+   ומאפיין לוגי היה נפתר לפי כיוון האלמנט ונוחת בצד ההפוך. */
+.pub-head h3 .pub-date { margin-right: 12px; font-weight: 600; color: var(--ink-48); letter-spacing: 0; }
 .pub-search { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 14px; }
 .pub-search .text-inp { width: 240px; max-width: 100%; }
 .pub-slot { display: flex; gap: 12px; align-items: flex-start; padding: 7px 0;

@@ -2292,7 +2292,7 @@ function renderPublicSchedule() {
       >${escH(tData(d.label))}${d.date ? ` <span class="num">${fmtDate(d.date)}</span>` : ''}</button>`).join('')}</div>` : '';
 
   const head = `<div class="pub-head">
-    <h3>${escH(tData(day.label))}${day.date ? ` <span class="num">${escH(fmtDate(day.date))}</span>` : ''}</h3>
+    <h3>${escH(tData(day.label))}${day.date ? `<span class="pub-date num">${escH(fmtDate(day.date))}</span>` : ''}</h3>
     <span class="muted">${escH(tData(day.beach || ''))} · ${escH(t('sched.startsAt'))}<b class="num">${escH(day.startTime)}</b></span>
   </div>`;
 
@@ -3385,7 +3385,8 @@ Board.init({
   document.documentElement.lang = getLang();   // ‎dir‎ נשאר rtl — ראו league-i18n.js
   paint();
   setSync('ok');
-  // ‎?m=1‎ הוא **קישור הכניסה**, ולכן הוא פותח את הדיאלוג מיד. ביטול משאיר
-  // את הכפתור ברצועה, כך שאין צורך לטעון מחדש כדי לנסות שוב.
-  if (MGR_LINK && secured() && !realRole()) openLogin();
+  // אין פתיחה אוטומטית של דיאלוג הכניסה. פעם ‎?m=1‎ היה הדרך היחידה להגיע
+  // אליו ולכן הוא נפתח מיד; מאז הכפתור "כניסת מנהלת" מוצג תמיד כשיש סיסמה,
+  // והפתיחה האוטומטית רק חסמה את העמוד הציבורי במסך שהמנהלת לא ביקשה —
+  // גם כשהיא רק רצתה לראות את הלוז כמו שהשחקניות רואות אותו.
 })();
