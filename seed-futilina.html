@@ -33,6 +33,7 @@ td,th{border:1px solid #dde3ea;padding:4px 10px;text-align:right}
 <button onclick="seedAll()">▶ Seed / Overwrite</button>
 <button class="sec" onclick="verifyDoc()">🔍 בדיקה — קרא ואמת</button>
 <button class="sec" onclick="addLatin()">🔤 הוסף כתיב לטיני (בלי למחוק לוז)</button>
+<button onclick="promoteReal()">🚀 הקם ליגה אמיתית — futilina-2026</button>
 <a id="open-link" href="./league.html?l=futilina-seedtest" target="_blank"><button class="sec" type="button">↗ פתח את הליגה</button></a>
 
 <div style="margin-top:14px;padding:12px;border:1px solid #dde3ea;border-radius:8px">
@@ -434,6 +435,20 @@ window.seedAll = async function () {
 // שכפול מלא למסמך ארגז-חול. המקור נקרא בלבד. הסיסמאות מנוקות בעותק, כי
 // המטרה היא שמישהי תיכנס ותשחק — ובלי סיסמה realRole() מחזיר מאסטר לכולן.
 // שני שומרים: אסור לכתוב על המקור, ואסור לכתוב על המסמך האמיתי.
+// הקמת הליגה האמיתית: העתקה מלאה של מסמך הבדיקה אל futilina-2026 — לוז,
+// רוסטר, מרשם, תוצאות, סיסמאות ושם, כמות שהם. המקור לא נגע ונשאר גיבוי חי.
+// ⚠️ המזהה נכנס לקישור שכל 72 השחקניות מקבלות, ולכן הוא בלתי הפיך בפועל.
+window.promoteReal = async function () {
+  if (!confirm('להקים את "' + REAL_DOC + '" מתוך "' + T_ID + '"?\n\n' +
+               'הכל מועתק כמות שהוא — לוז, תוצאות, סיסמאות ושם.\n' +
+               'המקור נשאר ולא משתנה.')) return;
+  const el = document.getElementById('dup-target');
+  const keep = el.value;
+  el.value = REAL_DOC;
+  window.__promote = true;
+  try { await duplicateDoc(); } finally { window.__promote = false; el.value = keep; }
+};
+
 window.duplicateDoc = async function () {
   logEl.textContent = '';
   const target = (document.getElementById('dup-target').value || '').trim();
@@ -441,7 +456,10 @@ window.duplicateDoc = async function () {
   link.textContent = '';
   if (!target)              { log('✗ חסר שם יעד.'); return; }
   if (target === T_ID)      { log('✗ היעד זהה למקור — זה היה דורס אותו.'); return; }
-  if (target === REAL_DOC)  { log('✗ חסום: ' + REAL_DOC + ' הוא המסמך האמיתי.'); return; }
+  // היעד האמיתי מותר רק דרך promoteReal(), שמאשר במפורש ולא מסמן את המסמך
+  // כארגז חול. לחיצה ישירה על "שכפל" עדיין חסומה, כדי שלא ייווצר בטעות.
+  if (target === REAL_DOC && !window.__promote)
+    { log('✗ חסום: ' + REAL_DOC + ' הוא המסמך האמיתי. השתמשי ב"הקם ליגה אמיתית".'); return; }
   if (!/^[a-z0-9-]+$/.test(target)) { log('✗ שם יעד: אותיות קטנות, ספרות ומקפים בלבד.'); return; }
   log('▶ משכפל "' + T_ID + '" → "' + target + '"…');
   try {
@@ -450,8 +468,12 @@ window.duplicateDoc = async function () {
     const dst = await getDoc(doc(db, 'tournaments', target));
     if (dst.exists() && !confirm('"' + target + '" כבר קיים. לדרוס?')) { log('✗ בוטל'); return; }
     const D = src.data();
-    D.meta = { ...(D.meta || {}), name: (D.meta?.name || 'ליגה') + ' — ארגז חול',
-               adminPasswordHash: '', managerPasswordHash: '' };
+    // ארגז חול: שם מסומן וסיסמאות נקיות, כדי שלא יתבלבל עם האמיתי.
+    // הקמה אמיתית: המסמך עובר כמות שהוא — אותו שם, אותן סיסמאות, אותו לוז,
+    // אותן תוצאות. רק המזהה בכתובת משתנה.
+    if (!window.__promote)
+      D.meta = { ...(D.meta || {}), name: (D.meta?.name || 'ליגה') + ' — ארגז חול',
+                 adminPasswordHash: '', managerPasswordHash: '' };
     await setDoc(doc(db, 'tournaments', target), { ...D, updatedAt: serverTimestamp() });
     const games = (D.games || []).length;
     const teams = Object.values(D.roster || {}).reduce((n, l) => n + (l || []).length, 0);
