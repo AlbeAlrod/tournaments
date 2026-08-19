@@ -17,7 +17,7 @@ import {
 
 // שלוש השפות של העמודים הציבוריים. ראו league-i18n.js — כולל ההחלטה
 // שהכיוון נשאר RTL בכל שפה, כי שמות הקבוצות נשארים עברית.
-import { t, tData, getLang, setLang, LANGS } from './league-i18n.js?v=5';
+import { t, tData, getLang, setLang, LANGS } from './league-i18n.js?v=6';
 
 // המתזמן — שלב 3. מודול טהור: הוא לא מכיר את L, את ה-DOM או את Firestore,
 // והוא מקבל תמונת מצב ומחזיר משחקים ודוח. ראו league-sched.js.
@@ -2222,6 +2222,12 @@ function standTable(ranked) {
 let pubDay = null;   // היום המוצג בלוז הציבורי
 let attDay = null;   // היום שפאנל הנוכחות פתוח עליו
 
+// מסנני הלוז הציבורי. **לא** ב-localStorage, בניגוד לחיפוש: חיפוש הוא כוונה
+// מתמשכת ("איפה הקבוצה שלי"), אבל מסנן ששרד ביקור קודם מציג לוז חלקי בלי
+// שהמשתמשת תזכור למה. מתאפסים גם בהחלפת מחזור.
+let pubNet = null;   // מספר מגרש, או null = הכל
+let pubCat = null;   // מזהה ליגה, או null = הכל
+
 // §7.2 — "ושדה החיפוש זוכר את עצמו". זה כל מה שנשאר מעמוד "הקבוצה שלי":
 // מי שחיפשה פעם אחת לא מקלידה שוב לעולם. localStorage ולא sessionStorage —
 // הזיכרון אמור לשרוד סגירת דפדפן בין מחזור למחזור.
@@ -2252,7 +2258,8 @@ function pubGameRow(g, opts = {}) {
   const search = `${TEAM_NAME(g.a)} ${TEAM_NAME(g.b)}`.toLowerCase();
   // צבע המגרש עובר כ-custom property ולא כרקע: ב-league.css הוא נישא על
   // השפה המובילה של הכרטיס (‎.mt‎ במוקאפ), ושם המגרש נשאר תווית קריאה.
-  return `<div class="pub-game" data-s="${escH(search)}" style="--net:${escH(color)}">
+  return `<div class="pub-game" data-s="${escH(search)}" data-net="${escH(g.net)}"
+       data-cat="${escH(g.cat)}" style="--net:${escH(color)}">
     <span class="pub-net">${escH(tData(NET_NAME(g.net)))}</span>
     ${opts.withTime && day ? `<span class="pub-when num">${escH(slotTime(day, g.slot))}</span>` : ''}
     ${opts.withDay ? `<span class="pub-when">${escH(tData(dayLabel(g.day)))}</span>` : ''}
@@ -2331,9 +2338,26 @@ function renderPublicSchedule() {
       </div>`).join('')}</div>
   </details>` : '';
 
+  // גלולות הסינון — נבנות **רק מהמשחקים של היום המוצג**, ורק כשיש יותר
+  // מאפשרות אחת. קבוצה עם ערך יחיד היא שורת פקדים שלא מסננת כלום.
+  // ‎.day-picker‎ מחוץ ל-‎.board-toolbar‎ במכוון: כללי לוח הגרירה תחומים אליו
+  // (league.css §5), וכאן מתקבלים בדיוק המרווח והרוחב הרצויים.
+  const pill = (on, act, val, label) =>
+    `<button class="filter-btn${on ? ' on' : ''}" data-act="${act}" data-v="${escH(val)}">${escH(label)}</button>`;
+  const netIds = [...new Set(games.map(g => g.net).filter(Boolean))].sort((a, b) => a - b);
+  const catIds = (L.categories || []).map(c => c.id).filter(id => games.some(g => g.cat === id));
+  const netBtns = netIds.length > 1 ? `<div class="day-picker">
+    ${pill(pubNet === null, 'pub.net', '', t('sched.allNets'))}
+    ${netIds.map(id => pill(pubNet === id, 'pub.net', id, tData(NET_NAME(id)))).join('')}
+  </div>` : '';
+  const catBtns = catIds.length > 1 ? `<div class="day-picker">
+    ${pill(pubCat === null, 'pub.cat', '', t('sched.allCats'))}
+    ${catIds.map(id => pill(pubCat === id, 'pub.cat', id, tData(CAT_NAME(id)))).join('')}
+  </div>` : '';
+
   setTimeout(pubFilter, 0);   // מחיל את החיפוש הזכור מיד אחרי שה-HTML נכנס ל-DOM
   return `${live}<div class="sett-section pub-sched">
-    ${picker}${head}${entry}${search}
+    ${picker}${head}${entry}${netBtns}${catBtns}${search}
     ${list || `<div class="empty">${escH(t('sched.noGames'))}</div>`}
   </div>`;
 }
@@ -2342,9 +2366,14 @@ function renderPublicSchedule() {
 // (מלכודת 3 בגרסתה החריפה: כאן זה שדה שמסנן את עצמו).
 function pubFilter() {
   const q = pubQuery.trim().toLowerCase();
+  const filtered = !!q || pubNet !== null || pubCat !== null;
   let n = 0;
   document.querySelectorAll('.pub-game').forEach(el => {
-    const hit = !q || (el.dataset.s || '').includes(q);
+    // חיתוך ולא איחוד: מגרש **וגם** ליגה **וגם** חיפוש.
+    // ‎+el.dataset.net‎ — g.net הוא מספר ו-dataset תמיד מחרוזת.
+    const hit = (!q || (el.dataset.s || '').includes(q))
+             && (pubNet === null || +el.dataset.net === pubNet)
+             && (pubCat === null || el.dataset.cat === pubCat);
     el.classList.toggle('hide', !hit);
     if (hit) n++;
   });
@@ -2352,8 +2381,10 @@ function pubFilter() {
     row.classList.toggle('hide', !row.querySelector('.pub-game:not(.hide)')));
   const c = document.getElementById('pub-count');
   if (c) {
-    c.textContent = !q ? '' : n ? t('sched.found', { n }) : t('sched.notfound');
-    c.classList.toggle('no', !!q && !n);
+    // המונה מוצג גם על סינון ולא רק על חיפוש — אחרת צמצום למגרש אחד נראה
+    // כמו לוז שנעלם בלי הסבר.
+    c.textContent = !filtered ? '' : n ? t('sched.found', { n }) : t('sched.notfound');
+    c.classList.toggle('no', filtered && !n);
   }
 }
 
@@ -3051,8 +3082,12 @@ const ACT = {
   },
   'pub.preview': () => { previewPublic = true; page = 'schedule'; paint(); return false; },
   'pub.exit':    () => { previewPublic = false; paint(); return false; },
-  'pub.day':     el => { pubDay = el.dataset.day; },
+  // החלפת מחזור מאפסת את המסננים: הם נבנו מהמשחקים של היום הקודם, ומגרש
+  // שלא קיים ביום החדש היה מרוקן את הרשימה בלי שום פקד פעיל שמסביר למה.
+  'pub.day':     el => { pubDay = el.dataset.day; pubNet = null; pubCat = null; },
   'pub.clearSearch': () => { setQuery(''); },
+  'pub.net':     el => { pubNet = el.dataset.v === '' ? null : +el.dataset.v; },
+  'pub.cat':     el => { pubCat = el.dataset.v === '' ? null : el.dataset.v; },
 
   // ── נוכחות וזמינות (§8.4) ──
   'att.day':   el => { attDay = el.dataset.day; },
@@ -3220,7 +3255,9 @@ const NO_REPAINT = new Set([
 // שקיים רק בדפדפן.
 const NO_SAVE = new Set(['lang.set', 'sched.day', 'stand.cat', 'stand.team',
   'auth.click', 'auth.submit', 'auth.close',
-  'pub.preview', 'pub.exit', 'pub.day', 'pub.clearSearch', 'att.day',
+  'pub.preview', 'pub.exit', 'pub.day', 'pub.clearSearch',
+  'pub.net', 'pub.cat',   // מסננים — קיימים בדפדפן בלבד, לא במסמך
+  'att.day',
   // §8.7 — בחירת יום, רענון, שעת-בדיקה וחישוב ההצעה הקבוצתית אינם משנים
   // את המודל: הם רק מחשבים ומציגים. רק live.toggle ו-live.apply כותבים.
   'live.day', 'live.refresh', 'live.now', 'live.group',
@@ -3234,7 +3271,8 @@ const NO_SAVE = new Set(['lang.set', 'sched.day', 'stand.cat', 'stand.team',
 const ACT_LEVEL = {};
 for (const a of ['lang.set', 'stand.cat', 'stand.team',
                  'auth.click', 'auth.submit', 'auth.close',
-                 'pub.day', 'pub.clearSearch', 'pub.exit']) ACT_LEVEL[a] = 0;
+                 'pub.day', 'pub.clearSearch', 'pub.exit',
+                 'pub.net', 'pub.cat']) ACT_LEVEL[a] = 0;
 for (const a of ['res.score', 'res.tech']) ACT_LEVEL[a] = 1;   // אדמין = הזנת תוצאות
 // §8.7 — האדמין עומדת במגרשים ולכן היא זו שמקדימה משחקים בפועל. הפעולות
 // עצמן פתוחות לה; ‎live.toggle‎ **לא** — הדלקת הפיצ׳ר היא מדיניות של המאסטר.

@@ -142,6 +142,8 @@ const DICT = {
     'sched.vs':      'נגד',
     'sched.unfin':   'לא הסתיים',
     'sched.found':   '{n} משחקים',
+    'sched.allNets': 'כל המגרשים',
+    'sched.allCats': 'כל הליגות',
     'sched.notfound':'לא נמצאה קבוצה',
 
     'sync.saving': 'שומר…',
@@ -200,6 +202,8 @@ const DICT = {
     'sched.vs':      'vs',
     'sched.unfin':   'Unfinished',
     'sched.found':   '{n} games',
+    'sched.allNets': 'All courts',
+    'sched.allCats': 'All leagues',
     'sched.notfound':'No team found',
 
     'sync.saving': 'Saving…',
@@ -258,6 +262,8 @@ const DICT = {
     'sched.vs':      'x',
     'sched.unfin':   'Não terminou',
     'sched.found':   '{n} jogos',
+    'sched.allNets': 'Todas as quadras',
+    'sched.allCats': 'Todas as ligas',
     'sched.notfound':'Nenhuma equipe encontrada',
 
     'sync.saving': 'Salvando…',
