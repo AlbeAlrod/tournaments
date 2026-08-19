@@ -28,7 +28,7 @@ import {
 // לוח הגרירה — שלב 5. מודול תצוגה+שליטה שמקבל את המצב החי דרך Board.init().
 // אין לו window.* globals; פעולותיו בקידומת board.* ומוזרקות ל-ACT (ראו start()).
 import Board from './league-board.js?v=16';
-import KO from './league-ko.js?v=5';
+import KO from './league-ko.js?v=6';
 
 // ============ זהות הליגה ============
 // ⚠️ המזהה הזה מופיע בכתובת הציבורית שכל 72 השחקניות מקבלות. הוא לא זמני.
@@ -2025,6 +2025,11 @@ let standTeam = null;   // סינון למשחקי קבוצה אחת (§7.2)
 
 // פונקציית רינדור עצמאית: תיבות ניקוד + תפריט טכני למשחק בודד. אין לה state
 // ותלות בטאב — שלב 5 (לוז) יקרא לה. הזיהוי דרך data-id בלבד.
+//
+// הכרטיס הוא התאום של ‎.pub-game‎ (§7.3): אותו סימון מגרש/ליגה, רק ששני
+// השמות נושאים תיבת הזנה במקום תוצאה. שם + תיבה על אותה שורה — כך אין
+// שאלה של מי ה-18, וזה מה שהחליף את השורה הישנה שבה שני השמות והניקוד
+// נדחסו לשורה אחת ונחתכו ל-"רותם קדוש • …" כבר ב-375px.
 function renderGameEntry(g) {
   const r = g.result;
   const tech = r === 'tech_a' || r === 'tech_b' || r === 'both_absent' || r === 'unfinished';
@@ -2038,8 +2043,10 @@ function renderGameEntry(g) {
   const winA = (r === 'ok' && sa > sb) || r === 'tech_b';
   const winB = (r === 'ok' && sb > sa) || r === 'tech_a';
 
-  const box = (side, val) => `<input class="text-inp res-inp" type="number" min="0" max="60"
-      id="ri-${escH(g.id)}-${side}" value="${val ?? ''}"
+  // ‎aria-label‎: השם והתיבה יושבים באותה שורת גריד אבל אינם קשורים בקשר
+  // תוכני, ובלעדיו קוראת מסך שומעת ארבעים וארבע תיבות מספר בלי הקשר.
+  const box = (side, val, who) => `<input class="text-inp res-inp" type="number" min="0" max="60"
+      id="ri-${escH(g.id)}-${side}" value="${val ?? ''}" aria-label="${escH(who)}"
       data-act="res.score" data-id="${escH(g.id)}" data-side="${side}"${tech ? ' disabled' : ''}/>`;
 
   const badge =
@@ -2060,11 +2067,22 @@ function renderGameEntry(g) {
     </div>
   </details>`;
 
-  return `<div class="res-row${invalid ? ' invalid' : ''}${tech ? ' tech' : ''}">
-    <span class="res-team${winA ? ' win' : ''}">${escH(nameA)}</span>
-    <span class="res-score">${box('sa', sa)}<b>:</b>${box('sb', sb)}</span>
-    <span class="res-team${winB ? ' win' : ''}">${escH(nameB)}</span>
-    <span class="res-meta">${badge}${menu}</span>
+  // הכרטיס נושא את אותו סימון שהצופה רואה בלוז: צבע המגרש על השפה המובילה
+  // (‎--net‎, כמו ‎.pub-game‎), שם המגרש ושם הליגה. זה מה שמאפשר להתאים משחק
+  // על המסך למשחק שמולה בחוף בלי לספור שורות. ‎g.net‎ עשוי להיות ריק כשהקריאה
+  // מגיעה מלוח הגרירה (משחק שקיבל סלוט אך טרם קיבל רשת) — אז אין תווית ואין
+  // צבע, ו-‎var(--net, …)‎ נופל לקו הרגיל.
+  const netLbl = g.net ? tData(NET_NAME(g.net)) : '';
+  const netVar = g.net ? ` style="--net:${escH(NET_COLOR(g.net))}"` : '';
+
+  return `<div class="res-card${invalid ? ' invalid' : ''}${tech ? ' tech' : ''}"${netVar}>
+    <span class="rc-head">
+      <span class="rc-net">${escH(netLbl)}</span>
+      <span class="rc-cat">${escH(tData(CAT_NAME(g.cat)))}</span>
+      ${badge}${menu}
+    </span>
+    <span class="rc-team${winA ? ' win' : ''}">${escH(nameA)}</span>${box('sa', sa, nameA)}
+    <span class="rc-team${winB ? ' win' : ''}">${escH(nameB)}</span>${box('sb', sb, nameB)}
     ${invalid ? `<span class="score-err">תוצאה לא חוקית — עד ${fmt.to}${fmt.cap ? `, תקרה ${fmt.cap}` : ', ללא תקרה'}, הפרש 2</span>` : ''}
   </div>`;
 }
@@ -2278,9 +2296,13 @@ function renderPublicSchedule() {
     <span class="team-counter" id="pub-count"></span>
   </div>`;
 
+  // ‎.num‎ יושב על ה-span הפנימי ולא על ‎.pub-time‎ עצמו: בטלפון השעה הופכת
+  // לשורה מלאה מעל קבוצת המשחקים (§7.3), ואלמנט שנושא ‎direction:ltr‎ היה
+  // מיישר את עצמו שמאלה גם בעברית — כלומר השעה הייתה קופצת לקצה הלא-נכון.
+  // העטיפה נשארת בכיוון העמוד ומיישרת ל-start, והבידוד הדו-כיווני נשמר.
   const list = [...bySlot.entries()].map(([slot, gs]) => `
     <div class="pub-slot">
-      <div class="pub-time num">${escH(slotTime(day, slot))}</div>
+      <div class="pub-time"><span class="num">${escH(slotTime(day, slot))}</span></div>
       <div class="pub-games">${gs.map(g => pubGameRow(g)).join('')}</div>
     </div>`).join('');
 
@@ -2290,17 +2312,30 @@ function renderPublicSchedule() {
   const live = R() === 1 ? livePanel() : '';
 
   // הזנת תוצאות = אדמין ומעלה (§7.1). אותו רכיב של שלב 4, בלי עותק שני.
-  const entry = R() >= 1 ? `<details class="results-panel" open>
+  //
+  // הפאנל עלה מתחתית העמוד אל מתחת לכותרת היום: זו העבודה היחידה שהמנהלת
+  // עושה בלוז, ולא היה שום היגיון בכך שהיא מתחת לארבעים וארבעה כרטיסי
+  // קריאה. בורר היום נשאר מעליו — אחרת החלפת מחזור דורשת לגלול את כל
+  // רשימת ההזנה.
+  //
+  // אותו פיצול לסלוטים כמו ברשימת הקריאה: המנהלת עובדת סבב-סבב, וארבעים
+  // וארבעה כרטיסים ברצף אחד הם קיר. ‎.res-slot‎ ולא ‎.pub-slot‎ — אחרת
+  // ‎pubFilter‎ היה מסתיר את שורות ההזנה יחד עם שורות הקריאה.
+  const entry = R() >= 1 && games.length ? `<details class="results-panel results-flow" open>
     <summary class="sett-section-title">הזנת תוצאות · ${escH(tData(day.label))}
       <span class="muted">${games.length}</span></summary>
-    <div class="results-body">${games.map(g => renderGameEntry(g)).join('')}</div>
+    <div class="results-body">${[...bySlot.entries()].map(([slot, gs]) => `
+      <div class="res-slot">
+        <div class="res-slot-t"><span class="num">${escH(slotTime(day, slot))}</span></div>
+        <div class="res-cards">${gs.map(g => renderGameEntry(g)).join('')}</div>
+      </div>`).join('')}</div>
   </details>` : '';
 
   setTimeout(pubFilter, 0);   // מחיל את החיפוש הזכור מיד אחרי שה-HTML נכנס ל-DOM
   return `${live}<div class="sett-section pub-sched">
-    ${picker}${head}${search}
+    ${picker}${head}${entry}${search}
     ${list || `<div class="empty">${escH(t('sched.noGames'))}</div>`}
-  </div>${entry}`;
+  </div>`;
 }
 
 // סינון החיפוש בלי רינדור מחדש — הקלדה לא יכולה לאבד את הפוקוס בשדה

@@ -421,7 +421,9 @@ footer { padding: 20px; text-align: center; font-size: 12px;
   padding-bottom: 5px; margin-bottom: 4px; border-bottom: 1px solid var(--border); }
 .nsd-btn { margin-inline-start: auto; font-size: 12px; padding: 4px 12px; }
 
-/* שורת הזנת תוצאה — שם : ניקוד : שם : סטטוס. תצוגה זמנית, לא לוח. */
+/* שורת הזנת תוצאה — שם : ניקוד : שם : סטטוס.
+   הלוז עבר לכרטיס ‎.res-card‎ (§7.3.1); השורה הזאת נשארת בשביל שלב הנוקאאוט
+   (league-ko.js), שבו יש משחק אחד לשלב ורוחב אינו הבעיה. */
 .res-row { display: flex; align-items: center; gap: 8px;
   padding: 8px 2px; border-bottom: 1px solid var(--border); }
 .res-row:last-child { border-bottom: 0; }
@@ -1525,6 +1527,66 @@ footer { border-top-color: var(--line-soft); color: var(--ink-32); }
 .pub-game.hide, .pub-slot.hide { display: none; }
 .team-counter.no { color: var(--red); }
 
+/* ── 7.3.1 כרטיס הזנת התוצאה (§7.1, אדמין ומעלה) ─────────────────────────
+   הלוז של המנהלת נבנה סביב הפעולה היחידה שהיא עושה בו — הזנת תוצאות —
+   ולכן הפאנל עלה אל מתחת לכותרת היום, והשורה הישנה (שם : ניקוד : שם,
+   הכול בשורה אחת) הוחלפה בכרטיס.
+
+   הכרטיס הוא התאום של ‎.pub-game‎: אותה שפה בדיוק — קו שיער, רדיוס קטן,
+   צבע המגרש על השפה המובילה (‎--net‎), ושם המגרש ושם הליגה כתוויות-מיקרו
+   בשורה העליונה. זה הסימון שהמנהלת והצופה רואות באותה צורה, וזה מה
+   שמאפשר להתאים כרטיס על המסך למגרש שמול העיניים.
+
+   ‎border-inline-start‎ ולא ‎border-right‎: הכרטיס נושא את כיוון העמוד (ולא
+   ‎direction:ltr‎ כמו ‎.num‎), ולכן ה-inline נפתר נכון — ובעיקר, ‎.pub-game‎
+   משתמש באותו מאפיין. מאפיין פיזי כאן היה מציב את פס הצבע בצד אחד בעברית
+   ובצד ההפוך באנגלית ובפורטוגזית ביחס לכרטיס הקריאה שמתחתיו. */
+.res-slot + .res-slot { margin-top: 14px; }
+/* אותה כותרת-סבב של ‎.pub-time‎ בטלפון, ובאותו משקל וגוון — שתי הרשימות
+   באותו עמוד, ושעה שנראית אחרת בכל אחת מהן נקראת כשני דברים שונים. */
+.res-slot-t { margin-bottom: 6px; font-size: 12.5px; font-weight: 700;
+  color: var(--ink); font-variant-numeric: tabular-nums; }
+/* טור אחד בטלפון, ובמסך רחב כמה שנכנסים ברוחב קריא. בלי זה כרטיס ברוחב
+   1140px מותח נהר של מאות פיקסלים בין השם לתיבה שלו.
+
+   ‎270px‎ אינו מספר שרירותי: ב-1280 הוא נותן ארבעה טורים, כלומר סלוט שלם
+   (רשת לכל מגרש) יוצא בשורה אחת ובאותו סדר שבו המגרשים עומדים בחוף.
+   מספר גדול יותר היה מוריד לשלושה, ואז כל סלוט משאיר חור של שני טורים. */
+.res-cards, .results-body:has(> .res-card) {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); gap: 7px; }
+/* שתי עמודות: שם גמיש ותיבת ניקוד ברוחב קבוע. שורת התוויות פורשת על
+   שתיהן. השם והתיבה שלו על אותה שורה — זו כל הנקודה: אין שאלה של מי
+   ה-18, ואין שם שנחתך אחרי שתי מילים. */
+.res-card { display: grid; grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: 10px; row-gap: 3px; align-items: center;
+  padding: 7px 11px 8px; border: 1px solid var(--line-soft); border-radius: var(--rs);
+  border-inline-start: 3px solid var(--net, var(--line));
+  background: var(--ground); font-size: 13.5px; line-height: 1.35; }
+.rc-head { grid-column: 1 / -1; display: flex; align-items: center; gap: 8px;
+  min-height: 26px; }
+.rc-net, .rc-cat { font-size: 10.5px; font-weight: 600; color: var(--ink-48); }
+/* המגרש בקצה הקריאה, הליגה והפקדים בקצה השני — כמו בכרטיס הציבורי. */
+.rc-net { margin-inline-end: auto; }
+.rc-head .tech-menu { margin-inline-start: 1px; }
+.rc-team { min-width: 0; font-weight: 500; color: var(--ink-70); }
+.rc-team.win { color: var(--ink); font-weight: 700; }
+.res-card.tech .rc-team { color: var(--ink-48); }
+/* ‎border-color‎ הוא קיצור ופוגע גם בשפה המובילה — כלומר צבע המגרש היה
+   מתחלף באדום בדיוק בכרטיס שצריך לזהות מהר. השפה חוזרת ל-‎--net‎. */
+.res-card.invalid { border-color: var(--red);
+  border-inline-start-color: var(--net, var(--red)); }
+.res-card .score-err { grid-column: 1 / -1; margin-top: 3px; }
+
+/* הפאנל בלוז אינו נגלל בתוך עצמו: הוא הדבר הראשי בעמוד, וגלילה מקוננת
+   בטלפון היא מלכודת. ‎.results-panel‎ הרגיל (לוח הגרירה, league-board.js)
+   נשאר עם התקרה שלו — שם הלוח מותח את עצמו לגובה הזמין וכל פיקסל נחשב.
+   ‎overflow:visible‎ גם משחרר את פופ-אובר "ט" מהחיתוך; הרדיוס העליון עובר
+   לכותרת כדי שהיא לא תבלוט מהפינות. */
+.results-flow { overflow: visible; }
+.results-flow > summary { border-radius: var(--rs) var(--rs) 0 0; }
+.results-flow > .results-body { max-height: none; overflow: visible; }
+.pub-sched > .results-flow { margin: 2px 0 18px; }
+
 /* ── 7.4 שני פאנלי המאסטר מעל הלוח ──────────────────────────────────────
    אותה התנהגות של אקורדיון ההגדרות, אבל **לא** מחלקת .acc: הכלל
    `#page-body:has(.acc)` הופך את העמוד לשני טורים במסך רחב, וזה נכון
@@ -1580,8 +1642,17 @@ footer { border-top-color: var(--line-soft); color: var(--ink-32); }
   direction: ltr; unicode-bidi: isolate; white-space: nowrap; }
 
 @media (max-width: 640px) {
-  .pub-slot { gap: 8px; }
-  .pub-time { width: 44px; font-size: 13px; }
+  /* השעה יורדת מעמודה צדדית לשורה מעל קבוצת המשחקים של אותו סלוט. בעמודה
+     היא גזלה 44px + 8px רווח מכל כרטיס — כ-14% מרוחב מסך של 375 — לאורך כל
+     הרשימה, ורק כדי לשאת חמישה תווים שחוזרים על עצמם ארבע פעמים ברצף.
+     כשורה היא נקראת כמו כותרת של סבב, והכרטיסים מקבלים את הרוחב בחזרה.
+
+     ‎.pub-time‎ אינו נושא כאן ‎.num‎ (הוא עבר ל-span הפנימי, ראו
+     renderPublicSchedule) — ולכן הוא בכיוון העמוד ונצמד לקצה הקריאה
+     הנכון בשלוש השפות. */
+  .pub-slot { display: block; padding: 10px 0 8px; }
+  .pub-time { width: auto; padding-top: 0; margin-bottom: 6px;
+    font-size: 12.5px; font-weight: 700; color: var(--ink); }
   /* בטלפון הכרטיס עובר לגריד: שם / תוצאה / שם זה מתחת לזה. בשורה אחת שני
      השמות נמחצים והתוצאה נדבקת לשם אחד, ואז אי אפשר לדעת של מי ה-18.
 
@@ -1609,6 +1680,14 @@ footer { border-top-color: var(--line-soft); color: var(--ink-32); }
      קטנה, ‎tabular‎, ובמשחק שטרם שוחק היא "נגד" בגוון דהוי. */
   .pub-score { justify-self: start; }
   .pub-search .text-inp { width: 100%; }
+
+  /* כרטיס ההזנה: טור אחד, ותיבת הניקוד גדלה ל-44×44 — היא הפקד הראשי של
+     מי שעומדת בחוף עם טלפון ביד, ולכן תקן המגע של §8 ולא מידת שדה טופס
+     במחשב. ‎min-height‎ ולא ריפוד: הריפוד לבדו עצר על 39px. */
+  .res-cards, .results-body:has(> .res-card) { grid-template-columns: minmax(0, 1fr); }
+  .res-card { font-size: 13px; padding: 7px 10px 8px; }
+  .res-card .res-inp { width: 44px; min-height: 44px; padding: 9px 4px; }
+  .res-slot-t { font-size: 12px; }
   .att-tbl { min-width: 560px; }
   .role-tab { margin-inline-start: 0; }
 }

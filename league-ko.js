@@ -265,7 +265,7 @@ function ffHtml() {
   const msgs =
     blocking.map(a => `<div class="sched-msg err">⛔ שוויון מלא בין ${a.size} קבוצות על מקומות
         <b class="num">${a.start}–${a.end}</b> — הוא נוגע לגבול הפיינל פור (4–5). התקנון לא מכריע
-        (§2.5), ולכן הבראקט לא נבנה עד שההכרעה תירשם ידנית בעמוד <b>דירוג</b>.</div>`).join('') +
+        , ולכן הבראקט לא נבנה עד שההכרעה תירשם ידנית בעמוד <b>דירוג</b>.</div>`).join('') +
     seeding.map(a => `<div class="sched-msg warn">⚠ שוויון לא מוכרע על מקומות
         <b class="num">${a.start}–${a.end}</b>. כל הארבע מעפילות, אבל סדר השיבוץ (מי מול מי)
         תלוי בהכרעה.</div>`).join('');
@@ -301,7 +301,7 @@ function qualifiersCard(S) {
       <thead><tr><th>שיבוץ</th><th>קבוצה</th><th>מקום בטבלה</th><th></th></tr></thead>
       <tbody>${rows}</tbody>
     </table></div>
-    <span class="sett-desc" style="margin-top:10px">3.9.1 — ארבעת המקומות הראשונים.
+    <span class="sett-desc" style="margin-top:10px">ארבעת המקומות הראשונים.
       "החלפה" מציבה במקומה של קבוצה שאינה יכולה להשתתף את
       <b>הקבוצה הגבוהה ביותר שלא העפילה</b>, ומתעדת את זה למטה.</span>
   </div>`;
@@ -315,7 +315,7 @@ function choiceCard(S) {
   return `<div class="sett-section">
     <div class="sett-section-title">בחירת חצי הגמר — מקום 1</div>
     <div class="court-filter" style="margin-bottom:8px">${btn(1)}${btn(2)}</div>
-    <span class="sett-desc">3.9.2 — לקבוצה שסיימה במקום 1 יש זכות לבחור באיזה חצי גמר תשחק.
+    <span class="sett-desc">לקבוצה שסיימה במקום 1 יש זכות לבחור באיזה חצי גמר תשחק.
       היריבה היא מקום 4 בכל מקרה, ולכן הבחירה היא בסלוט בלבד; מקומות 2–3 נכנסים לסלוט השני.
       כרגע: <b>${escH(teamName(S.seeds[0]))}</b> משחקת בחצי גמר ${cur === 1 ? '①' : '②'}.</span>
   </div>`;
@@ -590,7 +590,7 @@ function crossHtml() {
           <td><span class="status-badge badge-approved">⬆ עולה לליגה ראשונה</span></td></tr>`).join('')}
       </tbody>
     </table></div>
-    <span class="sett-desc" style="margin-top:10px">3.11.1–3.11.2. הספירה מלמטה:
+    <span class="sett-desc" style="margin-top:10px">הספירה מלמטה:
       ב-${P.N} קבוצות בליגה ראשונה, "שתי האחרונות" הן מקומות
       <b class="num">${P.N - 1}</b> ו-<b class="num">${P.N}</b> — המספרים האלה תוצאה של החישוב,
       לא קלט לו (§2.7).</span>
@@ -625,7 +625,7 @@ function crossHtml() {
   const play = `<div class="sett-section">
     <div class="sett-section-title">משחקי ההצלבה</div>
     ${rows}
-    <span class="sett-desc">3.11.3–3.11.5 — המנצחת בכל הצלבה תשחק בליגה הראשונה, המפסידה בשנייה.
+    <span class="sett-desc">המנצחת בכל הצלבה תשחק בליגה הראשונה, המפסידה בשנייה.
       סה״כ שני משחקים, במועד נפרד אחרי הפיינל פור (3.11.6).</span>
   </div>`;
 
