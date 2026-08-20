@@ -53,10 +53,12 @@ let warnsOpen = false;   // סרגל האזהרות מורחב?
 const WB_KEY = 'futilina-wb-h';
 const WB_MIN = 44, WB_MAX_FRAC = 0.6;
 let wbH = (() => { try { return +localStorage.getItem(WB_KEY) || 0; } catch (_) { return 0; } })();
+// ‎innerHeight‎ הוא 0 בלשונית מוסתרת ובחלון שטרם נמדד — אותה הגנה שיש
+// ב-‎fitGrid()‎. בלעדיה הקלמפ העליון מתאפס והסרגל מתכווץ ל-0 בלי סיבה.
+const wbViewH = () => window.innerHeight || document.documentElement.clientHeight || 800;
 function wbHeight() {
-  const max = Math.round(window.innerHeight * WB_MAX_FRAC);
-  const def = Math.round(window.innerHeight * 0.34);   // ברירת המחדל הישנה
-  return Math.min(Math.max(wbH || def, WB_MIN), max);
+  const h = wbViewH();
+  return Math.min(Math.max(wbH || Math.round(h * 0.34), WB_MIN), Math.round(h * WB_MAX_FRAC));
 }
 function setWbHeight(px) {
   wbH = Math.round(px);
@@ -1079,8 +1081,7 @@ function wbGripDown(e) {
   e.preventDefault();
   e.stopPropagation();
   const startY = e.clientY, startH = body.getBoundingClientRect().height;
-  const max = Math.round(window.innerHeight * WB_MAX_FRAC);
-  grip.setPointerCapture?.(e.pointerId);
+  const max = Math.round(wbViewH() * WB_MAX_FRAC);
   document.body.classList.add('wb-resizing');
   const move = ev => {
     // הידית בשפה העליונה: גרירה למעלה (‎clientY‎ קטן) מגדילה את האזהרות.
@@ -1091,14 +1092,19 @@ function wbGripDown(e) {
   const up = ev => {
     setWbHeight(body.getBoundingClientRect().height);
     document.body.classList.remove('wb-resizing');
-    grip.releasePointerCapture?.(ev.pointerId);
+    try { grip.releasePointerCapture(ev.pointerId); } catch (_) {}
     document.removeEventListener('pointermove', move);
     document.removeEventListener('pointerup', up);
     document.removeEventListener('pointercancel', up);
   };
+  // המאזינים נרשמים **לפני** לכידת המצביע, ולכידה עטופה ב-try. ‎setPointerCapture‎
+  // זורק ‎NotFoundError‎ כשהמצביע כבר אינו פעיל, וקודם הוא הפיל את כל המטפל לפני
+  // שהמאזינים בכלל נרשמו — כלומר הידית פשוט לא הגיבה. הלכידה היא שיפור ולא תנאי:
+  // בלעדיה הגרירה עדיין עובדת, רק מפסיקה אם הסמן יוצא מהחלון.
   document.addEventListener('pointermove', move, { passive: false });
   document.addEventListener('pointerup', up);
   document.addEventListener('pointercancel', up);
+  try { grip.setPointerCapture(e.pointerId); } catch (_) {}
 }
 
 function attachListeners() {
