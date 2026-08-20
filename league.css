@@ -1556,6 +1556,16 @@ footer { border-top-color: var(--line-soft); color: var(--ink-32); }
    מאפיין פיזי ולא ‎margin-inline-start‎: ‎.num‎ נושא ‎direction:ltr‎ (§5),
    ומאפיין לוגי היה נפתר לפי כיוון האלמנט ונוחת בצד ההפוך. */
 .pub-head h3 .pub-date { margin-right: 12px; font-weight: 600; color: var(--ink-48); letter-spacing: 0; }
+/* הערת מגרש — מגרש שנשמר לליגה שעוד לא התחילה. צבע המגרש על השפה
+   המובילה, בדיוק כמו כרטיס משחק, כך שהוא נקרא כחלק מאותה שפה ולא כהודעה
+   זרה. מאפיין פיזי: הדף rtl קבוע, ולכן ההתחלה היא ימין. */
+.net-notes { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 12px; }
+.net-note { display: inline-flex; align-items: baseline; gap: 6px;
+  font-size: 12.5px; color: var(--ink-70); background: var(--paper-2);
+  border-right: 3px solid var(--net, var(--line)); border-radius: var(--rs);
+  padding: 5px 10px 5px 12px; }
+.net-note b { color: var(--ink); font-weight: 700; }
+
 .pub-search { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 14px; }
 .pub-search .text-inp { width: 240px; max-width: 100%; }
 .pub-slot { display: flex; gap: 12px; align-items: flex-start; padding: 7px 0;

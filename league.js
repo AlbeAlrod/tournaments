@@ -2350,12 +2350,26 @@ function renderPublicSchedule() {
   // (league.css §5), וכאן מתקבלים בדיוק המרווח והרוחב הרצויים.
   const pill = (on, act, val, label) =>
     `<button class="filter-btn${on ? ' on' : ''}" data-act="${act}" data-v="${escH(val)}">${escH(label)}</button>`;
-  const netIds = [...new Set(games.map(g => g.net).filter(Boolean))].sort((a, b) => a - b);
+  // מגרש נכנס לרשימה אם יש בו משחקים **או** אם יש עליו הערה ב-‎meta.nets‎.
+  // ההערה היא הדרך להכריז על מגרש שנשמר לליגה שעוד לא התחילה — בלעדיה
+  // גלולה למגרש ריק הייתה מבטיחה משחקים שאינם. הטקסט נתון ולא קוד, ולכן
+  // המנהלת משנה אותו בעצמה בלי לגעת כאן.
+  const netNote = id => (L.meta.nets || []).find(n => n.id === id)?.note || '';
+  const played  = new Set(games.map(g => g.net).filter(Boolean));
+  const netIds  = (L.meta.nets || []).map(n => n.id)
+    .filter(id => played.has(id) || netNote(id))
+    .sort((a, b) => a - b);
+  const notes = netIds.filter(id => !played.has(id) && netNote(id));
   const catIds = (L.categories || []).map(c => c.id).filter(id => games.some(g => g.cat === id));
   const netBtns = netIds.length > 1 ? `<div class="day-picker">
     ${pill(pubNet === null, 'pub.net', '', t('sched.allNets'))}
     ${netIds.map(id => pill(pubNet === id, 'pub.net', id, tData(NET_NAME(id)))).join('')}
   </div>` : '';
+  // ההערות מוצגות תמיד, לא רק כשלוחצים על הגלולה — אחרת מי שלא לחצה
+  // לעולם לא תדע שהמגרש קיים ולמה הוא ריק.
+  const noteLines = notes.length ? `<div class="net-notes">${notes.map(id =>
+    `<span class="net-note" style="--net:${escH(NET_COLOR(id))}">
+       <b>${escH(tData(NET_NAME(id)))}</b> ${escH(netNote(id))}</span>`).join('')}</div>` : '';
   const catBtns = catIds.length > 1 ? `<div class="day-picker">
     ${pill(pubCat === null, 'pub.cat', '', t('sched.allCats'))}
     ${catIds.map(id => pill(pubCat === id, 'pub.cat', id, tData(CAT_NAME(id)))).join('')}
@@ -2363,7 +2377,7 @@ function renderPublicSchedule() {
 
   setTimeout(pubFilter, 0);   // מחיל את החיפוש הזכור מיד אחרי שה-HTML נכנס ל-DOM
   return `${live}<div class="sett-section pub-sched">
-    ${picker}${head}${netBtns}${catBtns}${search}${entry}
+    ${picker}${head}${netBtns}${catBtns}${noteLines}${search}${entry}
     ${list || `<div class="empty">${escH(t('sched.noGames'))}</div>`}
   </div>`;
 }
@@ -2399,8 +2413,12 @@ function pubFilter() {
   if (c) {
     // המונה מוצג גם על סינון ולא רק על חיפוש — אחרת צמצום למגרש אחד נראה
     // כמו לוז שנעלם בלי הסבר.
-    c.textContent = !filtered ? '' : n ? t('sched.found', { n }) : t('sched.notfound');
-    c.classList.toggle('no', filtered && !n);
+    // ומגרש שיש עליו הערה ואין בו משחקים מקבל את ההערה במקום "לא נמצאה
+    // קבוצה" — הוא לא ריק בטעות, הוא שמור.
+    const note = pubNet !== null && !n
+      ? ((L.meta.nets || []).find(x => x.id === pubNet)?.note || '') : '';
+    c.textContent = note ? note : !filtered ? '' : n ? t('sched.found', { n }) : t('sched.notfound');
+    c.classList.toggle('no', filtered && !n && !note);
   }
 }
 
