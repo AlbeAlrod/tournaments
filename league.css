@@ -706,9 +706,22 @@ footer { padding: 20px; text-align: center; font-size: 12px;
 .wb-note.wb-info { cursor: pointer; text-decoration: underline dotted; }
 .wb-fixnote { font-size: 12.5px; font-weight: 700; color: var(--text);
   background: color-mix(in srgb, var(--p-yellow) 30%, transparent); padding: 4px 10px; border-radius: 999px; }
-/* גוף מתקפל — max-height נמוך + גלילה פנימית כדי שלא יכסה את המסך */
-.wb-body { margin-top: 8px; display: flex; flex-direction: column; gap: 8px;
+/* גוף מתקפל — הגובה נגרר מהידית שמעליו (league-board.js קובע ‎max-height‎
+   inline). 34vh נשאר כנפילה לדפדפן שלא הריץ עדיין את הסקריפט. */
+.wb-body { margin-top: 6px; display: flex; flex-direction: column; gap: 8px;
   max-height: 34vh; overflow-y: auto; padding-inline-end: 2px; }
+
+/* ידית הגרירה בין הגריד לאזהרות. גובה 10px עם אזור מגע 18px דרך ‎::after‎ —
+   קו דק נראה טוב אבל קשה לתפוס אותו, במיוחד במגע. */
+.wb-grip { position: relative; height: 10px; cursor: ns-resize; touch-action: none;
+  display: flex; align-items: center; justify-content: center; }
+.wb-grip::before { content: ''; width: 46px; height: 3px; border-radius: 999px;
+  background: var(--ink-18); transition: background .14s ease; }
+.wb-grip:hover::before { background: var(--p-magenta); }
+.wb-grip::after { content: ''; position: absolute; inset: -4px 0; }
+/* בזמן גרירה — בלי בחירת טקסט מקרית, והסמן נשאר ns-resize על כל המסך */
+body.wb-resizing { user-select: none; cursor: ns-resize; }
+body.wb-resizing .wb-grip::before { background: var(--p-magenta); }
 .wb-grp-h { font-size: 11.5px; font-weight: 800; margin-bottom: 4px; }
 .wb-grp.prob .wb-grp-h { color: color-mix(in srgb, var(--block) 78%, var(--text)); }
 .wb-grp.warn .wb-grp-h { color: var(--text2); }

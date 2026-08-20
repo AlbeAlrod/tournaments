@@ -45,6 +45,23 @@ let teamQuery = '';        // חיפוש חי (§8.6)
 //   null | { kind:'game', id } | { kind:'cell', day, slot, net }
 let pick = null;
 let warnsOpen = false;   // סרגל האזהרות מורחב?
+
+// גובה סרגל האזהרות, בפיקסלים. היה ‎34vh‎ קשיח ב-CSS; עכשיו נגרר, כי כמה
+// מקום האזהרות שוות משתנה מרגע לרגע — בתחילת סידור רוצים לראות את כולן,
+// ובסוף רק לוודא שאין אדום. localStorage ולא sessionStorage: זו העדפת
+// עבודה, לא מצב של מסך אחד.
+const WB_KEY = 'futilina-wb-h';
+const WB_MIN = 44, WB_MAX_FRAC = 0.6;
+let wbH = (() => { try { return +localStorage.getItem(WB_KEY) || 0; } catch (_) { return 0; } })();
+function wbHeight() {
+  const max = Math.round(window.innerHeight * WB_MAX_FRAC);
+  const def = Math.round(window.innerHeight * 0.34);   // ברירת המחדל הישנה
+  return Math.min(Math.max(wbH || def, WB_MIN), max);
+}
+function setWbHeight(px) {
+  wbH = Math.round(px);
+  try { localStorage.setItem(WB_KEY, wbH); } catch (_) {}
+}
 let leagueFilter = null; // הצג רק ליגה אחת (null=הכל) — §5
 let fixNote = null;      // "מה תיקנתי" — הודעה קצרה אחרי "תקן לי" (§4 שקיפות)
 let resultsOpen = false; // פאנל הזנת התוצאות פתוח? (מתג — כדי שלא יגזול גובה מהגריד)
@@ -489,7 +506,12 @@ function warnBar() {
     const grp = (title, arr, k) => arr.length ? `<div class="wb-grp ${k}"><div class="wb-grp-h">${title}</div>${arr.map(row).join('')}</div>` : '';
     const waits = info.length ? `<div class="wb-waits">🔵 <b>המתנות ארוכות</b> (יותר מסלוט בין משחקים) — לא בעיה, רק פחות אידיאלי: ${
       [...new Set(info.map(v => teamName(v.team)))].slice(0, 10).map(escH).join(' · ')}${info.length > 10 ? ' …' : ''}</div>` : '';
-    body = `<div class="wb-body">${grp('בעיות — חובה לתקן', problems, 'prob')}${grp('אזהרות — אפשר להשאיר', warnings, 'warn')}${waits}</div>`;
+    // ידית הגרירה יושבת **מעל** הגוף, על השפה שבין הגריד לאזהרות — כי זה
+    // בדיוק מה שהיא מזיזה: כל פיקסל שהאזהרות מוותרות עליו fitGrid נותן לגריד.
+    // בלי ‎data-act‎: הידית נתפסת ב-‎wbGripDown‎ לפי המחלקה, ולא עוברת דרך
+    // ‎handle()‎ — היא גרירה רציפה ולא פעולה בודדת.
+    body = `<div class="wb-grip" title="גררי כדי לשנות את גובה האזהרות"></div>`
+         + `<div class="wb-body" style="max-height:${wbHeight()}px">${grp('בעיות — חובה לתקן', problems, 'prob')}${grp('אזהרות — אפשר להשאיר', warnings, 'warn')}${waits}</div>`;
   }
   return `<div class="warnbar${cls}">${head}${body}</div>`;
 }
@@ -1045,7 +1067,42 @@ const TH = 7;
 let tapPend = null;   // הקשה על תא פנוי / שם קבוצה (לא-גרירה) — מנוהלת דרך pointer,
                       // לא click, כדי לעבוד במגע בלי השהיה ובלי click מסונתז.
 
+// גרירת ידית האזהרות. מאזין נפרד ולפני ‎onDown‎, כי הידית אינה תא בגריד
+// ואסור לה להיכנס למכונת הגרירה של המשחקים. במהלך הגרירה משנים את הסגנון
+// ישירות ומריצים ‎fitGrid()‎ — בלי ‎boardRepaint()‎, שהיה בונה מחדש את ה-DOM
+// מתחת לאצבע ומנתק את ה-pointer capture.
+function wbGripDown(e) {
+  const grip = e.target.closest?.('.wb-grip');
+  if (!grip) return;
+  const body = grip.parentElement?.querySelector('.wb-body');
+  if (!body) return;
+  e.preventDefault();
+  e.stopPropagation();
+  const startY = e.clientY, startH = body.getBoundingClientRect().height;
+  const max = Math.round(window.innerHeight * WB_MAX_FRAC);
+  grip.setPointerCapture?.(e.pointerId);
+  document.body.classList.add('wb-resizing');
+  const move = ev => {
+    // הידית בשפה העליונה: גרירה למעלה (‎clientY‎ קטן) מגדילה את האזהרות.
+    const h = Math.min(Math.max(startH + (startY - ev.clientY), WB_MIN), max);
+    body.style.maxHeight = h + 'px';
+    fitGrid();                       // הגריד לוקח מיד את מה שנשאר
+  };
+  const up = ev => {
+    setWbHeight(body.getBoundingClientRect().height);
+    document.body.classList.remove('wb-resizing');
+    grip.releasePointerCapture?.(ev.pointerId);
+    document.removeEventListener('pointermove', move);
+    document.removeEventListener('pointerup', up);
+    document.removeEventListener('pointercancel', up);
+  };
+  document.addEventListener('pointermove', move, { passive: false });
+  document.addEventListener('pointerup', up);
+  document.addEventListener('pointercancel', up);
+}
+
 function attachListeners() {
+  document.addEventListener('pointerdown', wbGripDown, { passive: false });
   document.addEventListener('pointerdown', onDown, { passive: false });
   document.addEventListener('pointermove', onMove, { passive: false });
   document.addEventListener('pointerup', onUp);
