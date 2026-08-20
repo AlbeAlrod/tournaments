@@ -428,10 +428,31 @@ function dayViolations(dayId) {
   }
   return out;
 }
-function boardWarnings() {
+// ── אזהרות שסומנו כמטופלות ────────────────────────────────────────────────
+// המפתח הוא ‎violSig‎ (kind|team|slot) ולא אינדקס, ולכן אזהרה שנעלמה וחזרה
+// באותו מקום נשארת מוסתרת — המנהלת כבר הכריעה עליה. localStorage ולא
+// המסמך: זו הכרעה של מי שמסדרת, לא נתון של הליגה.
+//
+// ⚠️ **בעיה חוסמת אינה ניתנת להסתרה.** שתי קבוצות שחולקות שחקנית באותו
+// סלוט לא הופכות לאפשריות בלחיצה על ×, ואסור שהמסך יגיד שכן.
+let dismissed = null;
+const dismissKey = () => 'futilina-wb-dismiss:' + (X?.leagueId || '');
+function dismissSet() {
+  if (dismissed) return dismissed;
+  try { dismissed = new Set(JSON.parse(localStorage.getItem(dismissKey()) || '[]')); }
+  catch (_) { dismissed = new Set(); }
+  return dismissed;
+}
+function saveDismiss() {
+  try { localStorage.setItem(dismissKey(), JSON.stringify([...dismissSet()])); } catch (_) {}
+}
+const isHidden = v => v.cls !== 'block' && dismissSet().has(violSig(v));
+
+function boardWarningsAll() {
   const dd = view === 'season' ? days().map(d => d.id) : [boardDay].filter(Boolean);
   return dd.flatMap(dayViolations);
 }
+function boardWarnings() { return boardWarningsAll().filter(v => !isHidden(v)); }
 // רק הבעיות ה"אמיתיות" (אדומות/כתומות), בסדר יציב — האינדקס משמש קפיצה ותיקון.
 const realProblems = () => boardWarnings().filter(v => v.cls === 'block' || v.cls === 'soft');
 
@@ -475,7 +496,9 @@ function suggestFix(v) {
 
 // אזהרות ≠ בעיות (§3): בעיה (block, אדום — חובה) מול אזהרה (soft, כתום — עבירה).
 function warnBar() {
-  const all = boardWarnings();
+  const raw = boardWarningsAll();
+  const hidden = raw.filter(isHidden).length;
+  const all = raw.filter(v => !isHidden(v));
   const real = all.filter(v => v.cls === 'block' || v.cls === 'soft');   // אותו סדר כמו realProblems()
   const problems = [], warnings = [];
   real.forEach((v, i) => (v.cls === 'block' ? problems : warnings).push({ v, i }));
@@ -491,6 +514,7 @@ function warnBar() {
     ${allowed.length ? `<span class="wb-note ok">${allowed.length} רצף מותר בליגה ב׳</span>` : ''}
     ${info.length ? `<button class="wb-note wb-info" data-act="board.toggleWarns">🔵 ${info.length} ${info.length === 1 ? 'קבוצה ממתינה' : 'קבוצות ממתינות'} — לא קריטי</button>` : ''}
     ${fixNote ? `<span class="wb-fixnote">✨ ${escH(fixNote)}</span>` : ''}
+    ${hidden ? `<button class="wb-note wb-restore" data-act="board.restoreViols" title="הצג שוב את מה שסימנת כמטופל">${hidden} מוסתרות — הצג</button>` : ''}
   </div>`;
 
   let body = '';
@@ -502,6 +526,7 @@ function warnBar() {
           <span class="wb-prob-fix">💡 ${escH(suggestFix(v))}</span>
         </button>
         ${FIXABLE.has(v.kind) ? `<button class="wb-fix" data-act="board.fixViol" data-i="${i}">✨ תקן לי</button>` : ''}
+        ${v.cls === 'block' ? '' : `<button class="wb-dismiss" data-act="board.dismissViol" data-i="${i}" title="טופל — אל תציגי לי את זה שוב">×</button>`}
       </div>
       ${violExtra(v)}
     </div>`;
@@ -1021,6 +1046,13 @@ ACT['board.gotoViol'] = el => {
   return false;
 };
 ACT['board.fixViol'] = el => { fixViol(+el.dataset.i); return false; };
+// ‎realProblems()‎ מסנן בדיוק כמו ‎warnBar‎, ולכן האינדקס מצביע על אותה אזהרה.
+ACT['board.dismissViol'] = el => {
+  const v = realProblems()[+el.dataset.i];
+  if (!v || v.cls === 'block') return false;   // חוסמת — לא ניתנת להסתרה
+  dismissSet().add(violSig(v)); saveDismiss(); boardRepaint(); return false;
+};
+ACT['board.restoreViols'] = () => { dismissSet().clear(); saveDismiss(); boardRepaint(); return false; };
 
 // ============================================================================
 // מודל ההקשה — "בחירה → אפשרויות" בשני הכיוונים (§8.1 + בקשות המשתמשת)

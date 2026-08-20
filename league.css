@@ -724,6 +724,13 @@ footer { padding: 20px; text-align: center; font-size: 12px;
 /* בזמן גרירה — בלי בחירת טקסט מקרית, והסמן נשאר ns-resize על כל המסך */
 body.wb-resizing { user-select: none; cursor: ns-resize; }
 body.wb-resizing .wb-grip::before { background: var(--p-magenta); }
+
+/* × להסתרת אזהרה שטופלה. דהוי עד ריחוף — הוא לא הפעולה הראשית בשורה. */
+.wb-dismiss { border: 0; background: transparent; color: var(--ink-32); cursor: pointer;
+  font-size: 17px; line-height: 1; padding: 2px 7px; border-radius: var(--rs);
+  flex-shrink: 0; transition: color .14s ease, background .14s ease; }
+.wb-dismiss:hover { color: var(--ink); background: var(--ink-08, rgba(0,11,25,.06)); }
+.wb-restore { border: 0; cursor: pointer; }
 .wb-grp-h { font-size: 11.5px; font-weight: 800; margin-bottom: 4px; }
 .wb-grp.prob .wb-grp-h { color: color-mix(in srgb, var(--block) 78%, var(--text)); }
 .wb-grp.warn .wb-grp-h { color: var(--text2); }
@@ -1111,35 +1118,19 @@ nav {
 }
 .diffnum { min-width: 38px; text-align: left; font-weight: 600; }
 
-/* מסגרת הפיינל פור — הצהוב, ורק כאן. אין תווית ואין מילוי: קו שמקיף את
-   ארבע הראשונות (במוקאפ ‎.tg.is-qual‎). ‎:has‎ מזהה את השורה האחרונה שלפני
-   הגבול, כך שהמסגרת נסגרת נכון גם אם יש פחות מארבע קבוצות.
+/* מסגרת ארבע המעפילות — **הוסרה 19.8, החלטת המשתמשת.**
+   היא סימנה בצהוב את ארבע הראשונות בטבלה החיה. בתחילת עונה, כשכל הקבוצות
+   על 0 נקודות, "ארבע הראשונות" הן ארבע שורות שרירותיות — והמסגרת אמרה
+   לשחקניות משהו לא נכון על עצמן. אותה בעיה בדיוק שהייתה בבראקט.
+   הכללים נמחקו ולא נוטרלו, כדי שלא יישאר קוד מת שנראה פעיל.
+   ‎--qual‎ נשאר בטוקנים ומשמש את ‎.champ-wrap‎ — שם ההעפלה היא כבר עובדה
+   ולא תחזית. להחזרה: הכללים בהיסטוריה של git.
 
-   ⚠️ מאפיינים פיזיים ולא לוגיים: תאי המספר נושאים ‎.num‎, שקובע
-   ‎direction:ltr‎ (§5, כדי ש-"17:00–22:20" לא ייקרא הפוך) — ולכן
-   ‎border-inline-start‎ בתוכם מתפרש כשמאל ולא כימין, והמסגרת יצאה על
-   הצד ההפוך. בדף RTL קבוע: ראשון = ימין, אחרון = שמאל.
-   בליגה "winner" הוא העפלה, והצהוב הוא הסימון היחיד שלה: המילוי והקו
-   המגנטה של ‎.stbl tr.winner‎ (§1, צבע הקטגוריה באפליקציה הראשית) מבוטלים
-   בראש §6.7, ליד ‎.stand-tbl td‎ — ראו ההערה שם למה דווקא שם. */
-.stand-tbl tr.winner td:first-child { border-right: 2px solid var(--qual); }
-.stand-tbl tr.winner td:last-child  { border-right: 0; border-left: 2px solid var(--qual); }
-.stand-tbl tbody tr.winner:first-child td { border-top: 2px solid var(--qual); }
-.stand-tbl tbody tr.winner:has(+ tr:not(.winner)) td,
-.stand-tbl tbody tr.winner:last-child td { border-bottom: 2px solid var(--qual); }
-/* פינות המסגרת — 9px, כמו ‎border-start-start-radius‎ במוקאפ (פיזי כאן: ראו
-   ההערה על ‎.num‎ ו-direction למעלה) */
-.stand-tbl tbody tr.winner:first-child td:first-child { border-top-right-radius: 9px; }
-.stand-tbl tbody tr.winner:first-child td:last-child  { border-top-left-radius: 9px; }
-.stand-tbl tbody tr.winner:has(+ tr:not(.winner)) td:first-child,
-.stand-tbl tbody tr.winner:last-child td:first-child { border-bottom-right-radius: 9px; }
-.stand-tbl tbody tr.winner:has(+ tr:not(.winner)) td:last-child,
-.stand-tbl tbody tr.winner:last-child td:last-child { border-bottom-left-radius: 9px; }
-/* תא המגירה הוא גם ראשון וגם אחרון, ולכן שני הכללים למעלה מתנגשים עליו —
-   כאן שתי השפות בכלל אחד. */
-.stand-tbl tr.gdrawer.winner td {
-  border-right: 2px solid var(--qual); border-left: 2px solid var(--qual);
-}
+   ⚠️ הקו הזה חייב להישאר: ‎.stbl tr.winner td:first-child‎ (§1, ממוחזר
+   מ-styles.css) מצייר 3px בצבע הקטגוריה על אותן שורות. הצהוב הסתיר אותו
+   קודם בכך שדרס את אותו ‎border-right‎; בלי שניהם הוא נחשף, וארבע השורות
+   נשארו מסומנות — רק במגנטה. */
+.stand-tbl tr.winner td:first-child { border-right: 0; }
 
 /* ── המגירה: המשחקים של הקבוצה שנלחצה ────────────────────────────────────
    נפתחת מתחת לשורה עצמה. כל משחק הוא לוח תוצאות של שתי שורות — שורה
