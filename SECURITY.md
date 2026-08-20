@@ -6,9 +6,16 @@ tournament `adminPassword` / `masterPassword` (stored as SHA-256 hashes in each
 tournament doc) and a super-admin hash in `config/superAdmin`. Firestore itself is
 **open read/write** to anyone who knows a document path.
 
-`firestore.rules` in this repo codifies that model and adds two real protections:
+`firestore.rules` in this repo codifies that model and adds four real protections:
 - `config/*` is **read-only** from clients (the super-admin hash can't be overwritten).
 - A catch-all **denies** writes to any collection other than the three the app uses.
+- A tournament that already holds games **cannot be emptied** of its games or its
+  player registry. This is the accident case as much as the malicious one.
+- A password that is already set **cannot be cleared from a client**, only changed
+  to another one — so nobody can lock the manager out of her own league. To really
+  clear it, use the Firebase console.
+
+None of these authenticate anyone. They limit blast radius; they do not replace auth.
 
 Deploy the rules with:
 ```

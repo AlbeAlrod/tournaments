@@ -9,10 +9,46 @@ service cloud.firestore {
     // rules cannot tell an admin from an ordinary visitor. Access control today
     // is effectively "you need to know the tournament id + password". To truly
     // lock down writes, add Firebase Auth and gate on request.auth. See SECURITY.md.
+    // ── Damage limits, added 20.8 ───────────────────────────────────────────
+    // These do NOT authenticate anyone. Without Firebase Auth the rules still
+    // cannot tell a manager from a player, and a determined person can still
+    // edit a score. What they do stop is the two things that would actually
+    // cost a season, whether done on purpose or by accident:
+    //   1. emptying a live league of its games or its player registry
+    //   2. clearing a password that is already set, i.e. locking the manager out
+    // Both are shape checks on the resulting document, so every legitimate app
+    // write (full setDoc and merge alike — request.resource.data is the document
+    // AFTER the write) passes untouched. See SECURITY.md for the real fix.
+
+    // A league that already holds games is "live" and must not be blanked.
+    function wasLive() {
+      return 'games' in resource.data && resource.data.games.size() > 0;
+    }
+    function keepsContent() {
+      return !wasLive()
+          || ('games' in request.resource.data
+              && request.resource.data.games.size() > 0
+              && 'players' in request.resource.data
+              && request.resource.data.players.size() > 0);
+    }
+    // A password, once set, can be changed to another one but not removed.
+    // To actually clear it, use the Firebase console.
+    function lockKept(field) {
+      return !('meta' in resource.data)
+          || !(field in resource.data.meta)
+          || resource.data.meta[field] == ''
+          || ('meta' in request.resource.data
+              && field in request.resource.data.meta
+              && request.resource.data.meta[field] != '');
+    }
+
     match /tournaments/{tId} {
-      allow read:           if true;
-      allow create, update: if true;
-      allow delete:         if false;  // no client can WIPE a tournament — delete from the Firebase console
+      allow read:   if true;
+      allow create: if true;
+      allow update: if keepsContent()
+                    && lockKept('managerPasswordHash')
+                    && lockKept('adminPasswordHash');
+      allow delete: if false;  // no client can WIPE a tournament — delete from the Firebase console
 
       // Contains participant name + phone (PII). World-readable under the current model.
       match /registrations/{rId} {
