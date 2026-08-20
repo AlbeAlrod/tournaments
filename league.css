@@ -1331,6 +1331,25 @@ body:has(.board-main) header { padding-block: 7px 8px; }
 body:has(.board-main) .lmark { width: 34px; height: 34px; }
 body:has(.board-main) #logo-img { height: 30px !important; }
 body:has(.board-main) nav .tab { padding-block: 7px 9px; }
+
+/* ── 6.12.2 מסך העבודה של המנהלת — מיתוג החוצה, טקסט פנימה ────────────────
+   החלטת המשתמשת: בעמוד הלוח היא מעדיפה טקסט גדול וקריא על פני מיתוג.
+   סרגל הספונסרים ושם הליגה נועדו לשחקניות; מי שגוררת משחקים בחוף כבר
+   יודעת באיזו ליגה היא. שני אלה משחררים ~70px שיורדים ישירות לגריד.
+
+   ⚠️ ‎.tools‎ **נשאר** — שם יושב מחוון הסנכרון ("שומר…"/"מסונכרן"), והוא
+   בדיוק מה שצריך להיות גלוי בזמן גרירה. רק ‎.logo‎ יורד, לא ה-header כולו.
+   ⚠️ ‎nav‎ מחוץ ל-header ולכן הניווט לא נפגע. */
+body:has(.board-main) .sponsor-bar { display: none; }
+body:has(.board-main) header > .logo { display: none; }
+body:has(.board-main) header { justify-content: flex-end; }
+
+/* הטקסט בתא גדל לתוך המקום שהתפנה. אלה שלושת המספרים לכוונון אם צריך:
+   ‎.bc-team‎ הוא שם הקבוצה — הדבר שקוראים בפועל. */
+body:has(.board-main) .day-grid .bc-team { font-size: 14px; line-height: 1.22; }
+body:has(.board-main) .day-grid .bg-time { font-size: 13px; }
+body:has(.board-main) .day-grid .bg-neth { font-size: 13px; }
+body:has(.board-main) .day-grid .bcard   { padding: 2px 8px 3px; }
 /* (‎.mpanels‎/‎.mpanel‎ עצמם מכווצים ב-§7.4 — שם הבעלות שלהם, והוא מאוחר
     יותר בקובץ.) */
 .board-help, .board-guide { margin-top: 2px; padding: 0 12px; }
