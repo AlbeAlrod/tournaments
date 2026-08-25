@@ -27,7 +27,7 @@ import {
 
 // לוח הגרירה — שלב 5. מודול תצוגה+שליטה שמקבל את המצב החי דרך Board.init().
 // אין לו window.* globals; פעולותיו בקידומת board.* ומוזרקות ל-ACT (ראו start()).
-import Board from './league-board.js?v=21';
+import Board from './league-board.js?v=22';
 import KO from './league-ko.js?v=7';
 
 // ============ זהות הליגה ============
@@ -615,10 +615,25 @@ function setTech(g, kind) {
 const hhmmToMin = t => { const [h,m] = String(t||'0:0').split(':').map(Number); return h*60 + m; };
 const minToHhmm = m => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
 
-// slotIndex הוא 1-based: סלוט 1 = שעת ההתחלה.
-export function slotTime(day, slotIndex) {
-  return minToHhmm(hhmmToMin(day.startTime) + (slotIndex - 1) * day.slotMin);
+// אורך משחק לפי ליגה. ‎day.slotMin‎ הוא ברירת המחדל של היום; ליגה שמגדירה
+// ‎slotMin‎ משלה גוברת עליו — כך לשאו יש משחקים של 20 דקות בזמן שהשאר
+// רצות ב-15, בלי לקפוא על שעה מוחלטת שלא תעקוב אחרי שינוי ‎startTime‎.
+// ⚠️ מספר הסלוט הוא **המשחק ה-N על אותו מגרש**, ולא נקודת זמן משותפת:
+// סלוט 3 של השאו הוא 17:10 וסלוט 3 של ליגה א׳ הוא 17:00. כל מקום שמציג
+// שעה חייב לדעת את הליגה — ראו ‎gameTime()‎.
+export function catSlotMin(day, catId) {
+  const c = (L.categories || []).find(x => x.id === catId);
+  return (c && +c.slotMin) || day.slotMin;
 }
+// slotIndex הוא 1-based: סלוט 1 = שעת ההתחלה.
+export function slotTime(day, slotIndex, catId) {
+  const step = catId ? catSlotMin(day, catId) : day.slotMin;
+  return minToHhmm(hhmmToMin(day.startTime) + (slotIndex - 1) * step);
+}
+// השעה של משחק מסוים — הצורה שכל תצוגה צריכה.
+export const gameTime = (day, g) => slotTime(day, g.slot, g.cat);
+const gameMin = (day, g) =>
+  hhmmToMin(day.startTime) + (g.slot - 1) * catSlotMin(day, g.cat);
 export function dayEndTime(day) {
   return minToHhmm(hhmmToMin(day.startTime) + day.slots * day.slotMin);
 }
@@ -2267,7 +2282,7 @@ function pubGameRow(g, opts = {}) {
   return `<div class="pub-game" data-s="${escH(search)}" data-net="${escH(g.net)}"
        data-cat="${escH(g.cat)}" style="--net:${escH(color)}">
     <span class="pub-net">${escH(tData(NET_NAME(g.net)))}</span>
-    ${opts.withTime && day ? `<span class="pub-when num">${escH(slotTime(day, g.slot))}</span>` : ''}
+    ${opts.withTime && day ? `<span class="pub-when num">${escH(gameTime(day, g))}</span>` : ''}
     ${opts.withDay ? `<span class="pub-when">${escH(tData(dayLabel(g.day)))}</span>` : ''}
     <span class="pub-team${wa ? ' win' : ''}">${escH(TEAM_NAME(g.a))}</span>
     ${score}
@@ -2290,8 +2305,16 @@ function renderPublicSchedule() {
     .filter(g => g.day === day.id && g.slot && g.net)
     .sort((a, b) => (a.slot - b.slot) || (a.net - b.net));
 
+  // מקובץ לפי **שעה** ולא לפי מספר סלוט. כשלכל ליגה אורך משחק משלה, שני
+  // משחקים באותו סלוט אינם באותה שעה — קיבוץ לפי סלוט היה מדביק 17:00
+  // ו-17:10 לאותה כותרת. המפתח הוא הדקה, וזה גם מה שקורא מי שעומדת בחוף.
   const bySlot = new Map();
-  for (const g of games) { if (!bySlot.has(g.slot)) bySlot.set(g.slot, []); bySlot.get(g.slot).push(g); }
+  for (const g of games) {
+    const k = gameMin(day, g);
+    if (!bySlot.has(k)) bySlot.set(k, []);
+    bySlot.get(k).push(g);
+  }
+  const ordered = [...bySlot.entries()].sort((a, b) => a[0] - b[0]);
 
   const picker = days.length > 1 ? `<div class="day-picker">${days.map(d =>
     `<button class="filter-btn${d.id === day.id ? ' on' : ''}" data-act="pub.day" data-day="${escH(d.id)}"
@@ -2313,9 +2336,9 @@ function renderPublicSchedule() {
   // לשורה מלאה מעל קבוצת המשחקים (§7.3), ואלמנט שנושא ‎direction:ltr‎ היה
   // מיישר את עצמו שמאלה גם בעברית — כלומר השעה הייתה קופצת לקצה הלא-נכון.
   // העטיפה נשארת בכיוון העמוד ומיישרת ל-start, והבידוד הדו-כיווני נשמר.
-  const list = [...bySlot.entries()].map(([slot, gs]) => `
+  const list = ordered.map(([mins, gs]) => `
     <div class="pub-slot">
-      <div class="pub-time"><span class="num">${escH(slotTime(day, slot))}</span></div>
+      <div class="pub-time"><span class="num">${escH(minToHhmm(mins))}</span></div>
       <div class="pub-games">${gs.map(g => pubGameRow(g)).join('')}</div>
     </div>`).join('');
 
@@ -2337,9 +2360,9 @@ function renderPublicSchedule() {
   const entry = R() >= 1 && games.length ? `<details class="results-panel results-flow" open>
     <summary class="sett-section-title">הזנת תוצאות · ${escH(tData(day.label))}
       <span class="muted">${games.length}</span></summary>
-    <div class="results-body">${[...bySlot.entries()].map(([slot, gs]) => `
+    <div class="results-body">${ordered.map(([mins, gs]) => `
       <div class="res-slot">
-        <div class="res-slot-t"><span class="num">${escH(slotTime(day, slot))}</span></div>
+        <div class="res-slot-t"><span class="num">${escH(minToHhmm(mins))}</span></div>
         <div class="res-cards">${gs.map(g => renderGameEntry(g)).join('')}</div>
       </div>`).join('')}</div>
   </details>` : '';
@@ -3381,6 +3404,7 @@ Board.init({
   schedInput, regularDays,
   findTeam, findGame,
   teamName: TEAM_NAME, netName: NET_NAME, netColor: NET_COLOR, catName: CAT_NAME,
+  catSlotMin,   // אורך משחק לפי ליגה — הלוח מסמן איתו שעה על כרטיס חריג
   slotTime, dayEndTime,
   renderGameEntry,
   leagueId: LEAGUE_ID, isDev: DEV

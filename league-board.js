@@ -654,8 +654,15 @@ function bcard(g) {
   }
   const dim = leagueFilter && g.cat !== leagueFilter ? ' lg-dim' : '';   // §5
   const cls = `bcard cat-${escH(g.cat)}${picked ? ' picked' : ''}${g.locked ? ' locked' : ''}${cand}${dim}`;
+  // ⚠️ עמודת השעה של הגריד מחושבת מאורך הסלוט של **היום**. ליגה עם אורך
+  // משחק משלה (שאו, 20 דק׳) יושבת בשורה שכותרתה שעה אחרת מהשעה שלה, ולכן
+  // הכרטיס נושא את השעה האמיתית שלו. ליגה שרצה על ברירת המחדל לא מקבלת
+  // תווית — שם השורה כבר נכונה, וחזרה עליה היא רעש.
+  const day = dayById(g.day);
+  const own = day && g.slot && X.catSlotMin && X.catSlotMin(day, g.cat) !== day.slotMin
+    ? `<span class="bc-time num">${escH(X.slotTime(day, g.slot, g.cat))}</span>` : '';
   return `<div class="${cls}" data-drag="game" data-game="${escH(g.id)}" data-day="${escH(g.day || '')}" title="${escH(X.catName(g.cat))}">
-    <span class="bc-lg lg-${escH(g.cat)}">${escH(leagueShort(g.cat))}</span>
+    <span class="bc-lg lg-${escH(g.cat)}">${escH(leagueShort(g.cat))}</span>${own}
     <span class="bc-team${teamHl(g.a)}" data-team="${escH(g.a)}">${escH(teamName(g.a))}</span><span class="bc-sep"> · </span><span class="bc-team${teamHl(g.b)}" data-team="${escH(g.b)}">${escH(teamName(g.b))}</span>
     <button class="bc-lock" data-act="board.lock" data-game="${escH(g.id)}" title="${g.locked ? 'נעול' : 'נעילה'}">${g.locked ? '📌' : '📍'}</button>
   </div>`;
