@@ -63,8 +63,10 @@
 
   .row .time{text-align:center; font-size:16px; font-weight:700; color:var(--sec);
     font-variant-numeric:tabular-nums; letter-spacing:.5px}
-  .row .tA{text-align:left;  padding-left:18px}
-  .row .tB{text-align:right; padding-right:18px}
+  /* מאפיינים לוגיים ולא פיזיים: הדף הוא rtl בעברית ו-ltr באנגלית, ובשני
+     המקרים שם הקבוצה צריך להידחף **אל** תיבת הניקוד שבמרכז ולא ממנה. */
+  .row .tA{text-align:end;   padding-inline-end:18px}
+  .row .tB{text-align:start; padding-inline-start:18px}
   .row .tA,.row .tB{font-size:18px; font-weight:600; color:var(--ink); line-height:1.25}
   .row .sc{text-align:center}
 
@@ -95,6 +97,8 @@
   .toolbar button.on{background:var(--ink); color:#fff; border-color:var(--ink)}
   .toolbar .print-btn{margin-inline-start:auto; background:#0775ED; color:#fff; border-color:#0775ED}
   .toolbar .status{width:100%; font-size:12.5px; color:#666}
+  /* מפריד דק בין קבוצות הפקדים — יום · ליגה · שפה */
+  .toolbar .sep{width:1px; align-self:stretch; background:#e0e0e0; margin:0 2px}
 
   @page{size:A4; margin:0}
   @media print{
@@ -108,9 +112,14 @@
 <body>
 
 <div class="toolbar no-print" id="toolbar">
-  <span class="lbl">יום:</span>
+  <span class="lbl" id="lbl-day">יום:</span>
   <span id="day-btns"></span>
-  <button class="print-btn" onclick="window.print()">הדפסה / PDF</button>
+  <span class="sep"></span>
+  <span class="lbl" id="lbl-cat">ליגה:</span>
+  <span id="cat-btns"></span>
+  <span class="sep"></span>
+  <span id="lang-btns"></span>
+  <button class="print-btn" id="print-btn" onclick="window.print()">הדפסה / PDF</button>
   <div class="status" id="status">טוען…</div>
 </div>
 
@@ -140,8 +149,16 @@ const escH = s => String(s ?? '')
   .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 const hhmmToMin = t => { const [h,m] = String(t||'0:0').split(':').map(Number); return h*60 + m; };
 const minToHhmm = m => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
-// slotIndex 1-based (כמו slotTime ב-league.js): סלוט 1 = שעת ההתחלה.
-const slotTime = (day, slot) => minToHhmm(hhmmToMin(day.startTime) + (slot - 1) * (day.slotMin || 20));
+// אורך משחק לפי ליגה — ליגה שמגדירה ‎slotMin‎ משלה גוברת על זה של היום
+// (השאו רץ 20 דקות בזמן שהשאר ב-15). אותו חוזה כמו ‎catSlotMin‎ ב-league.js;
+// בלעדיו דף ההדפסה היה מדפיס לשאו שעות של 15 דקות, כלומר שעות שגויות.
+const catSlotMin = (day, catId) => {
+  const c = (L.categories || []).find(x => x.id === catId);
+  return (c && +c.slotMin) || day.slotMin || 20;
+};
+// slotIndex 1-based: סלוט 1 = שעת ההתחלה.
+const slotTime = (day, slot, catId) =>
+  minToHhmm(hhmmToMin(day.startTime) + (slot - 1) * (catId ? catSlotMin(day, catId) : (day.slotMin || 20)));
 const fmtDate = iso => {
   if (!iso) return '';
   const [y,m,d] = String(iso).split('-');
@@ -165,15 +182,51 @@ function buildNameIndex(roster) {
 }
 const teamName = id => nameById.get(id) || id || '';
 
-const netName  = id => (L.meta?.nets || []).find(n => n.id === id)?.name || ('רשת ' + id);
 const netColor = id => (L.meta?.nets || []).find(n => n.id === id)?.color || '#0a0a0a';
-const catName  = id => (L.categories || []).find(c => c.id === id)?.name || id;
 const catOrder = id => (L.categories || []).find(c => c.id === id)?.order ?? 99;
+
+// ---- שפה ----
+// ‎?lang=en‎ מדפיס באנגלית. נועד קודם כול לליגת השאו, שיש בה שחקניות
+// ברזילאיות. **שמות השחקניות והקבוצות נשארים כפי שהם במסמך** — בדיוק
+// כמו באתר. מתורגמים רק התוויות ושמות־הנתונים (רשת · מחזור · שם הליגה).
+const LANG = params.get('lang') === 'en' ? 'en' : 'he';
+const T = {
+  he: { day:'יום:', league:'ליגה:', all:'כל הליגות', print:'הדפסה / PDF',
+        loading:'טוען…', noGames:'אין משחקים על רשת זו ביום זה',
+        games:'משחקים', pages:'דפים', noDate:'ללא תאריך', net:'רשת ' },
+  en: { day:'Day:', league:'League:', all:'All leagues', print:'Print / PDF',
+        loading:'Loading…', noGames:'No games on this court today',
+        games:'games', pages:'pages', noDate:'no date', net:'Court ' }
+}[LANG];
+
+// אותה טבלה של ‎tData‎ ב-league-i18n.js. מוחזרת ולא מיובאת: הדף הזה עצמאי
+// לגמרי ואינו טוען את מודולי האתר.
+const DATA_EN = {
+  'ליגת שואו':'Show League', 'ליגת שאו':'Show League',
+  'ליגה ראשונה':'First League', 'ליגה שנייה':'Second League', 'ליגה שלישית':'Third League',
+  'פיינל פור':'Final Four', 'משחקי הצלבה':'Playoff'
+};
+function tData(s) {
+  if (LANG === 'he' || !s) return s || '';
+  const raw = String(s).trim();
+  if (DATA_EN[raw]) return DATA_EN[raw];
+  let m = raw.match(/^(?:רשת|מגרש)\s*(\d+)$/); if (m) return 'Court ' + m[1];
+  m = raw.match(/^מחזור\s*(\d+)$/);            if (m) return 'Round ' + m[1];
+  return raw;   // שם חופשי — כפי שהוקלד, לא מתורגם אבל גם לא שגוי
+}
+const netName = id => tData((L.meta?.nets || []).find(n => n.id === id)?.name || (T.net + id));
+const catName = id => tData((L.categories || []).find(c => c.id === id)?.name || id);
+const dayLabel = d => tData(d.label || '');
+
+// ---- סינון ליגה ----
+// ‎?cat=show‎ מדפיס ליגה אחת בלבד, ואז רק הרשתות שיש בהן משחקים שלה —
+// עמוד ריק לכל מגרש אחר היה סתם נייר.
+const CAT = params.get('cat') || '';
 
 // ---- rendering ----
 function gameRow(day, g) {
   return `<div class="row">
-    <div class="time">${escH(slotTime(day, g.slot))}</div>
+    <div class="time">${escH(slotTime(day, g.slot, g.cat))}</div>
     <div class="tA">${escH(teamName(g.a))}</div>
     <div class="sc"><span class="field"><span></span><span class="colon">:</span><span></span></span></div>
     <div class="tB">${escH(teamName(g.b))}</div>
@@ -207,7 +260,7 @@ function headBlock(day, netId) {
 function footBlock(day) {
   const logos = (L.meta?.sponsorLogos || [])
     .map(s => `<img src="${escH(typeof s === 'string' ? s : (s.url || ''))}" alt="">`).join('');
-  const meta = [day.label, fmtDate(day.date)].filter(Boolean).join('  ·  ');
+  const meta = [dayLabel(day), fmtDate(day.date)].filter(Boolean).join('  ·  ');
   return `<div class="foot"><div class="inner">
     ${logos ? `<div class="sponsors">${logos}</div>` : ''}
     <div class="foot-meta">${escH(meta || 'ליגת קיץ פוצ׳ילינה 2026')}</div>
@@ -215,14 +268,14 @@ function footBlock(day) {
 }
 
 function pageForNet(day, netId, dayGames) {
-  const onNet = dayGames.filter(g => g.net === netId && g.slot);
+  const onNet = dayGames.filter(g => g.net === netId && g.slot && (!CAT || g.cat === CAT));
   // טבלה נפרדת לכל ליגה, בסדר הקטגוריות (§13: שואו / ראשונה / שנייה).
   const byCat = new Map();
   for (const g of onNet) (byCat.get(g.cat) || byCat.set(g.cat, []).get(g.cat)).push(g);
   const cats = [...byCat.keys()].sort((a, b) => catOrder(a) - catOrder(b));
   const pools = cats.length
     ? cats.map(c => poolBlock(day, c, byCat.get(c))).join('')
-    : `<div class="empty-pool">אין משחקים על רשת זו ביום זה</div>`;
+    : `<div class="empty-pool">${escH(T.noGames)}</div>`;
   return `<section class="page">
     ${headBlock(day, netId)}
     ${pools}
@@ -234,7 +287,8 @@ function render(dayId) {
   const day = (L.meta?.days || []).find(d => d.id === dayId);
   if (!day) { $('pages').innerHTML = ''; status('לא נמצא יום.'); return; }
   const dayGames = (L.games || []).filter(g => g.day === dayId);
-  const netIds = day.netIds && day.netIds.length ? day.netIds : (L.meta?.nets || []).map(n => n.id);
+  let netIds = day.netIds && day.netIds.length ? day.netIds : (L.meta?.nets || []).map(n => n.id);
+  if (CAT) netIds = netIds.filter(n => dayGames.some(g => g.net === n && g.slot && g.cat === CAT));
   $('pages').innerHTML = netIds.map(nid => pageForNet(day, nid, dayGames)).join('');
 
   // עדכון כפתורי היום + הכתובת (בלי טעינה מחדש)
@@ -243,15 +297,41 @@ function render(dayId) {
   const u = new URL(location.href); u.searchParams.set('day', dayId);
   history.replaceState(null, '', u);
 
-  const placed = dayGames.filter(g => g.slot).length;
-  status(`${day.label} · ${fmtDate(day.date) || 'ללא תאריך'} · ${placed} משחקים · ${netIds.length} דפים`);
+  const placed = dayGames.filter(g => g.slot && (!CAT || g.cat === CAT)).length;
+  status(`${dayLabel(day)} · ${fmtDate(day.date) || T.noDate} · ${placed} ${T.games} · ${netIds.length} ${T.pages}`);
+}
+
+// כל פקד בסרגל משנה פרמטר בכתובת וטוען מחדש. הדף קטן והקריאה ל-Firestore
+// אחת, ולכן זה פשוט ובטוח יותר מלנהל מצב — והכתובת נשארת ניתנת לשיתוף.
+function goWith(key, val) {
+  const u = new URL(location.href);
+  val ? u.searchParams.set(key, val) : u.searchParams.delete(key);
+  location.href = u.toString();
+}
+function buildFilterButtons() {
+  $('lbl-day').textContent = T.day;
+  $('lbl-cat').textContent = T.league;
+  $('print-btn').textContent = T.print;
+  const cats = (L.categories || []).slice().sort((a, b) => catOrder(a.id) - catOrder(b.id));
+  $('cat-btns').innerHTML =
+    `<button data-cat="" class="${CAT ? '' : 'on'}">${escH(T.all)}</button>` +
+    cats.map(c => `<button data-cat="${escH(c.id)}" class="${CAT === c.id ? 'on' : ''}">${escH(catName(c.id))}</button>`).join('');
+  $('cat-btns').addEventListener('click', e => {
+    const b = e.target.closest('button'); if (b) goWith('cat', b.dataset.cat);
+  });
+  $('lang-btns').innerHTML =
+    `<button data-lang="he" class="${LANG === 'he' ? 'on' : ''}">עב</button>` +
+    `<button data-lang="en" class="${LANG === 'en' ? 'on' : ''}">EN</button>`;
+  $('lang-btns').addEventListener('click', e => {
+    const b = e.target.closest('button'); if (b) goWith('lang', b.dataset.lang === 'en' ? 'en' : '');
+  });
 }
 
 function buildDayButtons() {
   const days = L.meta?.days || [];
   const gamesPerDay = id => (L.games || []).filter(g => g.day === id && g.slot).length;
   $('day-btns').innerHTML = days.map(d =>
-    `<button data-day="${escH(d.id)}">${escH(d.label)}${gamesPerDay(d.id) ? '' : ' (ריק)'}</button>`
+    `<button data-day="${escH(d.id)}">${escH(dayLabel(d))}</button>`
   ).join('');
   $('day-btns').addEventListener('click', e => {
     const b = e.target.closest('button'); if (b) render(b.dataset.day);
@@ -264,6 +344,13 @@ async function load() {
     if (!snap.exists()) { status(`המסמך "${LEAGUE_ID}" לא קיים.`); return; }
     L = snap.data();
     buildNameIndex(L.roster);
+    // כיוון ושפת הדף — הכותרת והתוויות באנגלית עוברות ל-LTR.
+    if (LANG === 'en') {
+      document.documentElement.lang = 'en';
+      document.documentElement.dir  = 'ltr';
+      document.title = 'Futilina — Printable schedule';
+    }
+    buildFilterButtons();
     buildDayButtons();
     // יום התחלתי: ?day=, אחרת היום הראשון שיש בו משחקים, אחרת הראשון.
     const days = L.meta?.days || [];
