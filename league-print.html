@@ -171,12 +171,24 @@ const status = msg => { $('status').textContent = msg; };
 let L = null;          // מסמך הליגה
 let nameById = new Map();
 
+// שם הקבוצה נבנה מהמרשם ולא נלקח מ-‎t.name‎ המוכן, כי באנגלית צריך את
+// ‎players[pid].lat‎ — הכתיב הלטיני שהמנהלת הזינה. שחקנית בלי ‎lat‎ נופלת
+// לשם העברי שלה: עדיף שם נכון בעברית מאשר תעתיק אוטומטי שגוי.
+// ‎t.name‎ נשאר הנפילה האחרונה, למסמך ישן שאין בו מרשם.
 function buildNameIndex(roster) {
   nameById = new Map();
+  const reg = L.players || {};
   for (const list of Object.values(roster || {})) {
     for (const t of (list || [])) {
-      const nm = t.name || (Array.isArray(t.players) ? t.players.filter(Boolean).join(' ') : '') || t.id;
-      nameById.set(t.id, nm);
+      const ids = Array.isArray(t.players) ? t.players.filter(Boolean) : [];
+      const parts = ids.map(pid => {
+        const p = reg[pid];
+        if (!p) return '';
+        return (LANG === 'en' && p.lat) ? p.lat : (p.name || '');
+      }).filter(Boolean);
+      nameById.set(t.id, parts.length === ids.length && parts.length
+        ? parts.join(' · ')
+        : (t.name || t.id));
     }
   }
 }
