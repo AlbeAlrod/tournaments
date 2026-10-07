@@ -108,23 +108,23 @@
       <div id="reg-form-wrap">
         <div class="form-card">
           <div class="form-row">
-            <label>Player 1 Name</label>
-            <input class="form-input" id="frm-p1" placeholder="Name" autocomplete="off"/>
+            <label for="frm-p1">Player 1 Name</label>
+            <input class="form-input" id="frm-p1" placeholder="Name" autocomplete="name" maxlength="30" required/>
           </div>
           <div class="form-row">
-            <label>Player 2 Name</label>
-            <input class="form-input" id="frm-p2" placeholder="Name" autocomplete="off"/>
+            <label for="frm-p2">Player 2 Name</label>
+            <input class="form-input" id="frm-p2" placeholder="Name" autocomplete="off" maxlength="30" required/>
           </div>
           <div class="form-row">
-            <label>Phone</label>
-            <input class="form-input" id="frm-phone" type="tel" placeholder="050-0000000" autocomplete="off"/>
+            <label for="frm-phone">Phone</label>
+            <input class="form-input" id="frm-phone" type="tel" inputmode="tel" placeholder="050-0000000" autocomplete="tel" required/>
           </div>
           <div class="form-row">
-            <label>Category</label>
-            <div id="frm-cat-wrap" class="cat-pills"></div>
+            <label id="frm-cat-lbl">Category</label>
+            <div id="frm-cat-wrap" class="cat-pills" role="group" aria-labelledby="frm-cat-lbl"></div>
             <div id="frm-cat-single" class="d-cat-single" style="display:none"></div>
           </div>
-          <div id="frm-err" class="frm-err h"></div>
+          <div id="frm-err" class="frm-err h" role="alert"></div>
           <div id="frm-ok" class="frm-ok h">Registration submitted! You will be notified upon approval.</div>
           <button class="submit-btn" id="frm-submit" type="button" onclick="submitRegistration()">Submit Registration</button>
           <div id="reg-pay-wrap"></div>
