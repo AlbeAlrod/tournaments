@@ -8,15 +8,11 @@
 //                          an Error whose .cancelled === true (callers should ignore it).
 //   attachDropZone(...)  → calls onImage(null, message).
 
+import { t } from './i18n.js?v=67';
+
 const DEFAULTS = { maxPx: 512, maxBytes: 80000 };
 
-const ERR = {
-  notImage: 'Please choose an image file (PNG, JPG or WebP).',
-  svg:      'SVG files are not supported — please use PNG, JPG or WebP.',
-  decode:   "Couldn't read this image. Try saving it as PNG or JPG.",
-  tooBig:   "Couldn't make this image small enough. Try a simpler or smaller image.",
-  huge:     'This file is too large (max 15 MB).',
-};
+const fail = key => new Error(t('upload.' + key));
 
 const isSvg = f => /svg/i.test(f.type || '') || /\.svgz?$/i.test(f.name || '');
 
@@ -43,7 +39,7 @@ async function decode(file) {
     return await new Promise((resolve, reject) => {
       const img = new Image();
       img.onload = () => resolve(img);
-      img.onerror = () => reject(new Error(ERR.decode));
+      img.onerror = () => reject(fail('decode'));
       img.src = url;
     });
   } finally {
@@ -73,15 +69,15 @@ function hasAlpha(src, w, h) {
  * Never upscales. Keeps transparency.
  */
 export async function processImageFile(file, { maxPx = DEFAULTS.maxPx, maxBytes = DEFAULTS.maxBytes } = {}) {
-  if (!file) throw new Error(ERR.notImage);
-  if (isSvg(file)) throw new Error(ERR.svg);
-  if (!/^image\//i.test(file.type || '')) throw new Error(ERR.notImage);
-  if (file.size > 15 * 1024 * 1024) throw new Error(ERR.huge);
+  if (!file) throw fail('notImage');
+  if (isSvg(file)) throw fail('svg');
+  if (!/^image\//i.test(file.type || '')) throw fail('notImage');
+  if (file.size > 15 * 1024 * 1024) throw fail('huge');
 
   let src;
-  try { src = await decode(file); } catch (_) { throw new Error(ERR.decode); }
+  try { src = await decode(file); } catch (_) { throw fail('decode'); }
   const sw = src.width || src.naturalWidth, sh = src.height || src.naturalHeight;
-  if (!sw || !sh) throw new Error(ERR.decode);
+  if (!sw || !sh) throw fail('decode');
 
   let scale = Math.min(1, maxPx / Math.max(sw, sh));
   const type = supportsWebp() ? 'image/webp'
@@ -103,7 +99,7 @@ export async function processImageFile(file, { maxPx = DEFAULTS.maxPx, maxBytes 
   } finally {
     if (typeof src.close === 'function') src.close();   // ImageBitmap
   }
-  throw new Error(ERR.tooBig);
+  throw fail('tooBig');
 }
 
 // Opens the file picker; onFile(file) on a choice, onCancel() when the picker is dismissed.
@@ -146,7 +142,7 @@ export function attachDropZone(el, onImage, { maxPx = DEFAULTS.maxPx, maxBytes =
   const handle = async file => {
     el.setAttribute('aria-busy', 'true');
     try { onImage(await processImageFile(file, opts), null); }
-    catch (e) { onImage(null, (e && e.message) || ERR.decode); }
+    catch (e) { onImage(null, (e && e.message) || t('upload.decode')); }
     finally { el.removeAttribute('aria-busy'); }
   };
   const firstImage = list => [...(list || [])].find(it => it && it.kind === 'file' && /^image\//.test(it.type || ''));
@@ -158,7 +154,7 @@ export function attachDropZone(el, onImage, { maxPx = DEFAULTS.maxPx, maxBytes =
   const onDrop = e => {
     e.preventDefault(); el.classList.remove('d-drop-over');
     const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
-    if (!f) return onImage(null, ERR.notImage);
+    if (!f) return onImage(null, t('upload.notImage'));
     handle(f);
   };
   const onPaste = e => {

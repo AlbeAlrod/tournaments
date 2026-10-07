@@ -1,12 +1,12 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="he" dir="rtl">
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>Tournaments</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
-<link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700;800;900&display=swap" rel="stylesheet"/>
-<link rel="stylesheet" href="styles.css?v=66"/>
+<link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700;800&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="styles.css?v=67"/>
 <!-- Lane D temporary styles (d-*) — to be moved into styles.css by Lane E -->
 <style id="lane-d">
 .d-cat-single{font-weight:600;color:var(--text);padding:6px 0}
@@ -36,30 +36,30 @@
 <!-- EXPIRED -->
 <div id="view-expired" class="view h">
   <div class="no-t-wrap">
-    <h1>Tournament Expired</h1>
-    <p>This tournament page is no longer active.</p>
+    <h1 data-i18n="common.expiredH">Tournament Expired</h1>
+    <p data-i18n="common.expiredP">This tournament page is no longer active.</p>
   </div>
 </div>
 
 <!-- NO TOURNAMENT -->
 <div id="view-none" class="view h">
   <div class="no-t-wrap">
-    <h1>Tournaments</h1>
-    <p>No tournament specified. Add <code>?t=tournament-id</code> to the URL.</p>
+    <h1 data-i18n="common.noTournamentH">Tournaments</h1>
+    <p data-i18n-html="common.noTournamentP">No tournament specified. Add <code>?t=tournament-id</code> to the URL.</p>
   </div>
 </div>
 
 <!-- TOURNAMENT NOT FOUND -->
 <div id="view-notfound" class="view h">
   <div class="no-t-wrap">
-    <h1>Tournament not found</h1>
-    <p>We couldn't find this tournament. Please check the link you received, or ask the organizer to send it again.</p>
+    <h1 data-i18n="common.notFoundH">Tournament not found</h1>
+    <p data-i18n="common.notFoundP">We couldn't find this tournament. Please check the link you received, or ask the organizer to send it again.</p>
   </div>
 </div>
 
 <!-- LOADING -->
 <div id="view-loading" class="view">
-  <div class="no-t-wrap"><div class="loader"></div><p>Loading…</p></div>
+  <div class="no-t-wrap"><div class="loader"></div><p data-i18n="common.loading">Loading…</p></div>
 </div>
 
 <!-- MAIN APP -->
@@ -69,10 +69,10 @@
 
   <div id="admin-bar" class="admin-bar">
     <div id="mode-bar" class="mode-bar mode-view">
-      <span id="mode-text">Tap Admin to manage</span>
+      <span id="mode-text" data-i18n="admin.modeHint">Tap Admin to manage</span>
       <span id="sync-indicator" class="sync-dot sync-ok h"></span>
     </div>
-    <button class="admin-toggle" id="abtn" onclick="adminClick()"><span id="adm-txt">Admin</span></button>
+    <button class="admin-toggle" id="abtn" onclick="adminClick()"><span id="adm-txt" data-i18n="admin.btn">Admin</span></button>
   </div>
 
   <div id="sticky-block" class="sticky-block">
@@ -84,19 +84,23 @@
         </div>
         <span class="lname" id="header-name">Tournament</span>
       </div>
+      <div class="langsw" role="group" data-i18n-aria="lang.aria">
+        <button type="button" class="langsw__b" data-lang="he" onclick="setLang('he')" lang="he">עב</button>
+        <button type="button" class="langsw__b" data-lang="en" onclick="setLang('en')" lang="en">EN</button>
+      </div>
     </header>
-    <nav id="main-nav">
+    <nav id="main-nav" data-i18n-aria="common.nav.aria">
       <!-- Registration phase tabs -->
-      <button class="tab phase-reg" id="tab-register" onclick="goPage('register')">Register</button>
-      <button class="tab phase-reg" id="tab-participants" onclick="goPage('participants')">Participants</button>
-      <button class="tab phase-reg admin-only" id="tab-registrations" onclick="goPage('registrations')">Registrations</button>
-      <button class="tab phase-blt admin-only" id="tab-build" onclick="goPage('build')">Build</button>
+      <button class="tab phase-reg" id="tab-register" onclick="goPage('register')" data-i18n="common.nav.register">Register</button>
+      <button class="tab phase-reg" id="tab-participants" onclick="goPage('participants')" data-i18n="common.nav.participants">Participants</button>
+      <button class="tab phase-reg admin-only" id="tab-registrations" onclick="goPage('registrations')" data-i18n="common.nav.registrations">Registrations</button>
+      <button class="tab phase-blt admin-only" id="tab-build" onclick="goPage('build')" data-i18n="common.nav.build">Build</button>
       <!-- Tournament phase tabs -->
-      <button class="tab phase-trn" id="tab-standings" onclick="goPage('standings')">Standings</button>
-      <button class="tab phase-trn" id="tab-schedule" onclick="goPage('schedule')">Schedule</button>
-      <button class="tab phase-trn" id="tab-bracket" onclick="goPage('bracket')">Bracket</button>
+      <button class="tab phase-trn" id="tab-standings" onclick="goPage('standings')" data-i18n="common.nav.standings">Standings</button>
+      <button class="tab phase-trn" id="tab-schedule" onclick="goPage('schedule')" data-i18n="common.nav.schedule">Schedule</button>
+      <button class="tab phase-trn" id="tab-bracket" onclick="goPage('bracket')" data-i18n="common.nav.bracket">Bracket</button>
       <!-- Shared master tabs -->
-      <button class="tab master-only" id="tab-settings" onclick="goPage('settings')">Settings</button>
+      <button class="tab master-only" id="tab-settings" onclick="goPage('settings')" data-i18n="common.nav.settings">Settings</button>
     </nav>
     <div id="sticky-cat" class="sticky-cat h"></div>
   </div>
@@ -106,37 +110,37 @@
     <!-- REGISTER page -->
     <div class="pg" id="page-register">
       <div class="page-header">
-        <h2 id="reg-title">Register</h2>
+        <h2 id="reg-title" data-i18n="reg.title">Register</h2>
         <p id="reg-subtitle"></p>
       </div>
       <div id="reg-info-card" class="d-info-card" style="display:none"></div>
       <div id="reg-mine" class="info-box d-reg-mine" style="display:none"></div>
-      <div id="reg-closed-msg" class="info-box h">Registration is currently closed.</div>
-      <div id="reg-soon-msg" class="info-box h">Registration opens soon.</div>
+      <div id="reg-closed-msg" class="info-box h" data-i18n="reg.closed">Registration is currently closed.</div>
+      <div id="reg-soon-msg" class="info-box h" data-i18n="reg.soon">Registration opens soon.</div>
       <div id="reg-note" class="reg-note h"></div>
       <div id="reg-receipt" style="display:none"></div>
       <div id="reg-form-wrap">
         <div class="form-card">
           <div class="form-row">
-            <label for="frm-p1">Player 1 Name</label>
-            <input class="form-input" id="frm-p1" placeholder="Name" autocomplete="name" maxlength="30" required/>
+            <label for="frm-p1" data-i18n="reg.p1Label">Player 1 Name</label>
+            <input class="form-input" id="frm-p1" dir="auto" data-i18n-ph="reg.namePh" placeholder="Name" autocomplete="name" maxlength="30" required/>
           </div>
           <div class="form-row">
-            <label for="frm-p2">Player 2 Name</label>
-            <input class="form-input" id="frm-p2" placeholder="Name" autocomplete="off" maxlength="30" required/>
+            <label for="frm-p2" data-i18n="reg.p2Label">Player 2 Name</label>
+            <input class="form-input" id="frm-p2" dir="auto" data-i18n-ph="reg.namePh" placeholder="Name" autocomplete="off" maxlength="30" required/>
           </div>
           <div class="form-row">
-            <label for="frm-phone">Phone</label>
-            <input class="form-input" id="frm-phone" type="tel" inputmode="tel" placeholder="050-0000000" autocomplete="tel" required/>
+            <label for="frm-phone" data-i18n="reg.phoneLabel">Phone</label>
+            <input class="form-input" id="frm-phone" type="tel" dir="ltr" inputmode="tel" placeholder="050-0000000" autocomplete="tel" required/>
           </div>
           <div class="form-row">
-            <label id="frm-cat-lbl">Category</label>
+            <label id="frm-cat-lbl" data-i18n="reg.catLabel">Category</label>
             <div id="frm-cat-wrap" class="cat-pills" role="group" aria-labelledby="frm-cat-lbl"></div>
             <div id="frm-cat-single" class="d-cat-single" style="display:none"></div>
           </div>
           <div id="frm-err" class="frm-err h" role="alert"></div>
-          <div id="frm-ok" class="frm-ok h">Registration submitted! You will be notified upon approval.</div>
-          <button class="submit-btn" id="frm-submit" type="button" onclick="submitRegistration()">Submit Registration</button>
+          <div id="frm-ok" class="frm-ok h" data-i18n="reg.ok">Registration submitted! You will be notified upon approval.</div>
+          <button class="submit-btn" id="frm-submit" type="button" onclick="submitRegistration()" data-i18n="reg.submit">Submit Registration</button>
           <div id="reg-pay-wrap"></div>
         </div>
       </div>
@@ -145,31 +149,31 @@
     <!-- PARTICIPANTS page -->
     <div class="pg" id="page-participants">
       <div class="page-header">
-        <h2>Registered Participants</h2>
-        <p id="participants-subtitle">Approved registrations</p>
+        <h2 data-i18n="parts.title">Registered Participants</h2>
+        <p id="participants-subtitle" data-i18n="parts.subtitle">Approved registrations</p>
       </div>
-      <div id="participants-hidden-msg" class="info-box h">The participant list is not public yet.</div>
+      <div id="participants-hidden-msg" class="info-box h" data-i18n="parts.hidden">The participant list is not public yet.</div>
       <div id="participants-list"></div>
     </div>
 
     <!-- REGISTRATIONS (master) -->
     <div class="pg" id="page-registrations">
       <div class="page-header">
-        <h2>Registrations</h2>
+        <h2 data-i18n="admin.regsTitle">Registrations</h2>
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">
-          <button class="filter-btn on" id="rf-all" onclick="setRegFilter('all')">All</button>
-          <button class="filter-btn" id="rf-pending" onclick="setRegFilter('pending')">Pending</button>
-          <button class="filter-btn" id="rf-approved" onclick="setRegFilter('approved')">Approved</button>
-          <button class="filter-btn" id="rf-rejected" onclick="setRegFilter('rejected')">Rejected</button>
+          <button class="filter-btn on" id="rf-all" onclick="setRegFilter('all')" data-i18n="admin.filterAll">All</button>
+          <button class="filter-btn" id="rf-pending" onclick="setRegFilter('pending')" data-i18n="admin.filterPending">Pending</button>
+          <button class="filter-btn" id="rf-approved" onclick="setRegFilter('approved')" data-i18n="admin.filterApproved">Approved</button>
+          <button class="filter-btn" id="rf-rejected" onclick="setRegFilter('rejected')" data-i18n="admin.filterRejected">Rejected</button>
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
-          <button class="filter-btn on" id="rpf-all" onclick="setRegPaidFilter('all')">Paid + unpaid</button>
-          <button class="filter-btn" id="rpf-paid" onclick="setRegPaidFilter('paid')">Paid</button>
-          <button class="filter-btn" id="rpf-unpaid" onclick="setRegPaidFilter('unpaid')">Unpaid</button>
+          <button class="filter-btn on" id="rpf-all" onclick="setRegPaidFilter('all')" data-i18n="admin.filterPaidAll">Paid + unpaid</button>
+          <button class="filter-btn" id="rpf-paid" onclick="setRegPaidFilter('paid')" data-i18n="admin.filterPaid">Paid</button>
+          <button class="filter-btn" id="rpf-unpaid" onclick="setRegPaidFilter('unpaid')" data-i18n="admin.filterUnpaid">Unpaid</button>
         </div>
         <div class="d-reg-tools">
-          <input class="team-search-input" id="reg-search" type="search" placeholder="Search name or phone…" aria-label="Search registrations" oninput="setRegSearch(this.value)"/>
-          <button class="filter-btn" type="button" onclick="exportRegistrationsCSV()">Export CSV</button>
+          <input class="team-search-input" id="reg-search" type="search" dir="auto" data-i18n-ph="admin.searchPh" data-i18n-aria="admin.searchAria" placeholder="Search name or phone…" aria-label="Search registrations" oninput="setRegSearch(this.value)"/>
+          <button class="filter-btn" type="button" onclick="exportRegistrationsCSV()" data-i18n="admin.exportCsv">Export CSV</button>
         </div>
         <div id="reg-counts" class="d-reg-counts"></div>
       </div>
@@ -179,8 +183,8 @@
     <!-- BUILD (master) -->
     <div class="pg" id="page-build">
       <div class="page-header">
-        <h2>Build Tournament</h2>
-        <p>Drag pairs into order, then build the tournament.</p>
+        <h2 data-i18n="build.title">Build Tournament</h2>
+        <p data-i18n="build.subtitle">Drag pairs into order, then build the tournament.</p>
       </div>
       <div id="build-cats"></div>
     </div>
@@ -188,7 +192,7 @@
     <!-- STANDINGS (tournament) -->
     <div class="pg" id="page-standings">
       <div class="page-header">
-        <h2>Standings</h2>
+        <h2 data-i18n="stand.title">Standings</h2>
       </div>
       <div id="standings-grid"></div>
     </div>
@@ -197,7 +201,7 @@
     <div class="pg" id="page-schedule">
       <div id="sched-info-card" class="d-info-card" style="display:none"></div>
       <div class="sched-search-box">
-        <input class="team-search-input" id="sched-search" placeholder="Search team…" oninput="filterSchedule()"/>
+        <input class="team-search-input" id="sched-search" type="search" dir="auto" data-i18n-ph="sched.searchPh" data-i18n-aria="sched.searchAria" placeholder="Search team…" oninput="filterSchedule()"/>
       </div>
       <div id="court-filter" class="court-filter"></div>
       <div id="schedule-content"></div>
@@ -208,13 +212,13 @@
 
     <!-- BRACKET (tournament) -->
     <div class="pg" id="page-bracket">
-      <div class="page-header"><h2>Knockout Bracket</h2></div>
+      <div class="page-header"><h2 data-i18n="bracket.title">Knockout Bracket</h2></div>
       <div id="bracket-container"></div>
     </div>
 
     <!-- SETTINGS (master) -->
     <div class="pg" id="page-settings">
-      <div class="page-header"><h2>Settings</h2></div>
+      <div class="page-header"><h2 data-i18n="settings.title">Settings</h2></div>
       <div id="settings-container"></div>
     </div>
 
@@ -224,19 +228,19 @@
 <!-- LOGIN MODAL -->
 <div class="overlay h" id="pw-modal" onclick="if(event.target===this)closeLogin()">
   <div class="modal">
-    <h3>Login</h3>
+    <h3 data-i18n="admin.loginTitle">Login</h3>
     <div class="modal-row" style="margin-bottom:14px;">
-      <button id="role-btn-admin"  onclick="selectLoginRole('admin')">Admin</button>
-      <button id="role-btn-master" onclick="selectLoginRole('master')">Master</button>
+      <button id="role-btn-admin"  onclick="selectLoginRole('admin')" data-i18n="admin.roleAdmin">Admin</button>
+      <button id="role-btn-master" onclick="selectLoginRole('master')" data-i18n="admin.roleMaster">Master</button>
     </div>
     <div class="modal-row">
-      <input class="modal-input" id="pw-inp" type="password" placeholder="Password"
+      <input class="modal-input" id="pw-inp" type="password" dir="ltr" autocomplete="current-password" data-i18n-ph="admin.pwPh" placeholder="Password"
         onkeydown="if(event.key==='Enter')tryLogin()"/>
     </div>
-    <div id="pw-err" class="h" style="color:#DC2626;font-size:13px;margin-top:6px;">Incorrect password.</div>
+    <div id="pw-err" class="frm-err h" data-i18n="admin.pwWrong">Incorrect password.</div>
     <div class="modal-btns">
-      <button class="mbtn mbtn-ok" onclick="tryLogin()">Login</button>
-      <button class="mbtn mbtn-cancel" onclick="closeLogin()">Cancel</button>
+      <button class="mbtn mbtn-ok" onclick="tryLogin()" data-i18n="admin.loginBtn">Login</button>
+      <button class="mbtn mbtn-cancel" data-i18n="common.cancel" onclick="closeLogin()">Cancel</button>
     </div>
   </div>
 </div>
@@ -244,14 +248,14 @@
 <!-- START TOURNAMENT MODAL -->
 <div class="overlay h" id="start-modal" onclick="if(event.target===this)closeStartModal()">
   <div class="modal">
-    <h3>Start Tournament?</h3>
-    <p style="font-size:14px;line-height:1.6;color:var(--text);margin-bottom:6px">
+    <h3 data-i18n="build.startQ">Start Tournament?</h3>
+    <p data-i18n="build.startBody" style="font-size:14px;line-height:1.6;color:var(--text);margin-bottom:6px">
       Are you sure you're ready to start? It's recommended to do this at the beginning of the tournament.
       Pairs and settings can no longer be changed.
     </p>
     <div class="modal-btns">
-      <button class="mbtn mbtn-ok" onclick="confirmStartTournament()">Confirm</button>
-      <button class="mbtn mbtn-cancel" onclick="closeStartModal()">Cancel</button>
+      <button class="mbtn mbtn-ok" onclick="confirmStartTournament()" data-i18n="common.confirm">Confirm</button>
+      <button class="mbtn mbtn-cancel" data-i18n="common.cancel" onclick="closeStartModal()">Cancel</button>
     </div>
   </div>
 </div>
@@ -259,19 +263,19 @@
 <!-- EDIT TEAM MODAL -->
 <div class="overlay h" id="edit-modal" onclick="if(event.target===this)closeEdit()">
   <div class="modal">
-    <h3 id="edit-modal-title">Edit Pair</h3>
+    <h3 id="edit-modal-title" data-i18n="build.editPair">Edit Pair</h3>
     <div class="modal-row">
-      <input class="modal-input" id="edit-p1" placeholder="Player 1"/>
+      <input class="modal-input" id="edit-p1" dir="auto" data-i18n-ph="common.player1" placeholder="Player 1"/>
     </div>
     <div class="modal-row">
-      <input class="modal-input" id="edit-p2" placeholder="Player 2"/>
+      <input class="modal-input" id="edit-p2" dir="auto" data-i18n-ph="common.player2" placeholder="Player 2"/>
     </div>
     <div class="modal-row h" id="edit-cat-row">
       <select class="modal-input" id="edit-cat"></select>
     </div>
     <div class="modal-btns">
-      <button class="mbtn mbtn-ok" onclick="saveEdit()">Save</button>
-      <button class="mbtn mbtn-cancel" onclick="closeEdit()">Cancel</button>
+      <button class="mbtn mbtn-ok" onclick="saveEdit()" data-i18n="common.save">Save</button>
+      <button class="mbtn mbtn-cancel" data-i18n="common.cancel" onclick="closeEdit()">Cancel</button>
     </div>
   </div>
 </div>
@@ -282,23 +286,23 @@
 <!-- ADD PAIR MODAL (master) -->
 <div class="overlay h" id="addpair-modal" onclick="if(event.target===this)closeAddPair()">
   <div class="modal">
-    <h3>Add Pair Directly</h3>
+    <h3 data-i18n="build.addPairTitle">Add Pair Directly</h3>
     <div class="modal-row">
-      <input class="modal-input" id="ap-p1" placeholder="Player 1" list="player-datalist" autocomplete="off"/>
+      <input class="modal-input" id="ap-p1" dir="auto" data-i18n-ph="common.player1" placeholder="Player 1" list="player-datalist" autocomplete="off"/>
     </div>
     <div class="modal-row">
-      <input class="modal-input" id="ap-p2" placeholder="Player 2" list="player-datalist" autocomplete="off"/>
+      <input class="modal-input" id="ap-p2" dir="auto" data-i18n-ph="common.player2" placeholder="Player 2" list="player-datalist" autocomplete="off"/>
     </div>
     <div class="modal-row">
       <select class="modal-input" id="ap-cat"></select>
     </div>
     <div class="modal-btns">
-      <button class="mbtn mbtn-ok" onclick="saveAddPair()">Add</button>
-      <button class="mbtn mbtn-cancel" onclick="closeAddPair()">Cancel</button>
+      <button class="mbtn mbtn-ok" onclick="saveAddPair()" data-i18n="common.add">Add</button>
+      <button class="mbtn mbtn-cancel" data-i18n="common.cancel" onclick="closeAddPair()">Cancel</button>
     </div>
   </div>
 </div>
 
-<script type="module" src="app.js?v=66"></script>
+<script type="module" src="app.js?v=67"></script>
 </body>
 </html>
