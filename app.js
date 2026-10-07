@@ -5,6 +5,8 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
 import { pickImage, attachDropZone } from "./uploader.js?v=67";
 import { t, initLang, setLang, getLang, applyStatic, fmtDate, tRound, tSlot } from './i18n.js?v=67';
+// Same Firebase config as below, so common.js's initializeApp returns this app (no duplicate).
+import { onColor } from './common.js?v=67';
 
 // ============ FIREBASE ============
 const firebaseConfig = {
@@ -348,11 +350,6 @@ function readable(candidate, bg, minRatio=4.5) {
     if (contrast(c, bg) >= minRatio) return c;
   }
   return bgDark ? '#FFFFFF' : '#000000';
-}
-
-// White or dark text on a colored background (e.g. buttons, group headers)
-function onColor(bgHex) {
-  return contrast('#FFFFFF', bgHex) >= 4.5 ? '#FFFFFF' : '#1a1a1a';
 }
 
 function applyTheme(primary, secondary) {
@@ -757,7 +754,7 @@ async function submitRegistration() {
     document.getElementById('frm-p2').value = '';
     document.getElementById('frm-phone').value = '';
     if (categories.length !== 1)
-      document.querySelectorAll('#frm-cat-wrap .cat-pill').forEach(b => b.classList.remove('on'));
+      document.querySelectorAll('#frm-cat-wrap .cat-pill').forEach(b => { b.classList.remove('on'); b.setAttribute('aria-pressed', 'false'); });
     unlock();
     regErrors = {};
     lastReceipt = { p1, p2, catId };
@@ -844,8 +841,9 @@ async function setRegPaid(id, paid) {
 }
 
 function selectRegCat(btn) {
-  document.querySelectorAll('.cat-pill').forEach(b => b.classList.remove('on'));
+  document.querySelectorAll('.cat-pill').forEach(b => { b.classList.remove('on'); b.setAttribute('aria-pressed', 'false'); });
   btn.classList.add('on');
+  btn.setAttribute('aria-pressed', 'true');
 }
 
 function setRegFilter(f) {
@@ -948,7 +946,7 @@ function renderRegistrations() {
         <div class="reg-phone">${phoneHtml}</div>
       </div>
       <span class="status-badge badge-${escH(r.status)}">${escH(statusTxt(r.status))}</span>
-      <label class="d-paid-toggle"><input type="checkbox" ${r.paid ? 'checked' : ''} onchange="setRegPaid('${r.id}',this.checked)"/> ${t('admin.paid')}</label>
+      <label class="d-paid-toggle"><input type="checkbox" ${r.paid ? 'checked' : ''} aria-label="${escH(t('admin.paidFor', { pair: regPairName(r) }))}" onchange="setRegPaid('${r.id}',this.checked)"/> <span aria-hidden="true">${t('admin.paid')}</span></label>
       <div class="reg-actions">
         ${r.status !== 'approved' ? `<button class="reg-btn approve" onclick="setRegStatus('${r.id}','approved')">${t('admin.approve')}</button>` : ''}
         ${r.status === 'approved'  ? `<button class="reg-btn" onclick="setRegStatus('${r.id}','pending')">${t('admin.undo')}</button>` : ''}
@@ -1053,9 +1051,9 @@ function renderRegisterPage() {
     // Live snapshots re-render this page: keep the category the user already picked.
     const prevSel = catWrap.querySelector('.cat-pill.on')?.dataset.value || '';
     catWrap.innerHTML = categories.map(c =>
-      `<button type="button" class="cat-pill${c.id === prevSel ? ' on' : ''}" data-value="${escH(c.id)}" onclick="selectRegCat(this)">${escH(c.name)}</button>`
+      `<button type="button" class="cat-pill${c.id === prevSel ? ' on' : ''}" aria-pressed="${c.id === prevSel}" data-value="${escH(c.id)}" onclick="selectRegCat(this)">${escH(c.name)}</button>`
     ).join('');
-    if (categories.length === 1) catWrap.querySelector('.cat-pill')?.classList.add('on');
+    if (categories.length === 1) { const b = catWrap.querySelector('.cat-pill'); b?.classList.add('on'); b?.setAttribute('aria-pressed', 'true'); }
     // One option: keep the (selected) pill hidden but tell the user which category it is.
     const single = categories.length === 1;
     catWrap.style.display = single ? 'none' : '';
@@ -1142,7 +1140,7 @@ function renderBuildPage() {
     div.dataset.ci = _bci;
     const _bDefColors = ['','#D97706','#0891B2','#EA580C'];
     const _bColor = cat.color || _bDefColors[_bci] || '';
-    const _bOn = _bColor && _bColor.startsWith('#') ? onColor(_bColor) : '';
+    const _bOn = /^#[0-9a-f]{6}$/i.test(_bColor) ? onColor(_bColor) : '';
     if (_bColor) { div.style.setProperty('--cat-color', _bColor); }
     if (_bOn)    { div.style.setProperty('--cat-on-color', _bOn); }
     div.innerHTML = `
@@ -1923,7 +1921,7 @@ function makeStandingsCard(catId, grp, gi, catIdx) {
   // Group colors: custom meta.groupColors overrides defaults
   const _grpDefaults = ['#E91E8C','#111111','#FFD600','#111111']; // B=black now
   const _grpColors  = _grpDefaults.map((d,i) => (meta.groupColors||[])[i] || d);
-  const _grpOnColors= _grpColors.map(c => c.startsWith('#') ? onColor(c) : '#fff');
+  const _grpOnColors= _grpColors.map(c => /^#[0-9a-f]{6}$/i.test(c) ? onColor(c) : '#fff');
   const _grpColor   = _grpColors[gi % 4];
   const _grpOn      = _grpOnColors[gi % 4];
   card.style.setProperty('--cat-color',    _grpColor);
@@ -2358,6 +2356,7 @@ function buildGameRow(catId, g, idx, isKO) {
   }
   const errD  = document.createElement('div');
   errD.id = 'serr-' + gk; errD.className = 'score-err';
+  errD.setAttribute('role', 'status'); errD.setAttribute('aria-live', 'polite');
   const showErr = !!msg && !!unsaved.shown;
   errD.textContent = showErr ? msg : ''; errD.style.display = showErr ? 'block' : 'none';
   wrap.appendChild(row); wrap.appendChild(errD);
@@ -2464,9 +2463,9 @@ function renderCourtFilter() {
       for (let i=1; i<=(cat.cfg?.courts||2); i++) courts.add(i);
     }
   });
-  el.innerHTML = `<button class="cf-btn ${activeCourt==='all'?'on':''}" onclick="setCourt('all')">${t('common.all')}</button>`
+  el.innerHTML = `<button class="cf-btn ${activeCourt==='all'?'on':''}" aria-pressed="${activeCourt==='all'}" onclick="setCourt('all')">${t('common.all')}</button>`
     + [...courts].sort((a,b)=>a-b).map(c =>
-        `<button class="cf-btn ${activeCourt===c?'on':''}" onclick="setCourt(${c})">${t('sched.court', { n: c })}</button>`).join('');
+        `<button class="cf-btn ${activeCourt===c?'on':''}" aria-pressed="${activeCourt===c}" onclick="setCourt(${c})">${t('sched.court', { n: c })}</button>`).join('');
 }
 
 function setCourt(c) { activeCourt=c; renderCourtFilter(); renderScheduleContent(); }
@@ -2787,8 +2786,8 @@ function renderCatFilters() {
   }
   el.classList.remove('h');
   el.innerHTML = `<div class="cat-filter">
-    <button class="cat-btn ${!activeCat?'on':''}" onclick="setCat(null)">${t('common.all')}</button>
-    ${categories.map(c=>`<button class="cat-btn ${activeCat===c.id?'on':''}" onclick="setCat('${escH(c.id)}')">${escH(c.name)}</button>`).join('')}
+    <button class="cat-btn ${!activeCat?'on':''}" aria-pressed="${!activeCat}" onclick="setCat(null)">${t('common.all')}</button>
+    ${categories.map(c=>`<button class="cat-btn ${activeCat===c.id?'on':''}" aria-pressed="${activeCat===c.id}" onclick="setCat('${escH(c.id)}')">${escH(c.name)}</button>`).join('')}
   </div>`;
 }
 
@@ -3393,12 +3392,12 @@ function goPage(p) {
   if (p==='build' && (!admin || (meta.phase !== 'registration' && meta.phase !== 'built'))) return;
   if (p==='settings' && (!superAdmin || meta.phase === 'tournament')) return;
   document.querySelectorAll('.pg').forEach(e=>e.classList.remove('on'));
-  document.querySelectorAll('.tab').forEach(e=>e.classList.remove('on'));
+  document.querySelectorAll('.tab').forEach(e=>{ e.classList.remove('on'); e.removeAttribute('aria-current'); });
   const pageEl=document.getElementById('page-'+p);
   if (!pageEl) return;
   pageEl.classList.add('on');
   const tab=document.getElementById('tab-'+p);
-  if (tab) tab.classList.add('on');
+  if (tab) { tab.classList.add('on'); tab.setAttribute('aria-current', 'page'); }
   renderCatFilters();
   if (p==='register')       renderRegisterPage();
   if (p==='participants')   renderParticipants();
