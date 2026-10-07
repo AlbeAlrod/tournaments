@@ -1,7 +1,7 @@
 // uploader.js — pick / drop / paste an image, resize + compress it in the browser,
 // and hand back a data URL small enough to store in the tournament doc (meta).
-// Pre-Auth decision (see WORKPLAN.md): max 512px, target < 80KB, WebP (PNG fallback),
-// SVG rejected. Storage-backed uploads come in phase 5.
+// Pre-Auth decision (see WORKPLAN.md): max 512px, target < 80KB, WebP (without WebP:
+// JPEG for opaque images, PNG only with transparency), SVG rejected. Storage-backed uploads come in phase 5.
 //
 // Errors are user-facing strings:
 //   pickImage()          → rejects with Error(message); a cancelled picker rejects with
@@ -52,18 +52,24 @@ async function decode(file) {
   }
 }
 
-function render(src, w, h, type, quality) {
+function draw(src, w, h) {
   const c = document.createElement('canvas');
   c.width = w; c.height = h;
   const ctx = c.getContext('2d');
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = 'high';
   ctx.drawImage(src, 0, 0, w, h);
-  return c.toDataURL(type, quality);
+  return c;
+}
+
+function hasAlpha(src, w, h) {
+  const px = draw(src, w, h).getContext('2d').getImageData(0, 0, w, h).data;
+  for (let i = 3; i < px.length; i += 4) if (px[i] < 255) return true;
+  return false;
 }
 
 /**
- * Resize + compress one File/Blob. Resolves to a data URL (image/webp or image/png).
+ * Resize + compress one File/Blob. Resolves to a data URL (image/webp, image/jpeg or image/png).
  * Never upscales. Keeps transparency.
  */
 export async function processImageFile(file, { maxPx = DEFAULTS.maxPx, maxBytes = DEFAULTS.maxBytes } = {}) {
@@ -77,17 +83,18 @@ export async function processImageFile(file, { maxPx = DEFAULTS.maxPx, maxBytes 
   const sw = src.width || src.naturalWidth, sh = src.height || src.naturalHeight;
   if (!sw || !sh) throw new Error(ERR.decode);
 
-  const webp = supportsWebp();
-  const type = webp ? 'image/webp' : 'image/png';
   let scale = Math.min(1, maxPx / Math.max(sw, sh));
+  const type = supportsWebp() ? 'image/webp'
+    : hasAlpha(src, Math.max(1, Math.round(sw * scale)), Math.max(1, Math.round(sh * scale))) ? 'image/png' : 'image/jpeg';
+  const qualities = { 'image/webp': [0.9, 0.8, 0.7, 0.6, 0.5], 'image/jpeg': [0.85, 0.75, 0.6], 'image/png': [undefined] }[type];
 
   try {
-    // Shrink dimensions until it fits; for WebP also step quality down at each size.
+    // Shrink dimensions until it fits; for WebP/JPEG also step quality down at each size.
     for (let attempt = 0; attempt < 12; attempt++) {
       const w = Math.max(1, Math.round(sw * scale)), h = Math.max(1, Math.round(sh * scale));
-      const qualities = webp ? [0.9, 0.8, 0.7, 0.6, 0.5] : [undefined];
+      const c = draw(src, w, h);
       for (const q of qualities) {
-        const out = render(src, w, h, type, q);
+        const out = c.toDataURL(type, q);
         if (dataUrlBytes(out) <= maxBytes) return out;
       }
       if (Math.max(w, h) <= 48) break;
@@ -99,28 +106,30 @@ export async function processImageFile(file, { maxPx = DEFAULTS.maxPx, maxBytes 
   throw new Error(ERR.tooBig);
 }
 
+// Opens the file picker; onFile(file) on a choice, onCancel() when the picker is dismissed.
+function openPicker(onFile, onCancel = () => {}) {
+  const inp = document.createElement('input');
+  inp.type = 'file';
+  inp.accept = 'image/png,image/jpeg,image/webp,image/gif';
+  inp.style.display = 'none';
+  inp.addEventListener('change', () => {
+    const f = inp.files && inp.files[0];
+    inp.remove();
+    f ? onFile(f) : onCancel();
+  });
+  // Modern browsers fire 'cancel'; older ones never settle, which locks nothing.
+  inp.addEventListener('cancel', () => { inp.remove(); onCancel(); });
+  document.body.appendChild(inp);
+  inp.click();
+}
+
 /**
  * Open the file picker and resolve to a compressed data URL.
  */
 export function pickImage({ maxPx = DEFAULTS.maxPx, maxBytes = DEFAULTS.maxBytes } = {}) {
-  return new Promise((resolve, reject) => {
-    const inp = document.createElement('input');
-    inp.type = 'file';
-    inp.accept = 'image/png,image/jpeg,image/webp,image/gif';
-    inp.style.display = 'none';
-    const cancelled = () => { const e = new Error('cancelled'); e.cancelled = true; return e; };
-    inp.addEventListener('change', () => {
-      const f = inp.files && inp.files[0];
-      inp.remove();
-      if (!f) return reject(cancelled());
-      processImageFile(f, { maxPx, maxBytes }).then(resolve, reject);
-    });
-    // Modern browsers fire 'cancel'; older ones simply never settle the promise,
-    // which is harmless: nothing is locked while the picker is open.
-    inp.addEventListener('cancel', () => { inp.remove(); reject(cancelled()); });
-    document.body.appendChild(inp);
-    inp.click();
-  });
+  return new Promise((resolve, reject) => openPicker(
+    f => processImageFile(f, { maxPx, maxBytes }).then(resolve, reject),
+    () => { const e = new Error('cancelled'); e.cancelled = true; reject(e); }));
 }
 
 /**
@@ -134,23 +143,23 @@ export function attachDropZone(el, onImage, { maxPx = DEFAULTS.maxPx, maxBytes =
   if (!el.hasAttribute('tabindex')) el.tabIndex = 0;
   if (!el.hasAttribute('role')) el.setAttribute('role', 'button');
 
-  const handle = async p => {
+  const handle = async file => {
     el.setAttribute('aria-busy', 'true');
-    try { onImage(await p, null); }
-    catch (e) { if (!e || !e.cancelled) onImage(null, (e && e.message) || ERR.decode); }
+    try { onImage(await processImageFile(file, opts), null); }
+    catch (e) { onImage(null, (e && e.message) || ERR.decode); }
     finally { el.removeAttribute('aria-busy'); }
   };
   const firstImage = list => [...(list || [])].find(it => it && it.kind === 'file' && /^image\//.test(it.type || ''));
 
-  const onClick = e => { if (e.target.closest('button,a,input')) return; handle(pickImage(opts)); };
-  const onKey = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handle(pickImage(opts)); } };
+  const onClick = e => { if (e.target.closest('button,a,input')) return; openPicker(handle); };
+  const onKey = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openPicker(handle); } };
   const onOver = e => { e.preventDefault(); e.dataTransfer && (e.dataTransfer.dropEffect = 'copy'); el.classList.add('d-drop-over'); };
   const onLeave = () => el.classList.remove('d-drop-over');
   const onDrop = e => {
     e.preventDefault(); el.classList.remove('d-drop-over');
     const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
     if (!f) return onImage(null, ERR.notImage);
-    handle(processImageFile(f, opts));
+    handle(f);
   };
   const onPaste = e => {
     const items = e.clipboardData && e.clipboardData.items;
@@ -158,7 +167,7 @@ export function attachDropZone(el, onImage, { maxPx = DEFAULTS.maxPx, maxBytes =
     const f = it && it.getAsFile ? it.getAsFile() : null;
     if (!f) return;   // plain text paste — leave it alone
     e.preventDefault();
-    handle(processImageFile(f, opts));
+    handle(f);
   };
 
   el.addEventListener('click', onClick);
