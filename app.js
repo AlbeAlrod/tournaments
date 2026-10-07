@@ -1987,9 +1987,12 @@ let scoreTimer = null, flushing = false;
 
 const gameKey = (cid, idx, ri, gi) => ri == null ? `${cid}-${idx}` : `${cid}-k${ri}-${gi}`;
 const gameRef = e => e.ri == null ? state[e.cid]?.sched?.[e.idx] : state[e.cid]?.ko?.[e.ri]?.[e.gi];
+// A score with only one side filled is never saved.
+const isHalf = g => !String(g.sa ?? '') !== !String(g.sb ?? '');
 function scoreMsg(e) {
   const g = gameRef(e);
   if (!g) return '';
+  if (isHalf(g)) return t('score.bothSides');
   const err = scoreError(String(g.sa ?? ''), String(g.sb ?? ''), e.cid, getRuleForGame(e.cid, g, e.ri != null).pts);
   return err ? t(err.key, err.params) : '';
 }
@@ -2001,7 +2004,7 @@ function markGameRow(gk) {
   const e = unsavedGames.get(gk);
   const msg = e ? scoreMsg(e) : '';
   row.classList.toggle('unsaved', !!e);
-  row.classList.toggle('invalid', !!msg);
+  row.classList.toggle('invalid', !!msg && !isHalf(gameRef(e)));
   const err = document.getElementById('serr-' + gk);
   if (err) { const show = !!msg && !!e.shown; err.textContent = show ? msg : ''; err.style.display = show ? 'block' : 'none'; }
 }
@@ -2224,25 +2227,29 @@ function buildGameRow(catId, g, idx, isKO) {
   const unsaved = unsavedGames.get(gk);
   const msg = unsaved ? scoreMsg(unsaved) : '';
   row.id = 'gc-' + gk;
-  row.className = 'gc'+(done?' done':'')+(isKO?' ko-game':'')+(unsaved?' unsaved':'')+(msg?' invalid':'');
+  row.className = 'gc'+(done?' done':'')+(isKO?' ko-game':'')+(unsaved?' unsaved':'')+(msg && !isHalf(g)?' invalid':'');
   const setter = k => isKO ? `setKS('${catId}',${g.ri},${g.gi},'${k}',this.value` : `setGS('${catId}',${idx},'${k}',this.value`;
   // Stable ids let the focus-preserving re-render put the caret back.
   const sid = k => isKO ? `si-${catId}-k${g.ri}-${g.gi}-${k}` : `si-${catId}-${idx}-${k}`;
-  const scoreCell = (admin && meta.phase === 'tournament')
-    ? `<input class="si" id="${sid('sa')}" type="number" min="0" inputmode="numeric" placeholder="—" aria-label="${t('sched.scoreA')}" value="${escH(String(g.sa ?? ''))}"
-         oninput="${setter('sa')})" onchange="${setter('sa')},true)"/>
-       <span class="ssep">:</span>
-       <input class="si" id="${sid('sb')}" type="number" min="0" inputmode="numeric" placeholder="—" aria-label="${t('sched.scoreB')}" value="${escH(String(g.sb ?? ''))}"
-         oninput="${setter('sb')})" onchange="${setter('sb')},true)"/>`
-    : `<span class="ssep">${done?`${g.sa} : ${g.sb}`:'— : —'}</span>`;
-
-  row.innerHTML = `
-    <span class="pill ${pc}">${t('sched.courtShort', { n: g.court })}</span>
-    ${koLbl?`<span class="ko-lbl">${koLbl}</span>`:''}
-    <span class="gt">${dnH(tSlot(g.a))}${!isKO&&g.gn?`<span class="gtag">${escH(g.gn)}</span>`:''}</span>
-    <span class="gvs">${t('sched.vs')}</span>
-    <span class="gt r">${dnH(tSlot(g.b))}</span>
-    <span class="sw">${scoreCell}</span>`;
+  const gtag = !isKO&&g.gn?`<span class="gtag">${escH(g.gn)}</span>`:'';
+  const pill = `<span class="pill ${pc}">${t('sched.courtShort', { n: g.court })}</span>${koLbl?`<span class="ko-lbl">${koLbl}</span>`:''}`;
+  if (admin && meta.phase === 'tournament') {
+    // Each input sits next to its own team; on a phone the row stacks as "team – score".
+    const inp = (k, team) => `<input class="si" id="${sid(k)}" type="number" min="0" inputmode="numeric" placeholder="—"
+      aria-label="${escH(t('sched.scoreFor', { team: dn(tSlot(team)) }))}" value="${escH(String(g[k] ?? ''))}"
+      oninput="${setter(k)})" onchange="${setter(k)},true)"/>`;
+    row.classList.add('edit');
+    row.innerHTML = `${pill}
+      <span class="gside a"><span class="gt">${dnH(tSlot(g.a))}${gtag}</span>${inp('sa', g.a)}</span>
+      <span class="gvs">${t('sched.vs')}</span>
+      <span class="gside b">${inp('sb', g.b)}<span class="gt r">${dnH(tSlot(g.b))}</span></span>`;
+  } else {
+    row.innerHTML = `${pill}
+      <span class="gt">${dnH(tSlot(g.a))}${gtag}</span>
+      <span class="gvs">${t('sched.vs')}</span>
+      <span class="gt r">${dnH(tSlot(g.b))}</span>
+      <span class="sw"><span class="ssep">${done?`${g.sa} : ${g.sb}`:'— : —'}</span></span>`;
+  }
   const errD  = document.createElement('div');
   errD.id = 'serr-' + gk; errD.className = 'score-err';
   const showErr = !!msg && !!unsaved.shown;

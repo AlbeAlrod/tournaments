@@ -468,6 +468,12 @@ main { position: relative; z-index: 5; max-width: 980px; margin: 0 auto; padding
   font-variant-numeric: tabular-nums; white-space: nowrap; }
 .gc.done .sw > .ssep:only-child { background: var(--primary); color: var(--on-primary);
   text-shadow: var(--on-primary-shadow); }
+/* Score entry: each input next to its own team (names at the outer edges, inputs meet in the middle) */
+.gc.edit { grid-template-columns: auto minmax(0,1fr) 28px minmax(0,1fr); }
+.gc.edit.ko-game { grid-template-columns: auto auto minmax(0,1fr) 28px minmax(0,1fr); }
+.gside { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.gside .gt { flex: 1; }
+.gside .si { flex-shrink: 0; }
 .score-err { font-size: 13px; color: var(--red); padding: 4px 12px 8px;
   background: rgba(220,38,38,.06); border-inline-start: 3px solid var(--red);
   margin: -4px 0 8px; border-radius: 0 0 var(--rs) var(--rs); }
@@ -839,6 +845,14 @@ input, textarea, select { max-width: 100%; }
   .gc.ko-game > .gt     { grid-column: 3; grid-row: 1; }
   .gc.ko-game > .gt.r   { grid-column: 3; grid-row: 2; }
   .gc.ko-game > .sw     { grid-column: 4; grid-row: 1 / span 2; }
+  /* Score entry stacks as two "team – score" rows */
+  .gc.edit { grid-template-columns: auto 1fr; }
+  .gc.edit.ko-game { grid-template-columns: auto auto 1fr; }
+  .gc.edit > .gside { grid-column: -2; }
+  .gc.edit > .gside.a { grid-row: 1; }
+  .gc.edit > .gside.b { grid-row: 2; }
+  .gc.edit .gside.b .si { order: 2; }
+  .gc.edit .gside .gt { white-space: normal; overflow-wrap: anywhere; text-align: start; }
 
   /* Every text field ≥ 16px = no iOS auto-zoom on focus. Several settings
      inputs carry an inline font-size from app.js, hence !important here. */

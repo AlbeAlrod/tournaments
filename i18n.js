@@ -494,6 +494,8 @@ const DICT = {
     'upload.decode':           'לא הצלחנו לקרוא את התמונה. נסו לשמור אותה כ-PNG או JPG.',
     'upload.tooBig':           'לא הצלחנו להקטין את התמונה מספיק. נסו תמונה פשוטה או קטנה יותר.',
     'upload.huge':             'הקובץ גדול מדי (עד 15MB).',
+    'sched.scoreFor':          'תוצאה של {team}',
+    'score.bothSides':         'יש למלא את התוצאה של שני הצדדים',
 
     // ── sport terms (for the multi-sport engine; not wired yet) ──
     'terms.pair':    'זוג',
@@ -826,6 +828,8 @@ const DICT = {
     'upload.decode':           'Couldn’t read this image. Try saving it as PNG or JPG.',
     'upload.tooBig':           'Couldn’t make this image small enough. Try a simpler or smaller image.',
     'upload.huge':             'This file is too large (max 15 MB).',
+    'sched.scoreFor':          'Score for {team}',
+    'score.bothSides':         'Enter both scores',
 
     'terms.pair':    'pair',
     'terms.pairs':   'pairs',
