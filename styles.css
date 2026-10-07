@@ -396,7 +396,7 @@ main { position: relative; z-index: 5; max-width: 980px; margin: 0 auto; padding
    the name. Physical on purpose — with unicode-bidi:plaintext, start/end
    follow the name's own script, not the page. */
 .gt.r { text-align: right; }
-[dir=rtl] .gt.r { text-align: left; }
+@media (min-width: 641px) { [dir=rtl] .gt.r { text-align: left; } }
 .gvs { font-size: 11px; color: var(--text3); text-align: center; }
 .gtag { font-size: 11px; color: var(--text3); background: var(--bg3); border-radius: 4px;
   padding: 1px 5px; margin-inline-start: 4px; }
@@ -844,7 +844,7 @@ input[type="password"] { direction: ltr; }
 /* Hebrew: letter-spacing breaks glyph shaping and uppercase is a no-op.
    :where() keeps this at class specificity so league.css (loaded later)
    can still set its own deliberate tracking. */
-:where(:lang(he)):is(body, .lname, .admin-toggle, .mode-bar, .tab, .form-row label,
+:where(:lang(he)):is(.lname, .admin-toggle, .mode-bar, .tab,
   .page-header h2, .status-badge, .filter-btn, .cat-btn, .cf-btn, .cat-pill,
   .build-cat-name, .scard-name, .rtag, .game-rule, .ko-lbl, .pill, .brnd-title,
   .bm-label, .bye-tag, .bye-badge, .ci, .sett-section-title, .sett-card-title,
@@ -852,4 +852,5 @@ input[type="password"] { direction: ltr; }
   .submit-btn, .build-btn, .pay-link-btn, .mbtn, .tsub-hdr) {
   letter-spacing: 0; text-transform: none;
 }
-:where(:lang(he)) :is(.stbl th, .scoring-rules-tbl th) { letter-spacing: 0; text-transform: none; }
+:where(:lang(he)) :where(.form-row label, .stbl th, .scoring-rules-tbl th) { letter-spacing: 0; text-transform: none; }
+body:lang(he) { letter-spacing: 0; }
