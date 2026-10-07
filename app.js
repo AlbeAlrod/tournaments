@@ -23,6 +23,7 @@ const tId = new URLSearchParams(location.search).get('t');
 let meta = { name:'', logoUrl:'', primaryColor:'#6B21A8', secondaryColor:'#7C3AED',
   paymentLink:'', paymentLinkLabel:'', paymentLink2:'', paymentLink2Label:'',
   regNote:'', sponsorLogos: [],
+  eventDate:'', venue:'', price:'',   // optional tournament info card (Register + Schedule)
   groupColors: [],   // [gi0,gi1,gi2,gi3] — empty = use defaults
   bgColor: '',       // override body background — empty = auto from primary
   phase:'registration', regOpen:true, showRegistered:true };
@@ -866,7 +867,29 @@ function renderPayLink(wrapId) {
     </div>`;
 }
 
+// Optional info card (date / venue / price) — hidden when none is set.
+function fmtEventDate(v) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(v || '')) return v || '';
+  const d = new Date(v + 'T00:00:00');
+  return isNaN(d) ? v : d.toLocaleDateString(undefined, { weekday:'short', day:'numeric', month:'short', year:'numeric' });
+}
+function renderInfoCards() {
+  const items = [
+    ['📅', fmtEventDate(meta.eventDate)],
+    ['📍', meta.venue],
+    ['💳', meta.price],
+  ].filter(([, v]) => v && String(v).trim());
+  const html = items.map(([ic, v]) => `<span class="d-info-item"><span aria-hidden="true">${ic}</span><span>${escH(v)}</span></span>`).join('');
+  ['reg-info-card', 'sched-info-card'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.innerHTML = html;
+    el.style.display = items.length ? '' : 'none';
+  });
+}
+
 function renderRegisterPage() {
+  renderInfoCards();
   const closedMsg = document.getElementById('reg-closed-msg');
   const formWrap  = document.getElementById('reg-form-wrap');
   const sub       = document.getElementById('reg-subtitle');
@@ -2734,12 +2757,26 @@ function renderSettings() {
     <div class="sett-row" style="align-items:flex-start;padding-top:16px">
       <div class="sett-label">
         <span class="sett-name">Registration Note</span>
-        <span class="sett-desc">Shown below the registration form.</span>
+        <span class="sett-desc">Shown above the registration form.</span>
       </div>
       <div class="sett-ctrl">
         <textarea class="text-inp" style="width:240px;height:76px;resize:vertical;line-height:1.5"
           onchange="updateMeta('regNote',this.value)"
           placeholder="e.g. Payment deadline is Friday…">${escH(meta.regNote)}</textarea>
+      </div>
+    </div>
+    <div class="sett-row" style="align-items:flex-start;padding-top:16px">
+      <div class="sett-label">
+        <span class="sett-name">Tournament Info</span>
+        <span class="sett-desc">Optional. Shown at the top of Register and Schedule.</span>
+      </div>
+      <div class="sett-ctrl" style="flex-direction:column;align-items:flex-end;gap:8px">
+        <input class="text-inp" type="date" style="width:190px" value="${escH(meta.eventDate)}" aria-label="Event date"
+          onchange="updateMeta('eventDate',this.value)"/>
+        <input class="text-inp" style="width:240px" value="${escH(meta.venue)}" placeholder="Venue, e.g. Gordon Beach" aria-label="Venue"
+          onchange="updateMeta('venue',this.value.trim())"/>
+        <input class="text-inp" style="width:240px" value="${escH(meta.price)}" placeholder="Price, e.g. ₪150 per pair" aria-label="Price"
+          onchange="updateMeta('price',this.value.trim())"/>
       </div>
     </div>
     <div class="sett-row" style="align-items:flex-start;padding-top:16px">
@@ -2992,6 +3029,7 @@ function updateMeta(key, val) {
     renderRegisterPage(); renderParticipants();
   }
   if (key === 'regNote') renderRegisterPage();
+  if (['eventDate','venue','price'].includes(key)) renderInfoCards();
   if (key === 'sport') renderAll();
   pushMetaOnly();
 }
@@ -3164,6 +3202,7 @@ function renderChrome() {
   document.body.classList.toggle('phase-tournament',   meta.phase === 'tournament');
 
   renderSponsorBar();
+  renderInfoCards();
   refreshAdmin();
 }
 function renderAllInner() {

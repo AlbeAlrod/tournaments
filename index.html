@@ -16,6 +16,9 @@
 .d-receipt-line{display:flex;gap:10px;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)}
 .d-receipt #receipt-pay-wrap{margin:14px 0 6px}
 .d-receipt .submit-btn{margin-top:14px}
+.d-info-card{display:flex;flex-wrap:wrap;gap:8px 18px;margin:0 0 14px;padding:12px 14px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r,12px);font-size:14px;color:var(--text)}
+.d-info-item{display:flex;gap:6px;align-items:baseline}
+#reg-note{margin:0 0 14px}
 </style>
 </head>
 <body>
@@ -96,9 +99,11 @@
         <h2 id="reg-title">Register</h2>
         <p id="reg-subtitle"></p>
       </div>
+      <div id="reg-info-card" class="d-info-card" style="display:none"></div>
       <div id="reg-mine" class="info-box d-reg-mine" style="display:none"></div>
       <div id="reg-closed-msg" class="info-box h">Registration is currently closed.</div>
       <div id="reg-soon-msg" class="info-box h">Registration opens soon.</div>
+      <div id="reg-note" class="reg-note h"></div>
       <div id="reg-receipt" style="display:none"></div>
       <div id="reg-form-wrap">
         <div class="form-card">
@@ -125,7 +130,6 @@
           <div id="reg-pay-wrap"></div>
         </div>
       </div>
-      <div id="reg-note" class="reg-note h"></div>
     </div>
 
     <!-- PARTICIPANTS page -->
@@ -171,6 +175,7 @@
 
     <!-- SCHEDULE (tournament) -->
     <div class="pg" id="page-schedule">
+      <div id="sched-info-card" class="d-info-card" style="display:none"></div>
       <div class="sched-search-box">
         <input class="team-search-input" id="sched-search" placeholder="Search team…" oninput="filterSchedule()"/>
       </div>
