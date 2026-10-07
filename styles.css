@@ -660,6 +660,19 @@ input:focus-visible + .toggle-slider { outline: 2px solid var(--primary); outlin
 #role-btn-admin, #role-btn-master { flex: 1; min-height: var(--tap); padding: 0 8px; border-radius: var(--rs);
   border: 1px solid var(--border2); background: transparent; color: var(--primary-text);
   font-family: inherit; font-size: var(--fs-md); font-weight: 500; cursor: pointer; }
+#role-btn-admin.on, #role-btn-master.on { background: var(--primary); border-color: var(--primary);
+  color: var(--on-primary); text-shadow: var(--on-primary-shadow); }
+
+/* Language switch (עב | EN) in the header. Scoped to the tournament app
+   (index.html has #admin-bar before the sticky block); league.css has its own. */
+.admin-bar ~ .sticky-block .langsw { display: inline-flex; align-items: center; flex-shrink: 0;
+  border: 1px solid var(--border2); border-radius: 999px; padding: 2px; background: var(--bg2); }
+.admin-bar ~ .sticky-block .langsw__b { min-width: 40px; min-height: 32px; padding: 0 10px; border: 0; border-radius: 999px;
+  background: transparent; color: var(--text2); font-family: inherit; font-size: 13px; font-weight: 500;
+  cursor: pointer; position: relative; }
+.admin-bar ~ .sticky-block .langsw__b::after { content: ''; position: absolute; inset: -6px 0; }
+.admin-bar ~ .sticky-block .langsw__b:hover { color: var(--text); }
+.admin-bar ~ .sticky-block .langsw__b.is-on { background: var(--primary); color: var(--on-primary); text-shadow: var(--on-primary-shadow); }
 
 /* ===== ON-PRIMARY SHADOW — outline on text for light colour themes ===== */
 .lmark span, .admin-toggle.on, .submit-btn,
