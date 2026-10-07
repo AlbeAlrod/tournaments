@@ -168,10 +168,10 @@ main { position: relative; z-index: 5; max-width: 980px; margin: 0 auto; padding
 .form-input:focus { outline: none; border-color: var(--primary); background: var(--bg2);
   box-shadow: 0 0 0 3px var(--border); }
 .frm-err { color: var(--red); font-size: 13px; margin-bottom: 10px; padding: 8px 12px;
-  background: rgba(220,38,38,.06); border-radius: var(--rs); border-left: 2px solid var(--red); }
+  background: rgba(220,38,38,.06); border-radius: var(--rs); border-inline-start: 2px solid var(--red); }
 .frm-err.h, .frm-ok.h { display: none; }
 .frm-ok { color: var(--green); font-size: 13px; margin-bottom: 10px; padding: 8px 12px;
-  background: rgba(5,150,105,.06); border-radius: var(--rs); border-left: 2px solid var(--green); }
+  background: rgba(5,150,105,.06); border-radius: var(--rs); border-inline-start: 2px solid var(--green); }
 .submit-btn { width: 100%; padding: 15px; background: var(--primary);
   color: var(--on-primary); border: none; border-radius: var(--rs); font-family: 'Rubik', sans-serif;
   font-size: 17px; font-weight: 800; letter-spacing: .2px;
@@ -200,9 +200,9 @@ main { position: relative; z-index: 5; max-width: 980px; margin: 0 auto; padding
   padding: 14px 16px; margin-bottom: 8px; display: grid;
   grid-template-columns: 1fr auto auto; gap: 12px; align-items: center;
   box-shadow: 0 1px 4px rgba(0,0,0,0.04); }
-.reg-row.status-approved { border-left: 3px solid var(--green); }
-.reg-row.status-rejected { border-left: 3px solid var(--red); opacity: .7; }
-.reg-row.status-pending { border-left: 3px solid var(--amber); }
+.reg-row.status-approved { border-inline-start: 3px solid var(--green); }
+.reg-row.status-rejected { border-inline-start: 3px solid var(--red); opacity: .7; }
+.reg-row.status-pending { border-inline-start: 3px solid var(--amber); }
 .reg-info { min-width: 0; }
 .reg-name { font-size: 14px; font-weight: 600; color: var(--text); }
 .reg-meta { font-size: 12px; color: var(--text3); margin-top: 2px; }
@@ -297,14 +297,14 @@ main { position: relative; z-index: 5; max-width: 980px; margin: 0 auto; padding
 .scard-name { font-family: 'Rubik', sans-serif; font-size: 17px; font-weight: 800;
   color: var(--cat-on-color, var(--on-primary)); letter-spacing: 1px; }
 .stbl { width: 100%; border-collapse: collapse; }
-.stbl th { font-size: 11px; color: var(--text3); text-align: left; padding: 6px 10px;
+.stbl th { font-size: 11px; color: var(--text3); text-align: start; padding: 6px 10px;
   text-transform: uppercase; letter-spacing: .05em; }
 .stbl th:not(:first-child) { text-align: center; }
 .stbl td { font-size: 13px; padding: 7px 10px; border-top: 1px solid var(--border); color: var(--text); }
 .stbl td:not(:first-child) { text-align: center; }
 .stbl tr.winner td { background: rgba(0,0,0,0.04); }
-.stbl tr.winner td:first-child { border-left: 3px solid var(--cat-color, var(--primary)); }
-.rnk { color: var(--text3); font-size: 11px; margin-right: 5px; }
+.stbl tr.winner td:first-child { border-inline-start: 3px solid var(--cat-color, var(--primary)); }
+.rnk { color: var(--text3); font-size: 11px; margin-inline-end: 5px; }
 .diff-pos { color: var(--green); font-weight: 600; }
 .diff-neg { color: var(--red); }
 .diff-zero { color: var(--text3); }
@@ -364,7 +364,7 @@ main { position: relative; z-index: 5; max-width: 980px; margin: 0 auto; padding
 /* Scoring rules table in Settings */
 .scoring-rules-tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
 .scoring-rules-tbl th { font-size: 10px; color: var(--text3); text-transform: uppercase;
-  letter-spacing: .5px; padding: 4px 6px; text-align: left; border-bottom: 1px solid var(--border); }
+  letter-spacing: .5px; padding: 4px 6px; text-align: start; border-bottom: 1px solid var(--border); }
 .scoring-rules-tbl td { padding: 3px 6px; border-bottom: 1px solid var(--border); vertical-align: middle; }
 .scoring-rules-tbl tr:last-child td { border-bottom: none; }
 .srt-label { font-size: 11px; color: var(--text2); }
@@ -392,10 +392,14 @@ main { position: relative; z-index: 5; max-width: 980px; margin: 0 auto; padding
 .gi3 { background: #111111; color: #fff; }
 .gt { font-size: 13px; color: var(--text); font-weight: 500; overflow: hidden;
   text-overflow: ellipsis; white-space: nowrap; }
+/* Side B hugs the score column: the page's END edge, whatever the script of
+   the name. Physical on purpose — with unicode-bidi:plaintext, start/end
+   follow the name's own script, not the page. */
 .gt.r { text-align: right; }
+[dir=rtl] .gt.r { text-align: left; }
 .gvs { font-size: 11px; color: var(--text3); text-align: center; }
 .gtag { font-size: 11px; color: var(--text3); background: var(--bg3); border-radius: 4px;
-  padding: 1px 5px; margin-left: 4px; }
+  padding: 1px 5px; margin-inline-start: 4px; }
 .sw { display: flex; align-items: center; gap: 4px; justify-content: flex-end; }
 .si { width: 38px; text-align: center; background: var(--bg3); border: 1px solid var(--border);
   border-radius: 5px; color: var(--text); padding: 5px 2px; font-size: 14px; font-weight: 600;
@@ -403,7 +407,7 @@ main { position: relative; z-index: 5; max-width: 980px; margin: 0 auto; padding
 .si:focus { outline: none; border-color: var(--primary2); }
 .ssep { color: var(--text3); font-size: 11px; }
 .score-err { font-size: 11px; color: var(--red); padding: 3px 14px 5px;
-  background: rgba(220,38,38,.06); border-left: 2px solid var(--red);
+  background: rgba(220,38,38,.06); border-inline-start: 2px solid var(--red);
   margin-bottom: 4px; border-radius: 0 0 var(--rs) var(--rs); }
 .empty { text-align: center; padding: 40px 20px; color: var(--text3); }
 .empty h3 { font-family: 'Rubik', sans-serif; font-size: 20px; font-weight: 700;
@@ -415,6 +419,8 @@ main { position: relative; z-index: 5; max-width: 980px; margin: 0 auto; padding
 .binfo span { color: var(--green); font-weight: 500; }
 .bscroll { overflow-x: auto; padding-bottom: 20px; position: relative; }
 .btree { display: flex; gap: 0; min-width: fit-content; }
+/* Physical left on purpose: drawBracketLines() measures x from the scroller's
+   LEFT edge in both directions, so the SVG origin must stay there in RTL too. */
 .bsvg { position: absolute; top: 0; left: 0; pointer-events: none; z-index: 0; }
 .bmatch-box { position: relative; z-index: 1; }
 .bround { display: flex; flex-direction: column; }
@@ -542,7 +548,7 @@ main { position: relative; z-index: 5; max-width: 980px; margin: 0 auto; padding
 .toggle-slider { position: absolute; inset: 0; background: var(--border2); border-radius: 24px;
   cursor: pointer; transition: .3s; }
 .toggle-slider::before { content: ''; position: absolute; height: 18px; width: 18px;
-  left: 3px; bottom: 3px; background: white; border-radius: 50%; transition: .3s; }
+  inset-inline-start: 3px; bottom: 3px; background: white; border-radius: 50%; transition: .3s; }
 input:checked + .toggle-slider { background: var(--primary); }
 input:checked + .toggle-slider::before { transform: translateX(20px); }
 
@@ -753,8 +759,8 @@ input, textarea, select { max-width: 100%; }
      Hebrew pair names on a 375px phone. */
   .gc { grid-template-columns: auto 1fr auto; column-gap: 8px; row-gap: 2px; }
   .gc > .pill   { grid-column: 1; grid-row: 1 / span 2; }
-  .gc > .gt     { grid-column: 2; grid-row: 1; text-align: left; }
-  .gc > .gt.r   { grid-column: 2; grid-row: 2; text-align: left; }
+  .gc > .gt     { grid-column: 2; grid-row: 1; text-align: start; }
+  .gc > .gt.r   { grid-column: 2; grid-row: 2; text-align: start; }
   .gc > .gvs    { display: none; }
   .gc > .sw     { grid-column: 3; grid-row: 1 / span 2; }
   .gc.ko-game   { grid-template-columns: auto auto 1fr auto; }
@@ -795,3 +801,55 @@ input, textarea, select { max-width: 100%; }
   .bmatch-box { margin: 3px 4px; }
   .bteam { font-size: 11px; padding: 6px 8px; min-height: 30px; }
 }
+
+/* ===== RTL & BIDI ===================================================
+   Everything above uses logical properties (inline-start/end), so the
+   layout mirrors on its own once <html dir="rtl"> is set. This block holds
+   only what logical properties cannot express. */
+
+/* Utilities for i18n wiring (see I18N_WIRING.md) */
+.bdi { unicode-bidi: isolate; }
+.num { direction: ltr; unicode-bidi: isolate; font-variant-numeric: tabular-nums; }
+.flip-rtl { display: inline-block; }
+[dir=rtl] .flip-rtl { transform: scaleX(-1); }
+
+/* User-typed names: the paragraph direction follows the first strong letter,
+   so "תום / מוריאל" sits right-aligned even inside an English page, and
+   "Tom / Muriel" sits left-aligned inside a Hebrew one. */
+.gt, .bname, .part-name, .reg-name, .build-name, .grp-team-name,
+.player-db-name, .bteam {
+  unicode-bidi: plaintext; text-align: start;
+}
+.champ-name { unicode-bidi: plaintext; }   /* stays centred */
+
+/* Arrows that app.js writes as "→" text */
+[dir=rtl] .hlane-arrow,
+[dir=rtl] .brnd-arrow { display: inline-block; transform: scaleX(-1); }
+
+/* Toggle knob: its start position is logical (inset-inline-start); the
+   travel has to change sign. */
+[dir=rtl] input:checked + .toggle-slider::before { transform: translateX(-20px); }
+
+/* Bracket connectors: the SVG is measured from the scroller's physical
+   edge. In RTL the scroll origin is the right edge — see I18N_WIRING.md §8
+   for the matching drawBracketLines() change (inline style wins over this). */
+[dir=rtl] .bsvg { left: auto; right: 0; }
+
+/* Phone numbers, codes, hex colours, URLs: always LTR */
+.reg-phone, .player-db-phone, .text-mono, .seed-tag,
+input[type="tel"], input[type="url"], input[type="time"], input[type="number"],
+input[type="password"] { direction: ltr; }
+[dir=rtl] .reg-phone, [dir=rtl] .player-db-phone { text-align: end; unicode-bidi: isolate; }
+
+/* Hebrew: letter-spacing breaks glyph shaping and uppercase is a no-op.
+   :where() keeps this at class specificity so league.css (loaded later)
+   can still set its own deliberate tracking. */
+:where(:lang(he)):is(body, .lname, .admin-toggle, .mode-bar, .tab, .form-row label,
+  .page-header h2, .status-badge, .filter-btn, .cat-btn, .cf-btn, .cat-pill,
+  .build-cat-name, .scard-name, .rtag, .game-rule, .ko-lbl, .pill, .brnd-title,
+  .bm-label, .bye-tag, .bye-badge, .ci, .sett-section-title, .sett-card-title,
+  .prev-label, .cat-sett-label, .pay-label, .sponsor-text, .gen-btn,
+  .submit-btn, .build-btn, .pay-link-btn, .mbtn, .tsub-hdr) {
+  letter-spacing: 0; text-transform: none;
+}
+:where(:lang(he)) :is(.stbl th, .scoring-rules-tbl th) { letter-spacing: 0; text-transform: none; }
