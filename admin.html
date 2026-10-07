@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="he" dir="rtl">
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Tournaments Admin</title>
+<title>ניהול טורנירים</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700;800;900&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="styles.css?v=61"/>
@@ -54,7 +54,7 @@
   padding: 8px 12px;
   background: rgba(220,38,38,.06);
   border-radius: var(--rs);
-  border-left: 2px solid #DC2626;
+  border-inline-start: 2px solid #DC2626;
 }
 
 /* ── App screen ── */
@@ -156,11 +156,9 @@
   font-family: 'Rubik', sans-serif;
   font-size: 11px;
   font-weight: 700;
-  letter-spacing: 2px;
-  text-transform: uppercase;
   color: var(--text3);
   padding: 12px 14px;
-  text-align: left;
+  text-align: start;
   background: var(--bg3);
   border-bottom: 1px solid var(--border);
   white-space: nowrap;
@@ -210,6 +208,8 @@
 }
 .status-active  { background: rgba(5,150,105,.12); color: #059669; }
 .status-expired { background: rgba(220,38,38,.12);  color: #DC2626; }
+.status-expiring { background: rgba(180,83,9,.12); color: var(--amber); }
+.status-archived { background: var(--bg3); color: var(--text3); }
 .del-btn {
   padding: 5px 12px;
   background: transparent;
@@ -234,7 +234,6 @@
   font-family: 'Rubik', sans-serif;
   transition: all .15s;
   white-space: nowrap;
-  margin-right: 6px;
 }
 .refresh-btn:hover { background: var(--surface); }
 .empty-state td {
@@ -272,13 +271,15 @@
 }
 .regen-btn:hover { background: var(--surface); }
 .pw-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.filters { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; font-size: 14px; color: var(--text2); }
+.actions { display: flex; gap: 6px; flex-wrap: wrap; }
 .cr-err {
   font-size: 13px;
   margin-bottom: 10px;
   padding: 8px 12px;
   background: rgba(220,38,38,.06);
   border-radius: var(--rs);
-  border-left: 2px solid #DC2626;
+  border-inline-start: 2px solid #DC2626;
   color: #DC2626;
 }
 
@@ -308,15 +309,14 @@
   <div class="login-box">
     <div class="login-title">
       <div class="adm-lmark"><span>T</span></div>
-      <h1>Tournaments Admin</h1>
+      <h1>ניהול טורנירים</h1>
     </div>
-    <p class="login-sub">Enter the super-admin password to manage tournaments.</p>
+    <p class="login-sub">הזינו את סיסמת מנהל העל כדי לנהל טורנירים.</p>
     <div class="form-row">
-      <input class="form-input" type="password" id="adm-pw" placeholder="Password"
-        onkeydown="if(event.key==='Enter')checkAdminPw()"/>
+      <input class="form-input" type="password" id="adm-pw" placeholder="סיסמה"/>
     </div>
-    <div id="adm-pw-err" class="pw-err h">Incorrect password.</div>
-    <button class="submit-btn" style="margin-top:14px" onclick="checkAdminPw()">Login</button>
+    <div id="adm-pw-err" class="pw-err h">סיסמה שגויה.</div>
+    <button class="submit-btn" style="margin-top:14px" onclick="checkAdminPw()">כניסה</button>
   </div>
 </div>
 
@@ -326,36 +326,48 @@
   <div class="adm-header">
     <div class="adm-header-left">
       <div class="adm-lmark"><span>T</span></div>
-      <span class="adm-header-title">Tournaments Admin</span>
+      <span class="adm-header-title">ניהול טורנירים</span>
     </div>
-    <button class="logout-btn" onclick="adminLogout()">Logout</button>
+    <button class="logout-btn" onclick="adminLogout()">יציאה</button>
   </div>
 
   <div class="adm-wrap">
     <div class="adm-toolbar">
-      <h2>All Tournaments</h2>
+      <h2>כל הטורנירים</h2>
       <div style="display:flex;gap:8px">
-        <button class="refresh-btn" onclick="loadTournaments()">Refresh</button>
-        <button class="new-btn" onclick="openCreateModal()">+ New Tournament</button>
+        <button class="refresh-btn" onclick="loadTournaments()">רענון</button>
+        <button class="new-btn" onclick="openCreateModal()">+ טורניר חדש</button>
       </div>
+    </div>
+
+    <div class="filters">
+      <label>תוקף:
+        <select class="modal-input" id="f-status" onchange="renderTable()" style="flex:none">
+          <option value="">הכול</option>
+          <option value="active">פעיל</option>
+          <option value="expiring">פג תוקף בתוך 7 ימים</option>
+          <option value="expired">פג תוקף</option>
+        </select>
+      </label>
+      <label><input type="checkbox" id="f-archived" onchange="renderTable()"/> הצגת טורנירים בארכיון</label>
     </div>
 
     <div class="t-table-wrap">
       <table class="t-table">
         <thead>
           <tr>
-            <th>Name</th>
-            <th>ID</th>
-            <th>Link</th>
-            <th>Expires</th>
-            <th>Admin PW</th>
-            <th>Master PW</th>
-            <th>Status</th>
-            <th>Actions</th>
+            <th>שם</th>
+            <th>מזהה</th>
+            <th>שלב</th>
+            <th>נרשמים</th>
+            <th>עדכון אחרון</th>
+            <th>תוקף</th>
+            <th>סטטוס</th>
+            <th>פעולות</th>
           </tr>
         </thead>
         <tbody id="t-tbody">
-          <tr class="empty-state"><td colspan="8">Loading…</td></tr>
+          <tr class="empty-state"><td colspan="8">טוען…</td></tr>
         </tbody>
       </table>
     </div>
@@ -365,136 +377,240 @@
 <!-- ══ SPONSORS MODAL ══════════════════════════════════════ -->
 <div class="overlay h" id="sponsors-modal" onclick="if(event.target===this)closeSponsorsModal()">
   <div class="modal modal-wide">
-    <h3>Sponsor Logos</h3>
+    <h3>לוגואים של ספונסרים</h3>
     <p style="font-size:12px;color:var(--text3);margin-bottom:14px;line-height:1.5">
-      Logos appear in a bar at the top of the tournament page.<br>
-      Each row: image URL + display name.
+      הלוגואים מוצגים בפס בראש עמוד הטורניר.<br>
+      בכל שורה: כתובת תמונה (או העלאה) ושם לתצוגה.
     </p>
     <div id="sponsors-list" style="margin-bottom:10px"></div>
-    <button class="regen-btn" onclick="addSponsorRow()" style="padding:7px 16px;width:100%">+ Add Sponsor</button>
+    <div id="sp-err" class="cr-err h"></div>
+    <button class="regen-btn" onclick="addSponsorRow()" style="padding:7px 16px;width:100%">+ הוספת ספונסר</button>
     <div class="modal-btns">
-      <button class="mbtn mbtn-ok" onclick="saveSponsors()">Save</button>
-      <button class="mbtn mbtn-cancel" onclick="closeSponsorsModal()">Cancel</button>
+      <button class="mbtn mbtn-ok" onclick="saveSponsors()">שמירה</button>
+      <button class="mbtn mbtn-cancel" onclick="closeSponsorsModal()">ביטול</button>
     </div>
   </div>
 </div>
 
-<!-- ══ CREATE MODAL ════════════════════════════════════════ -->
-<div class="overlay h" id="create-modal" onclick="if(event.target===this)closeCreateModal()">
+<!-- ══ EDIT MODAL ══════════════════════════════════════════ -->
+<div class="overlay h" id="edit-modal" onclick="if(event.target===this)closeModal('edit-modal')">
   <div class="modal modal-wide">
-    <h3>New Tournament</h3>
+    <h3>עריכת טורניר <span class="t-id" id="ed-id"></span></h3>
 
     <div class="form-group">
-      <label class="form-label">Tournament Name</label>
-      <input class="modal-input" id="cr-name" placeholder="e.g. Summer League 2024"
-        oninput="refreshId()" style="width:100%"/>
+      <label class="form-label">שם הטורניר</label>
+      <input class="modal-input" id="ed-name" style="width:100%"/>
     </div>
 
     <div class="form-group">
-      <label class="form-label">Tournament ID <span style="font-weight:400;letter-spacing:0;text-transform:none;color:var(--text3)">— used in the URL (?t=…)</span></label>
+      <label class="form-label">תוקף — ריק = ללא תוקף</label>
       <div class="id-wrap">
-        <input class="modal-input" id="cr-id" placeholder="auto-generated"/>
-        <button class="regen-btn" onclick="regenId()" title="Generate new ID">&#8635;</button>
+        <input class="modal-input" id="ed-expiry" type="datetime-local"/>
+        <button class="regen-btn" onclick="extendExpiry(7)">+7 ימים</button>
+        <button class="regen-btn" onclick="document.getElementById('ed-expiry').value=''">ניקוי</button>
       </div>
     </div>
 
     <div class="pw-grid">
       <div class="form-group">
-        <label class="form-label">Admin Password</label>
-        <input class="modal-input" id="cr-admin-pw" placeholder="Password" style="width:100%"/>
+        <label class="form-label">סיסמת אדמין חדשה</label>
+        <input class="modal-input" id="ed-admin-pw" placeholder="ריק = ללא שינוי" style="width:100%"/>
       </div>
       <div class="form-group">
-        <label class="form-label">Master Password</label>
-        <input class="modal-input" id="cr-master-pw" placeholder="Password" style="width:100%"/>
+        <label class="form-label">סיסמת מאסטר חדשה</label>
+        <input class="modal-input" id="ed-master-pw" placeholder="ריק = ללא שינוי" style="width:100%"/>
+      </div>
+    </div>
+
+    <div class="actions" style="margin-bottom:6px">
+      <a class="refresh-btn" id="ed-open" target="_blank" rel="noopener" style="text-decoration:none">פתיחת הטורניר ↗</a>
+      <button class="del-btn" id="ed-revert" onclick="revertPhase()">חזרה לשלב ההגדרה</button>
+    </div>
+
+    <div id="ed-err" class="cr-err h"></div>
+
+    <div class="modal-btns">
+      <button class="mbtn mbtn-ok" onclick="saveEdit()">שמירה</button>
+      <button class="mbtn mbtn-cancel" onclick="closeModal('edit-modal')">ביטול</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ DUPLICATE MODAL ═════════════════════════════════════ -->
+<div class="overlay h" id="dup-modal" onclick="if(event.target===this)closeModal('dup-modal')">
+  <div class="modal modal-wide">
+    <h3>שכפול: <span id="dup-src-name"></span></h3>
+    <p style="font-size:12px;color:var(--text3);margin-bottom:14px;line-height:1.5">
+      מועתקים העיצוב, ההגדרות והקטגוריות. הנרשמים, התוצאות והתוקף לא מועתקים.
+    </p>
+
+    <div class="form-group">
+      <label class="form-label">שם הטורניר החדש</label>
+      <input class="modal-input" id="dup-name" oninput="refreshId('dup')" style="width:100%"/>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">מזהה (בכתובת ‎?t=…)</label>
+      <div class="id-wrap">
+        <input class="modal-input" id="dup-id"/>
+        <button class="regen-btn" onclick="regenId('dup')" title="מזהה חדש">&#8635;</button>
+      </div>
+    </div>
+
+    <div class="pw-grid">
+      <div class="form-group">
+        <label class="form-label">סיסמת אדמין</label>
+        <input class="modal-input" id="dup-admin-pw" style="width:100%"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">סיסמת מאסטר</label>
+        <input class="modal-input" id="dup-master-pw" style="width:100%"/>
+      </div>
+    </div>
+
+    <label class="form-group" style="display:block;font-size:14px"><input type="checkbox" id="dup-rosters"/> העתקת רשימות המשתתפים</label>
+
+    <div id="dup-err" class="cr-err h"></div>
+
+    <div class="modal-btns">
+      <button class="mbtn mbtn-ok" onclick="duplicateTournament()">שכפול</button>
+      <button class="mbtn mbtn-cancel" onclick="closeModal('dup-modal')">ביטול</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ CREATE MODAL ════════════════════════════════════════ -->
+<div class="overlay h" id="create-modal" onclick="if(event.target===this)closeModal('create-modal')">
+  <div class="modal modal-wide">
+    <h3>טורניר חדש</h3>
+
+    <div class="form-group">
+      <label class="form-label">שם הטורניר</label>
+      <input class="modal-input" id="cr-name" placeholder="למשל: ליגת הקיץ 2026"
+        oninput="refreshId('cr')" style="width:100%"/>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">מזהה <span style="font-weight:400;letter-spacing:0;text-transform:none;color:var(--text3)">— מופיע בכתובת (‎?t=…)</span></label>
+      <div class="id-wrap">
+        <input class="modal-input" id="cr-id" placeholder="נוצר אוטומטית"/>
+        <button class="regen-btn" onclick="regenId('cr')" title="מזהה חדש">&#8635;</button>
+      </div>
+    </div>
+
+    <div class="pw-grid">
+      <div class="form-group">
+        <label class="form-label">סיסמת אדמין</label>
+        <input class="modal-input" id="cr-admin-pw" placeholder="סיסמה" style="width:100%"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">סיסמת מאסטר</label>
+        <input class="modal-input" id="cr-master-pw" placeholder="סיסמה" style="width:100%"/>
+      </div>
+    </div>
+
+    <div class="pw-grid">
+      <div class="form-group">
+        <label class="form-label">שפה</label>
+        <select class="modal-input" id="cr-lang" style="width:100%">
+          <option value="he">עברית</option>
+          <option value="en">English</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">תאריך האירוע</label>
+        <input class="modal-input" id="cr-date" type="date" style="width:100%"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">מקום</label>
+        <input class="modal-input" id="cr-venue" style="width:100%"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">מחיר</label>
+        <input class="modal-input" id="cr-price" placeholder="למשל: 100 ₪ לזוג" style="width:100%"/>
       </div>
     </div>
 
     <div class="form-group">
-      <label class="form-label">Expiry Date &amp; Time <span style="font-weight:400;letter-spacing:0;text-transform:none;color:var(--text3)">— optional</span></label>
+      <label class="form-label">תוקף <span style="font-weight:400;letter-spacing:0;text-transform:none;color:var(--text3)">— לא חובה</span></label>
       <input class="modal-input" id="cr-expiry" type="datetime-local" style="width:100%"/>
     </div>
 
     <div class="form-group">
-      <label class="form-label">Copy From <span style="font-weight:400;letter-spacing:0;text-transform:none;color:var(--text3)">— copies design (colors, logo, sponsors) + categories config</span></label>
-      <select class="modal-input" id="cr-template" style="width:100%">
-        <option value="">Default (purple theme)</option>
-      </select>
+      <label class="form-label">העתקה מ־ <span style="font-weight:400;letter-spacing:0;text-transform:none;color:var(--text3)">— מעתיק עיצוב (צבעים, לוגו, ספונסרים) והגדרות קטגוריות</span></label>
+      <select class="modal-input" id="cr-template" style="width:100%"></select>
     </div>
 
     <div id="cr-err" class="cr-err h"></div>
 
     <div class="modal-btns">
-      <button class="mbtn mbtn-ok" onclick="createTournament()">Create</button>
-      <button class="mbtn mbtn-cancel" onclick="closeCreateModal()">Cancel</button>
+      <button class="mbtn mbtn-ok" onclick="createTournament()">יצירה</button>
+      <button class="mbtn mbtn-cancel" onclick="closeModal('create-modal')">ביטול</button>
     </div>
   </div>
 </div>
 
 <script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
+import { db, sha256, escH as esc, doc, getDoc, setDoc, updateDoc, serverTimestamp } from './common.js';
+import { pickImage } from './uploader.js';
 import {
-  getFirestore, collection, getDocs, doc, getDoc, setDoc, deleteDoc, updateDoc,
-  serverTimestamp, Timestamp
+  collection, getDocs, getCountFromServer, deleteField, Timestamp
 } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
 
-// ── Config ──────────────────────────────────────────────────
-const BASE_URL = 'https://albealrod.github.io/tournaments/';
-
-const firebaseConfig = {
-  apiKey: "AIzaSyA-rPlg0Oau16QcTjD20hDfkyveRSrD8I0",
-  authDomain: "tournaments-33619.firebaseapp.com",
-  projectId: "tournaments-33619",
-  storageBucket: "tournaments-33619.firebasestorage.app",
-  messagingSenderId: "409384565600",
-  appId: "1:409384565600:web:61bd55676343d6035abc05"
-};
-const fbApp = initializeApp(firebaseConfig);
-const db    = getFirestore(fbApp);
+const BASE_URL = new URL('./', location.href).href;
+const DAY = 864e5;
+const PHASES = { registration: 'הרשמה', built: 'בנוי', tournament: 'בטורניר' };
+const STATUS = { active: 'פעיל', expiring: 'פג בקרוב', expired: 'פג תוקף' };
 
 let tournaments = [];
+let regCounts = {};
+const $ = id => document.getElementById(id);
+const linkOf = id => BASE_URL + '?t=' + encodeURIComponent(id);
 
 // ── Auth ────────────────────────────────────────────────────
-async function sha256(str) {
-  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
-  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join('');
-}
-
 async function checkAdminPw() {
-  const val = document.getElementById('adm-pw').value;
+  const val = $('adm-pw').value;
   const [snap, hashed] = await Promise.all([
     getDoc(doc(db, 'config', 'superAdmin')),
     sha256(val)
   ]);
   const expected = snap.exists() ? snap.data().password : null;
   if (expected && hashed === expected) {
-    document.getElementById('screen-login').style.display = 'none';
-    document.getElementById('screen-app').style.display   = 'block';
-    document.getElementById('adm-pw').value = '';
+    $('screen-login').style.display = 'none';
+    $('screen-app').style.display   = 'block';
+    $('adm-pw').value = '';
     loadTournaments();
   } else {
-    document.getElementById('adm-pw-err').classList.remove('h');
-    document.getElementById('adm-pw').value = '';
-    document.getElementById('adm-pw').focus();
+    $('adm-pw-err').classList.remove('h');
+    $('adm-pw').value = '';
+    $('adm-pw').focus();
   }
 }
 
 function adminLogout() {
-  document.getElementById('screen-app').style.display   = 'none';
-  document.getElementById('screen-login').style.display = '';
-  document.getElementById('adm-pw-err').classList.add('h');
-  setTimeout(() => document.getElementById('adm-pw').focus(), 80);
+  $('screen-app').style.display   = 'none';
+  $('screen-login').style.display = '';
+  $('adm-pw-err').classList.add('h');
+  setTimeout(() => $('adm-pw').focus(), 80);
 }
 
 // ── Data ────────────────────────────────────────────────────
 async function loadTournaments() {
-  const tbody = document.getElementById('t-tbody');
-  tbody.innerHTML = '<tr class="empty-state"><td colspan="8">Loading…</td></tr>';
+  $('t-tbody').innerHTML = '<tr class="empty-state"><td colspan="8">טוען…</td></tr>';
   try {
     const snap = await getDocs(collection(db, 'tournaments'));
     tournaments = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    regCounts = {};
+    renderTable();
+    await Promise.all(tournaments.map(async t => {
+      try {
+        const c = await getCountFromServer(collection(db, 'tournaments', t.id, 'registrations'));
+        regCounts[t.id] = c.data().count;
+      } catch(_) { regCounts[t.id] = '—'; }
+    }));
     renderTable();
   } catch(e) {
-    tbody.innerHTML = `<tr class="empty-state"><td colspan="8" style="color:#DC2626">Error: ${esc(e.message)}</td></tr>`;
+    $('t-tbody').innerHTML = `<tr class="empty-state"><td colspan="8" style="color:#DC2626">שגיאה: ${esc(e.message)}</td></tr>`;
   }
 }
 
@@ -504,80 +620,54 @@ function expiryMs(t) {
   return exp.seconds ? exp.seconds * 1000 : 0;
 }
 
-function formatExpiry(t) {
+function expiryState(t) {
   const ms = expiryMs(t);
-  if (ms === null) return '—';
-  const d = new Date(ms);
-  return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  if (ms === null) return 'active';
+  const left = ms - Date.now();
+  return left < 0 ? 'expired' : left < 7 * DAY ? 'expiring' : 'active';
 }
 
-function statusHtml(t) {
-  const ms = expiryMs(t);
-  if (ms === null || Date.now() <= ms) return '<span class="status-pill status-active">Active</span>';
-  return '<span class="status-pill status-expired">Expired</span>';
-}
+const fmtDate = ms => {
+  const d = new Date(ms);
+  return d.toLocaleDateString('he-IL') + ' ' + d.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' });
+};
 
 function renderTable() {
-  const tbody = document.getElementById('t-tbody');
-  if (!tournaments.length) {
-    tbody.innerHTML = '<tr class="empty-state"><td colspan="8">No tournaments yet. Create one above.</td></tr>';
+  const tbody = $('t-tbody');
+  const status = $('f-status').value, showArchived = $('f-archived').checked;
+  const list = tournaments
+    .filter(t => (showArchived || !t.meta?.archived) && (!status || expiryState(t) === status))
+    .sort((a, b) => (a.meta?.name || a.id).localeCompare(b.meta?.name || b.id));
+  if (!list.length) {
+    tbody.innerHTML = '<tr class="empty-state"><td colspan="8">אין טורנירים להצגה.</td></tr>';
     return;
   }
-  const sorted = [...tournaments].sort((a, b) =>
-    (a.meta?.name || a.id).localeCompare(b.meta?.name || b.id)
-  );
-  tbody.innerHTML = sorted.map(t => {
-    const name     = t.meta?.name      || '(unnamed)';
-    const adminPw  = t.meta?.adminPassword  ? '••••' : '—';
-    const masterPw = t.meta?.masterPassword ? '••••' : '—';
-    const link     = BASE_URL + '?t=' + t.id;
+  tbody.innerHTML = list.map(t => {
+    const id = esc(t.id), st = expiryState(t), archived = !!t.meta?.archived;
+    const exp = expiryMs(t), upd = t.updatedAt?.toMillis?.();
     return `<tr>
-      <td class="t-name">${esc(name)}</td>
-      <td><span class="t-id">${esc(t.id)}</span></td>
-      <td><a class="t-link" href="${esc(link)}" target="_blank" rel="noopener" title="${esc(link)}">${esc(link)}</a></td>
-      <td class="t-expiry">${formatExpiry(t)}</td>
-      <td class="t-pw">${esc(adminPw)}</td>
-      <td class="t-pw">${esc(masterPw)}</td>
-      <td>${statusHtml(t)}</td>
-      <td style="white-space:nowrap;display:flex;gap:6px">
-        <button class="refresh-btn" onclick="openSponsorsModal('${esc(t.id)}')">Sponsors</button>
-        <button class="del-btn" onclick="deleteTournament('${esc(t.id)}')">Delete</button>
-      </td>
+      <td class="t-name"><a class="t-link" style="font-size:13px" href="${esc(linkOf(t.id))}" target="_blank" rel="noopener">${esc(t.meta?.name || '(ללא שם)')}</a></td>
+      <td><span class="t-id">${id}</span></td>
+      <td>${esc(PHASES[t.meta?.phase || 'registration'] || t.meta?.phase)}</td>
+      <td>${regCounts[t.id] ?? '…'}</td>
+      <td class="t-expiry">${upd ? fmtDate(upd) : '—'}</td>
+      <td class="t-expiry">${exp === null ? '—' : fmtDate(exp)}</td>
+      <td>${archived ? '<span class="status-pill status-archived">בארכיון</span>' : `<span class="status-pill status-${st}">${STATUS[st]}</span>`}</td>
+      <td><div class="actions">
+        <button class="refresh-btn" onclick="openEditModal('${id}')">עריכה</button>
+        <button class="refresh-btn" onclick="openSponsorsModal('${id}')">ספונסרים</button>
+        <button class="refresh-btn" onclick="openDupModal('${id}')">שכפול</button>
+        <button class="del-btn" onclick="setArchived('${id}', ${!archived})">${archived ? 'שחזור' : 'העברה לארכיון'}</button>
+      </div></td>
     </tr>`;
   }).join('');
 }
 
-function esc(s) {
-  return String(s)
-    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
-    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
+function closeModal(id) { $(id).classList.add('h'); }
 
-// ── Create ──────────────────────────────────────────────────
-function openCreateModal() {
-  document.getElementById('cr-name').value      = '';
-  document.getElementById('cr-id').value        = '';
-  document.getElementById('cr-admin-pw').value  = '';
-  document.getElementById('cr-master-pw').value = '';
-  document.getElementById('cr-expiry').value    = '';
-  document.getElementById('cr-err').classList.add('h');
-
-  // Populate "Copy Design From" dropdown with existing tournaments
-  const sel = document.getElementById('cr-template');
-  sel.innerHTML = '<option value="">Default (purple theme)</option>' +
-    '<option value="__queen__">⭐ QUEEN — Futsilina ranking format</option>' +
-    [...tournaments]
-      .sort((a, b) => (a.meta?.name || a.id).localeCompare(b.meta?.name || b.id))
-      .map(t => `<option value="${esc(t.id)}">${esc(t.meta?.name || t.id)}</option>`)
-      .join('');
-  sel.value = '';
-
-  document.getElementById('create-modal').classList.remove('h');
-  setTimeout(() => document.getElementById('cr-name').focus(), 80);
-}
-
-function closeCreateModal() {
-  document.getElementById('create-modal').classList.add('h');
+function showErr(el, msg) {
+  el.textContent = msg;
+  el.classList.remove('h');
 }
 
 function generateId(name) {
@@ -590,48 +680,63 @@ function generateId(name) {
   return slug ? `${slug}-${suffix}` : `tournament-${suffix}`;
 }
 
-function refreshId() {
-  const name = document.getElementById('cr-name').value.trim();
-  if (name) document.getElementById('cr-id').value = generateId(name);
+function refreshId(p) {
+  const name = $(p + '-name').value.trim();
+  if (name) $(p + '-id').value = generateId(name);
 }
 
-function regenId() {
-  const name = document.getElementById('cr-name').value.trim();
-  document.getElementById('cr-id').value = generateId(name);
+function regenId(p) {
+  $(p + '-id').value = generateId($(p + '-name').value.trim());
+}
+
+// Validates the create / duplicate form (prefix p); returns null after showing the error.
+async function readNewForm(p) {
+  const name = $(p + '-name').value.trim(), tId = $(p + '-id').value.trim();
+  const adminPw = $(p + '-admin-pw').value.trim(), masterPw = $(p + '-master-pw').value.trim();
+  const errEl = $(p + '-err');
+  const fail = msg => { showErr(errEl, msg); return null; };
+  errEl.classList.add('h');
+  if (!name) return fail('נדרש שם לטורניר.');
+  if (!tId)  return fail('נדרש מזהה.');
+  if (!/^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/.test(tId))
+    return fail('המזהה יכול להכיל רק אותיות לועזיות קטנות, ספרות ומקפים (לא בהתחלה או בסוף).');
+  if (!adminPw)  return fail('נדרשת סיסמת אדמין.');
+  if (!masterPw) return fail('נדרשת סיסמת מאסטר.');
+  if (tournaments.some(t => t.id === tId)) return fail(`המזהה "${tId}" כבר תפוס — בחרו מזהה אחר.`);
+  return { name, tId, adminPassword: await sha256(adminPw), masterPassword: await sha256(masterPw), errEl };
+}
+
+// ── Create ──────────────────────────────────────────────────
+function openCreateModal() {
+  for (const f of ['name', 'id', 'admin-pw', 'master-pw', 'expiry', 'date', 'venue', 'price']) $('cr-' + f).value = '';
+  $('cr-lang').value = 'he';
+  $('cr-err').classList.add('h');
+  $('cr-template').innerHTML = '<option value="">ברירת מחדל (ערכת צבעים סגולה)</option>' +
+    '<option value="__queen__">פורמט Queen (4 בתים, 3 עולים מכל בית)</option>' +
+    [...tournaments]
+      .sort((a, b) => (a.meta?.name || a.id).localeCompare(b.meta?.name || b.id))
+      .map(t => `<option value="${esc(t.id)}">${esc(t.meta?.name || t.id)}</option>`)
+      .join('');
+  $('create-modal').classList.remove('h');
+  setTimeout(() => $('cr-name').focus(), 80);
 }
 
 async function createTournament() {
-  const name     = document.getElementById('cr-name').value.trim();
-  const tId      = document.getElementById('cr-id').value.trim();
-  const adminPw  = document.getElementById('cr-admin-pw').value.trim();
-  const masterPw = document.getElementById('cr-master-pw').value.trim();
-  const expiryVal= document.getElementById('cr-expiry').value;
-  const errEl    = document.getElementById('cr-err');
-  errEl.classList.add('h');
-
-  if (!name)     { showErr(errEl, 'Tournament name is required.');   return; }
-  if (!tId)      { showErr(errEl, 'Tournament ID is required.');     return; }
-  if (!/^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/.test(tId)) {
-    showErr(errEl, 'ID must contain only lowercase letters, numbers, and hyphens (no leading/trailing hyphens).');
-    return;
-  }
-  if (!adminPw)  { showErr(errEl, 'Admin password is required.');   return; }
-  if (!masterPw) { showErr(errEl, 'Master password is required.');  return; }
-
-  // Check ID not already in use
-  if (tournaments.some(t => t.id === tId)) {
-    showErr(errEl, `ID "${tId}" is already taken — choose a different one.`);
-    return;
-  }
-
-  const templateId = document.getElementById('cr-template').value;
+  const f = await readNewForm('cr');
+  if (!f) return;
+  const expiryVal = $('cr-expiry').value;
+  const templateId = $('cr-template').value;
   const isQueen = templateId === '__queen__';
   const tpl = (templateId && !isQueen) ? tournaments.find(t => t.id === templateId) : null;
 
   const metaObj = {
-    name,
-    adminPassword:  await sha256(adminPw),
-    masterPassword: await sha256(masterPw),
+    name: f.name,
+    adminPassword:  f.adminPassword,
+    masterPassword: f.masterPassword,
+    lang:           $('cr-lang').value,
+    eventDate:      $('cr-date').value,
+    venue:          $('cr-venue').value.trim(),
+    price:          $('cr-price').value.trim(),
     logoUrl:        tpl?.meta?.logoUrl        || '',
     primaryColor:   isQueen ? '#EC0F8C' : (tpl?.meta?.primaryColor   || '#652d92'),
     secondaryColor: isQueen ? '#F84FB0' : (tpl?.meta?.secondaryColor || '#7a3fb0'),
@@ -645,11 +750,9 @@ async function createTournament() {
     regOpen:        true,
     showRegistered: true,
   };
-  if (expiryVal) {
-    metaObj.expiresAt = Timestamp.fromDate(new Date(expiryVal));
-  }
+  if (expiryVal) metaObj.expiresAt = Timestamp.fromDate(new Date(expiryVal));
 
-  // QUEEN ranking preset: single category, snake seeding, custom KO, poster points.
+  // Queen preset: single category, snake seeding, custom KO, poster points.
   const queenCats = [{
     id:'queen', name:'QUEEN', color:'#EC0F8C',
     cfg:{ courts:4, gameDur:15, breakDur:0, numGroups:4, advPerGroup:3,
@@ -660,122 +763,197 @@ async function createTournament() {
   }];
 
   try {
-    await setDoc(doc(db, 'tournaments', tId), {
+    await setDoc(doc(db, 'tournaments', f.tId), {
       meta:       metaObj,
       categories: isQueen ? queenCats : (tpl?.categories || []),
       state:      {},
       updatedAt:  serverTimestamp()
     });
-    closeCreateModal();
+    closeModal('create-modal');
     await loadTournaments();
   } catch(e) {
-    showErr(errEl, 'Error creating tournament: ' + e.message);
+    showErr(f.errEl, 'שגיאה ביצירת הטורניר: ' + e.message);
   }
 }
 
-function showErr(el, msg) {
-  el.textContent = msg;
-  el.classList.remove('h');
-}
+// ── Duplicate ───────────────────────────────────────────────
+let dupSrcId = null;
 
-// ── Revert to Built ─────────────────────────────────────────
-async function revertPhase(tId) {
+function openDupModal(tId) {
+  dupSrcId = tId;
   const t = tournaments.find(x => x.id === tId);
-  const name = t?.meta?.name || tId;
-  const currentPhase = t?.meta?.phase || 'registration';
-  if (currentPhase !== 'tournament') {
-    alert(`"${name}" is not in active tournament phase (current: ${currentPhase}).`);
-    return;
+  $('dup-src-name').textContent = t?.meta?.name || tId;
+  $('dup-name').value = (t?.meta?.name || tId) + ' (עותק)';
+  $('dup-admin-pw').value = $('dup-master-pw').value = '';
+  $('dup-rosters').checked = false;
+  $('dup-err').classList.add('h');
+  regenId('dup');
+  $('dup-modal').classList.remove('h');
+}
+
+async function duplicateTournament() {
+  const f = await readNewForm('dup');
+  if (!f) return;
+  const src = tournaments.find(x => x.id === dupSrcId);
+  const meta = { ...src.meta };
+  delete meta.expiresAt;
+  delete meta.archived;
+  const state = {};
+  if ($('dup-rosters').checked) {
+    for (const [cid, cs] of Object.entries(src.state || {}))
+      state[cid] = { roster: cs.roster || [], groups: [], sched: [], ko: {} };
   }
-  if (!confirm(`Revert "${name}" back to built phase?\n\nThis re-enables settings and roster editing. Scores already entered will remain.`)) return;
   try {
-    await updateDoc(doc(db, 'tournaments', tId), { 'meta.phase': 'built', updatedAt: serverTimestamp() });
+    await setDoc(doc(db, 'tournaments', f.tId), {
+      meta: { ...meta, name: f.name, adminPassword: f.adminPassword, masterPassword: f.masterPassword, phase: 'registration' },
+      categories: src.categories || [],
+      state,
+      updatedAt: serverTimestamp()
+    });
+    closeModal('dup-modal');
     await loadTournaments();
   } catch(e) {
-    alert('Error reverting: ' + e.message);
+    showErr(f.errEl, 'שגיאה בשכפול: ' + e.message);
   }
 }
 
-// ── Delete ──────────────────────────────────────────────────
-async function deleteTournament(tId) {
-  const t    = tournaments.find(x => x.id === tId);
-  const name = t?.meta?.name || tId;
-  if (!confirm(`Delete "${name}" (${tId})?\n\nThis cannot be undone. Subcollections (registrations) must be removed manually from the Firestore console.`)) return;
+// ── Archive ─────────────────────────────────────────────────
+async function setArchived(tId, archived) {
   try {
-    await deleteDoc(doc(db, 'tournaments', tId));
+    await updateDoc(doc(db, 'tournaments', tId), { 'meta.archived': archived });
     await loadTournaments();
   } catch(e) {
-    alert('Error deleting: ' + e.message);
+    alert('שגיאה: ' + e.message);
   }
 }
 
-// ── Sponsors management ──────────────────────────────────────
+// ── Edit ────────────────────────────────────────────────────
+let editId = null;
+
+const toLocalInput = ms => new Date(ms - new Date(ms).getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+
+function openEditModal(tId) {
+  editId = tId;
+  const t = tournaments.find(x => x.id === tId);
+  const exp = expiryMs(t);
+  $('ed-id').textContent = tId;
+  $('ed-name').value = t.meta?.name || '';
+  $('ed-expiry').value = exp ? toLocalInput(exp) : '';
+  $('ed-admin-pw').value = $('ed-master-pw').value = '';
+  $('ed-open').href = linkOf(tId);
+  $('ed-revert').classList.toggle('h', t.meta?.phase !== 'tournament');
+  $('ed-err').classList.add('h');
+  $('edit-modal').classList.remove('h');
+}
+
+function extendExpiry(days) {
+  const cur = $('ed-expiry').value ? new Date($('ed-expiry').value).getTime() : 0;
+  $('ed-expiry').value = toLocalInput(Math.max(cur, Date.now()) + days * DAY);
+}
+
+async function saveEdit() {
+  const name = $('ed-name').value.trim(), expiry = $('ed-expiry').value;
+  const adminPw = $('ed-admin-pw').value.trim(), masterPw = $('ed-master-pw').value.trim();
+  if (!name) return showErr($('ed-err'), 'נדרש שם לטורניר.');
+  const upd = {
+    'meta.name': name,
+    'meta.expiresAt': expiry ? Timestamp.fromDate(new Date(expiry)) : deleteField(),
+    updatedAt: serverTimestamp()
+  };
+  if (adminPw)  upd['meta.adminPassword']  = await sha256(adminPw);
+  if (masterPw) upd['meta.masterPassword'] = await sha256(masterPw);
+  try {
+    await updateDoc(doc(db, 'tournaments', editId), upd);
+    closeModal('edit-modal');
+    await loadTournaments();
+  } catch(e) {
+    showErr($('ed-err'), 'שגיאה בשמירה: ' + e.message);
+  }
+}
+
+// tournament → built: settings and rosters become editable again; scores stay.
+async function revertPhase() {
+  const t = tournaments.find(x => x.id === editId);
+  const name = t.meta?.name || editId;
+  const typed = prompt(`החזרת "${name}" לשלב ההגדרה מאפשרת שוב לערוך הגדרות ומשתתפים. התוצאות שהוזנו נשמרות.\n\nלאישור, הקלידו את שם הטורניר:`);
+  if (typed === null) return;
+  if (typed.trim() !== name) return alert('השם לא תואם — לא בוצע שינוי.');
+  try {
+    await updateDoc(doc(db, 'tournaments', editId), { 'meta.phase': 'built', updatedAt: serverTimestamp() });
+    closeModal('edit-modal');
+    await loadTournaments();
+  } catch(e) {
+    alert('שגיאה: ' + e.message);
+  }
+}
+
+// ── Sponsors ────────────────────────────────────────────────
 let editingSponsorTId = null;
 
 function openSponsorsModal(tId) {
   editingSponsorTId = tId;
   const t = tournaments.find(x => x.id === tId);
   const logos = t?.meta?.sponsorLogos || [];
-  const container = document.getElementById('sponsors-list');
-  container.innerHTML = '';
-  const rows = logos.length ? logos : [{ url: '', alt: '' }];
-  rows.forEach(l => addSponsorRow(l.url, l.alt));
-  document.getElementById('sponsors-modal').classList.remove('h');
+  $('sponsors-list').innerHTML = '';
+  $('sp-err').classList.add('h');
+  (logos.length ? logos : [{ url: '', alt: '' }]).forEach(l => addSponsorRow(l.url, l.alt));
+  $('sponsors-modal').classList.remove('h');
 }
 
 function closeSponsorsModal() {
-  document.getElementById('sponsors-modal').classList.add('h');
+  closeModal('sponsors-modal');
   editingSponsorTId = null;
 }
 
 function addSponsorRow(url='', alt='') {
-  const container = document.getElementById('sponsors-list');
   const div = document.createElement('div');
   div.className = 'sponsor-row';
   div.style.cssText = 'display:flex;gap:8px;margin-bottom:8px;align-items:center';
   div.innerHTML = `
-    <input class="modal-input" style="flex:3;min-width:0" placeholder="Logo URL https://…" value="${esc(url)}"/>
-    <input class="modal-input" style="flex:2;min-width:0" placeholder="Name (e.g. Rip Curl)" value="${esc(alt)}"/>
+    <input class="modal-input" style="flex:3;min-width:0" placeholder="כתובת לוגו https://…" value="${esc(url)}"/>
+    <button class="regen-btn" style="align-self:stretch">העלאה</button>
+    <input class="modal-input" style="flex:2;min-width:0" placeholder="שם (למשל Rip Curl)" value="${esc(alt)}"/>
     <button onclick="this.parentElement.remove()"
       style="padding:6px 10px;border:1px solid rgba(220,38,38,.3);background:transparent;
       border-radius:var(--rs);cursor:pointer;color:#DC2626;flex-shrink:0;font-size:14px">✕</button>`;
-  container.appendChild(div);
-}
-
-function collectSponsorRows() {
-  return [...document.querySelectorAll('#sponsors-list .sponsor-row')].map(row => {
-    const inputs = row.querySelectorAll('input');
-    return { url: inputs[0]?.value.trim()||'', alt: inputs[1]?.value.trim()||'' };
-  }).filter(l => l.url || l.alt);
+  div.querySelector('.regen-btn').onclick = async () => {
+    try {
+      div.querySelector('input').value = await pickImage({ maxBytes: 25000 });
+    } catch(e) {
+      if (!e.cancelled) showErr($('sp-err'), e.message);
+    }
+  };
+  $('sponsors-list').appendChild(div);
 }
 
 async function saveSponsors() {
   if (!editingSponsorTId) return;
-  const logos = collectSponsorRows();
+  const logos = [...document.querySelectorAll('#sponsors-list .sponsor-row')].map(row => {
+    const inputs = row.querySelectorAll('input');
+    return { url: inputs[0].value.trim(), alt: inputs[1].value.trim() };
+  }).filter(l => l.url || l.alt);
   try {
     await updateDoc(doc(db, 'tournaments', editingSponsorTId), { 'meta.sponsorLogos': logos });
     const t = tournaments.find(x => x.id === editingSponsorTId);
     if (t) { if (!t.meta) t.meta = {}; t.meta.sponsorLogos = logos; }
     closeSponsorsModal();
   } catch(e) {
-    alert('Error saving sponsors: ' + e.message);
+    showErr($('sp-err'), 'שגיאה בשמירת הספונסרים: ' + e.message);
   }
 }
 
-// ── Expose globals ──────────────────────────────────────────
 Object.assign(window, {
-  checkAdminPw, adminLogout,
-  openCreateModal, closeCreateModal,
-  createTournament, deleteTournament,
-  openSponsorsModal, closeSponsorsModal, addSponsorRow, saveSponsors,
-  loadTournaments, refreshId, regenId
+  checkAdminPw, adminLogout, loadTournaments, renderTable, closeModal,
+  openCreateModal, createTournament, refreshId, regenId,
+  openDupModal, duplicateTournament, setArchived,
+  openEditModal, extendExpiry, saveEdit, revertPhase,
+  openSponsorsModal, closeSponsorsModal, addSponsorRow, saveSponsors
 });
 
-// ── Boot ────────────────────────────────────────────────────
-document.getElementById('adm-pw').addEventListener('keydown', e => {
+$('adm-pw').addEventListener('keydown', e => {
   if (e.key === 'Enter') checkAdminPw();
 });
-document.getElementById('adm-pw').focus();
+$('adm-pw').focus();
 </script>
 </body>
 </html>
