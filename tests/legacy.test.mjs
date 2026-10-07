@@ -48,8 +48,7 @@ describe('dn / normName', () => {
     assert.equal(L.dn('תום ומוריאל'), 'תום מוריאל');
     assert.equal(L.dn('A1'), 'A1');
     assert.equal(L.dn('Winner of X'), 'Winner of X');
-    // Current app.js also strips inside "p1 / p2" names (WORKPLAN decision changes this later).
-    assert.equal(L.dn('דנה / ורד'), 'דנה / רד');
+    assert.equal(L.dn('דנה / ורד'), 'דנה / ורד');
   });
   test('normName treats "/" as a space and lowercases', () => {
     assert.equal(L.normName('Tom / Muriel'), 'tom muriel');

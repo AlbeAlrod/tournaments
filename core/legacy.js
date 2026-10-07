@@ -19,6 +19,7 @@
 // from app.js:62
 export const dn = s => {
   if (!s || s.startsWith('Winner') || /^[A-Z]\d+$/.test(s)) return s;
+  if (s.includes('/')) return s;
   return s.replace(/\sו([^\s])/g, ' $1');
 };
 

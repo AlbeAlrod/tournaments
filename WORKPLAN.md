@@ -46,3 +46,7 @@ Never change firestore.rules in phases 1–4.
 | F Admin & tools | admin.html, bracket.html, print-courts.html, king-of-court.html, ranking.html, validate.html |
 | G League | league*.js, league.html, league.css, league-print.html |
 | B Security (phase 5) | firestore.rules, storage.rules, functions/, common.js, SECURITY.md |
+
+## Code style (owner's rule)
+Minimal, to-the-point code. No code that wasn't asked for, no needless abstraction layers,
+no comments stating the obvious. Prefer the standard library / platform APIs.
