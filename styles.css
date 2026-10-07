@@ -975,3 +975,10 @@ body:lang(he) { letter-spacing: 0; }
 .gc.invalid .si { border-color: var(--red); }
 .d-reg-mine-row{padding-top:10px;margin-top:10px;border-top:1px solid var(--border)}
 .d-reg-mine-row .status-badge{display:inline-block;margin-top:4px}
+
+/* App confirm dialog + toast */
+.confirm-msg { font-size: var(--fs-md); line-height: 1.6; color: var(--text); white-space: pre-line; unicode-bidi: plaintext; }
+.toast { position: fixed; inset-inline: 16px; bottom: 24px; z-index: 120; max-width: 420px; margin-inline: auto;
+  padding: 12px 16px; border-radius: var(--r); background: var(--text); color: var(--bg2);
+  font-size: var(--fs-sm); text-align: center; box-shadow: var(--shadow-md); }
+.toast.h { display: none; }

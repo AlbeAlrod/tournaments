@@ -659,13 +659,14 @@ function renderMyReg() {
 
 async function cancelMyRegistration(id) {
   if (!getMyRegs().includes(id)) return;
-  if (!confirm(t('reg.confirmCancel'))) return;
+  if (!await askConfirm(t('reg.confirmCancel'), t('reg.cancelReg'))) return;
   try {
     await deleteDoc(doc(db, 'tournaments', tId, 'registrations', id));
     setMyRegs(getMyRegs().filter(x => x !== id));
     lastReceipt = null;
     registrations = registrations.filter(r => r.id !== id);
     renderRegisterPage();
+    toast(t('reg.cancelled'));
   } catch(e) { alert(t('errors.cancelFailed')); }
 }
 
@@ -768,11 +769,12 @@ async function submitRegistration() {
   }
 }
 
+// status: 'approved' | 'pending' | 'rejected' (soft, stays listed) | 'deleted' (hard delete).
 async function setRegStatus(id, status) {
   if (!admin) return;
   try {
-    if (status === 'rejected') {
-      if (!confirm(t('admin.confirmDelete'))) return;
+    if (status === 'deleted') {
+      if (!await askConfirm(t('admin.confirmDelete'), t('common.delete'))) return;
       // Hard delete — also remove from build roster if present
       const reg = registrations.find(r => r.id === id);
       if (reg) {
@@ -938,7 +940,8 @@ function renderRegistrations() {
       <div class="reg-actions">
         ${r.status !== 'approved' ? `<button class="reg-btn approve" onclick="setRegStatus('${r.id}','approved')">${t('admin.approve')}</button>` : ''}
         ${r.status === 'approved'  ? `<button class="reg-btn" onclick="setRegStatus('${r.id}','pending')">${t('admin.undo')}</button>` : ''}
-        <button class="reg-btn reject" onclick="setRegStatus('${r.id}','rejected')" title="${t('admin.deleteTitle')}">${t('admin.delete')}</button>
+        ${r.status !== 'rejected'  ? `<button class="reg-btn reject" onclick="setRegStatus('${r.id}','rejected')">${t('admin.reject')}</button>` : ''}
+        <button class="reg-btn reject" onclick="setRegStatus('${r.id}','deleted')" title="${t('admin.deleteTitle')}">${t('admin.delete')}</button>
       </div>
     </div>`;
   }).join('');
@@ -1061,6 +1064,40 @@ function renderRegisterPage() {
   renderRegErrors();
 }
 
+// ============ DIALOG / TOAST ============
+// The app's own confirm dialog (replaces window.confirm). Resolves true on OK.
+function askConfirm(msg, okLabel) {
+  const m = document.getElementById('confirm-modal');
+  const ok = document.getElementById('confirm-ok'), no = document.getElementById('confirm-cancel');
+  document.getElementById('confirm-msg').textContent = msg;
+  ok.textContent = okLabel || t('common.confirm');
+  const back = document.activeElement;
+  m.classList.remove('h');
+  no.focus();
+  return new Promise(resolve => {
+    const done = v => {
+      m.classList.add('h');
+      ok.onclick = no.onclick = m.onclick = m.onkeydown = null;
+      back?.focus?.();
+      resolve(v);
+    };
+    ok.onclick = () => done(true);
+    no.onclick = () => done(false);
+    m.onclick = e => { if (e.target === m) done(false); };
+    m.onkeydown = e => { if (e.key === 'Escape') done(false); };
+  });
+}
+
+let toastTimer = null;
+function toast(msg) {
+  const el = document.getElementById('toast');
+  if (!el) return;
+  el.textContent = msg;
+  el.classList.remove('h');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.add('h'), 3500);
+}
+
 // ============ BUILD PAGE ============
 let dragSrc = null;
 let dragSrcCat = null;
@@ -1159,7 +1196,7 @@ function editBuildItem(catId, idx) {
 async function deleteBuildItem(catId, idx) {
   if (!admin || (meta.phase !== 'registration' && meta.phase !== 'built')) return;
   const name = state[catId]?.roster[idx];
-  if (!confirm(name ? t('build.confirmRemove', { name }) : t('build.confirmRemoveAnon'))) return;
+  if (!await askConfirm(name ? t('build.confirmRemove', { name }) : t('build.confirmRemoveAnon'), t('common.remove'))) return;
   if (name) {
     const parts = name.split(' / ').map(s => s.trim());
     const p1 = parts[0], p2 = parts[1] || '';
@@ -2012,12 +2049,12 @@ function saveEdit() {
   if (rIdx >= 0) state[catId].roster[rIdx] = name;
   closeEdit(); pushToCloud(); renderStandings(); renderScheduleContent(); renderBracket();
 }
-function deleteTeam(catId, gi, ti) {
+async function deleteTeam(catId, gi, ti) {
   if (!superAdmin || (meta.phase !== 'registration' && meta.phase !== 'built')) return;
   const cs  = state[catId];
   const grp = cs.groups[gi];
   if (grp.teams.length<=1) { alert(t('errors.groupMin')); return; }
-  if (!confirm(t('stand.confirmRemove', { name: grp.teams[ti], group: grp.name }))) return;
+  if (!await askConfirm(t('stand.confirmRemove', { name: grp.teams[ti], group: grp.name }), t('common.remove'))) return;
   grp.teams.splice(ti,1);
   // Coordinated mode: re-run the whole shared-grid scheduler so the board updates itself.
   if (meta.coordinated) { generateCoordinatedSchedule(); pushToCloud(); renderAll(); return; }
@@ -3314,17 +3351,17 @@ function addCategory() {
   state[id]={ roster:[], groups:[], sched:[], ko:[] };
   pushToCloud(); renderSettings();
 }
-function deleteCategory(ci) {
+async function deleteCategory(ci) {
   if (meta.phase === 'tournament') { alert(t('settings.cantDeleteCat')); return; }
-  if (!confirm(t('settings.confirmDeleteCat'))) return;
+  if (!await askConfirm(t('settings.confirmDeleteCat'), t('common.delete'))) return;
   const id=categories[ci].id;
   categories.splice(ci,1);
   delete state[id];
   pushToCloud(); renderSettings(); renderAll();
 }
 
-function resetAllScores() {
-  if (!superAdmin||!confirm(t('settings.confirmResetScores'))) return;
+async function resetAllScores() {
+  if (!superAdmin||!await askConfirm(t('settings.confirmResetScores'), t('common.reset'))) return;
   unsavedGames.clear();
   categories.forEach(cat => {
     const cs=state[cat.id];

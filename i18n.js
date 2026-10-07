@@ -236,7 +236,7 @@ const DICT = {
     'admin.undo':           'ביטול אישור',
     'admin.delete':         'מחיקה',
     'admin.deleteTitle':    'מחיקה לצמיתות',
-    'admin.confirmDelete':  'לדחות ולמחוק את ההרשמה הזאת לצמיתות?',
+    'admin.confirmDelete':  'למחוק את ההרשמה הזאת לצמיתות? אפשר במקום זה לדחות אותה.',
     'admin.noPhone':        '—',
 
     // ── registration form ──
@@ -494,6 +494,10 @@ const DICT = {
     'upload.decode':           'לא הצלחנו לקרוא את התמונה. נסו לשמור אותה כ-PNG או JPG.',
     'upload.tooBig':           'לא הצלחנו להקטין את התמונה מספיק. נסו תמונה פשוטה או קטנה יותר.',
     'upload.huge':             'הקובץ גדול מדי (עד 15MB).',
+    'common.back':             'חזרה',
+    'admin.reject':            'דחייה',
+    'reg.cancelReg':           'ביטול ההרשמה',
+    'reg.cancelled':           'ההרשמה בוטלה',
     'sched.scoreFor':          'תוצאה של {team}',
     'score.bothSides':         'יש למלא את התוצאה של שני הצדדים',
 
@@ -579,7 +583,7 @@ const DICT = {
     'admin.undo':           'Undo',
     'admin.delete':         'Delete',
     'admin.deleteTitle':    'Remove permanently',
-    'admin.confirmDelete':  'Reject and permanently remove this registration?',
+    'admin.confirmDelete':  'Permanently delete this registration? You can reject it instead.',
     'admin.noPhone':        '—',
 
     'reg.title':        'Register',
@@ -828,6 +832,10 @@ const DICT = {
     'upload.decode':           'Couldn’t read this image. Try saving it as PNG or JPG.',
     'upload.tooBig':           'Couldn’t make this image small enough. Try a simpler or smaller image.',
     'upload.huge':             'This file is too large (max 15 MB).',
+    'common.back':             'Back',
+    'admin.reject':            'Reject',
+    'reg.cancelReg':           'Cancel registration',
+    'reg.cancelled':           'Registration cancelled',
     'sched.scoreFor':          'Score for {team}',
     'score.bothSides':         'Enter both scores',
 

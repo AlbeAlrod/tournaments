@@ -261,6 +261,19 @@
   </div>
 </div>
 
+<!-- CONFIRM DIALOG (askConfirm in app.js) -->
+<div class="overlay h" id="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="confirm-msg">
+  <div class="modal">
+    <p id="confirm-msg" class="confirm-msg"></p>
+    <div class="modal-btns">
+      <button class="mbtn mbtn-ok" id="confirm-ok" data-i18n="common.confirm">Confirm</button>
+      <button class="mbtn mbtn-cancel" id="confirm-cancel" data-i18n="common.back">Back</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="toast h" role="status" aria-live="polite"></div>
+
 <!-- global player datalist for autocomplete -->
 <datalist id="player-datalist"></datalist>
 
