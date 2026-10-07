@@ -737,8 +737,10 @@ function renderRegisterPage() {
   if (sub) sub.textContent = meta.name ? `Register for ${meta.name}` : '';
   const catWrap = document.getElementById('frm-cat-wrap');
   if (catWrap) {
+    // Live snapshots re-render this page: keep the category the user already picked.
+    const prevSel = catWrap.querySelector('.cat-pill.on')?.dataset.value || '';
     catWrap.innerHTML = categories.map(c =>
-      `<button type="button" class="cat-pill" data-value="${escH(c.id)}" onclick="selectRegCat(this)">${escH(c.name)}</button>`
+      `<button type="button" class="cat-pill${c.id === prevSel ? ' on' : ''}" data-value="${escH(c.id)}" onclick="selectRegCat(this)">${escH(c.name)}</button>`
     ).join('');
     if (categories.length === 1) catWrap.querySelector('.cat-pill')?.classList.add('on');
     // Hide category row when only one option
