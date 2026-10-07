@@ -1,0 +1,57 @@
+# Static site served straight from the repo root — no build step.
+[build]
+  publish = "."
+  command = ""
+
+# package.json only has devDependencies (eslint); don't install them on Netlify.
+[build.environment]
+  NPM_FLAGS = "--omit=dev"
+
+# One-off seed/repair tools (ops/) must never be reachable on the live site.
+[[redirects]]
+  from = "/ops/*"
+  to = "/404"
+  status = 404
+  force = true
+
+# Dev-only folders that must not be served even if they end up in the publish dir.
+[[redirects]]
+  from = "/node_modules/*"
+  to = "/404"
+  status = 404
+  force = true
+
+[[redirects]]
+  from = "/tests/*"
+  to = "/404"
+  status = 404
+  force = true
+
+# Basic safe headers for every response. (CSP comes with the security phase.)
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+
+# Always revalidate code/pages so a deploy is picked up immediately
+# (ETag revalidation; manual ?v= cache-busting is no longer needed for freshness).
+[[headers]]
+  for = "/"
+  [headers.values]
+    Cache-Control = "no-cache"
+
+[[headers]]
+  for = "/*.html"
+  [headers.values]
+    Cache-Control = "no-cache"
+
+[[headers]]
+  for = "/*.js"
+  [headers.values]
+    Cache-Control = "no-cache"
+
+[[headers]]
+  for = "/*.css"
+  [headers.values]
+    Cache-Control = "no-cache"
