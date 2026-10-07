@@ -1983,16 +1983,22 @@ function queueScoreWrite(catId, now) {
   else scoreTimer = setTimeout(flushScoreWrites, SCORE_DEBOUNCE_MS);
 }
 
+// A category with any invalid score is never sent; it stays pending until fixed.
+const catHasScoreError = cid => {
+  const cs = state[cid];
+  return cs.sched.some(g => scoreError(g.sa, g.sb, cid, getRuleForGame(cid, g, false).pts))
+    || cs.ko.some(r => r.some(g => g && scoreError(g.sa, g.sb, cid, getRuleForGame(cid, g, true).pts)));
+};
+
 async function flushScoreWrites() {
   clearTimeout(scoreTimer); scoreTimer = null;
-  if (!pendingScoreCats.size) return;
-  const cats = [...pendingScoreCats];
-  pendingScoreCats.clear();
   if (!firebaseReady || applyingRemote || !TREF) return;
+  const cats = [...pendingScoreCats].filter(cid => state[cid] && !catHasScoreError(cid));
+  if (!cats.length) return;
+  cats.forEach(cid => pendingScoreCats.delete(cid));
   // One updateDoc for all pending categories — same serialized shape as pushToCloud.
   const args = [];
-  cats.forEach(cid => { if (state[cid]) args.push(new FieldPath('state', cid), catStateToFB(state[cid])); });
-  if (!args.length) return;
+  cats.forEach(cid => args.push(new FieldPath('state', cid), catStateToFB(state[cid])));
   args.push('updatedAt', serverTimestamp());
   skipNextSnapshot++;
   try {
@@ -2002,7 +2008,9 @@ async function flushScoreWrites() {
     skipNextSnapshot--;
     console.error('Score push error', e);
     setSyncStatus(false);
-    cats.forEach(cid => pendingScoreCats.add(cid));   // retry on next edit / blur
+    cats.forEach(cid => pendingScoreCats.add(cid));
+    clearTimeout(scoreTimer);
+    scoreTimer = setTimeout(flushScoreWrites, 3000);
   }
 }
 
@@ -2022,7 +2030,8 @@ function setGS(catId, idx, k, v, commit) {
   const rule = getRuleForGame(catId, g, false);
   const err = scoreError(g.sa, g.sb, catId, rule.pts);
   showScoreErr(`gerr-${catId}-${idx}`, err, commit);
-  if (!err) { updateKOForCat(catId); queueScoreWrite(catId, commit); renderStandings(); }
+  if (err) { clearTimeout(scoreTimer); scoreTimer = setTimeout(flushScoreWrites, SCORE_DEBOUNCE_MS); return; }
+  updateKOForCat(catId); queueScoreWrite(catId, commit); renderStandings();
 }
 function setKS(catId, ri, gi, k, v, commit) {
   if (!admin || meta.phase !== 'tournament') return;
@@ -2032,7 +2041,8 @@ function setKS(catId, ri, gi, k, v, commit) {
   const rule = getRuleForGame(catId, g, true);
   const err = scoreError(g.sa, g.sb, catId, rule.pts);
   showScoreErr(`kerr-${catId}-${ri}-${gi}`, err, commit);
-  if (!err) { updateKOForCat(catId); queueScoreWrite(catId, commit); }
+  if (err) { clearTimeout(scoreTimer); scoreTimer = setTimeout(flushScoreWrites, SCORE_DEBOUNCE_MS); return; }
+  updateKOForCat(catId); queueScoreWrite(catId, commit);
 }
 
 // ============ KO UPDATE ============
