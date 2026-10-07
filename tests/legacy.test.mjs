@@ -91,16 +91,16 @@ describe('isValidScore / scoreError (1 set, pointsToWin 21)', () => {
   });
   test('"" is invalid', () => assert.equal(v('', 3), false));
 
-  test('scoreError messages', () => {
+  test('scoreError returns i18n keys + params', () => {
     const e = (a, b, p) => api.scoreError(a, b, 'c', p);
     assert.equal(e('', '5'), null);
     assert.equal(e('x', '5'), null);
-    assert.equal(e('-1', '21'), 'Scores must be 0 or higher');
-    assert.equal(e('21', '21'), "Scores can't be equal");
-    assert.equal(e('20', '18'), 'Must reach 21 · e.g. 21–18');
-    assert.equal(e('21', '20'), 'Need 2-point lead');
-    assert.equal(e('22', '21'), 'Above 21: exactly 2 apart');
-    assert.equal(e('25', '21'), 'Above 21: exactly 2 apart');
+    assert.deepEqual(e('-1', '21'), { key: 'score.nonNegative' });
+    assert.deepEqual(e('21', '21'), { key: 'score.noDraw' });
+    assert.deepEqual(e('20', '18'), { key: 'score.mustReachEg', params: { n: 21, lo: 18 } });
+    assert.deepEqual(e('21', '20'), { key: 'score.needLead', params: { n: 2 } });
+    assert.deepEqual(e('22', '21'), { key: 'score.exactlyTwoAbove', params: { n: 21 } });
+    assert.deepEqual(e('25', '21'), { key: 'score.exactlyTwoAbove', params: { n: 21 } });
     assert.equal(e('23', '21'), null);
     assert.equal(e('15', '9', 15), null);
   });
@@ -114,8 +114,8 @@ describe('isValidScore (sets: 3 → scores are SETS WON)', () => {
   for (const [a, b, ok] of table)
     test(`${a}:${b} → ${ok}`, () => assert.equal(api.isValidScore(a, b, 'c'), ok));
   test('scoreError', () => {
-    assert.equal(api.scoreError('3', '1', 'c'), 'Sets won: 2:0 or 2:1');
-    assert.equal(api.scoreError('1', '0', 'c'), 'Winner must have 2 sets');
+    assert.deepEqual(api.scoreError('3', '1', 'c'), { key: 'score.setsFormat' });
+    assert.deepEqual(api.scoreError('1', '0', 'c'), { key: 'score.setsWinner' });
     assert.equal(api.scoreError('2', '1', 'c'), null);
     // Quirk: 2:2 passes scoreError (null) but isValidScore rejects it.
     assert.equal(api.scoreError('2', '2', 'c'), null);

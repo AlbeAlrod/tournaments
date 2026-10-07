@@ -77,6 +77,8 @@ h1, h2, h3, h4 { line-height: 1.25; font-weight: 700; }
   outline: 2px solid var(--primary); outline-offset: 2px;
 }
 
+.h { display: none !important; }
+
 /* Views */
 .view { min-height: 100vh; }
 .view.h { display: none !important; }
@@ -241,7 +243,7 @@ main { position: relative; z-index: 5; max-width: 980px; margin: 0 auto; padding
 /* Registrations admin table */
 .reg-row { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--r);
   padding: 12px 16px; margin-bottom: 8px; display: grid;
-  grid-template-columns: 1fr auto auto; gap: 12px; align-items: center;
+  grid-template-columns: 1fr auto auto auto; gap: 12px; align-items: center;
   box-shadow: var(--shadow-sm); }
 .reg-row.status-approved { border-inline-start: 3px solid var(--green); }
 .reg-row.status-rejected { border-inline-start: 3px solid var(--red); opacity: .7; }
@@ -776,6 +778,7 @@ body.master-mode button.master-only { display: inline-block !important; }
 .brnd-arrow { color: var(--text3); font-size: var(--fs-sm); font-weight: 400; }
 /* Smaller match box for the R16 side of a hybrid lane */
 .bmatch-box--sm { min-width: 150px; }
+.bmatch-box--bye { opacity: .85; }
 .bmatch-box--sm .bteam { padding: 8px; font-size: 13px; }
 /* Direct seed badge */
 .bteam.bdirect::before { content: '★'; font-size: 10px; color: var(--amber); margin-inline-end: 2px; }
@@ -893,11 +896,6 @@ input, textarea, select { max-width: 100%; }
    travel has to change sign. */
 [dir=rtl] input:checked + .toggle-slider::before { transform: translateX(-20px); }
 
-/* Bracket connectors: the SVG is measured from the scroller's physical
-   edge. In RTL the scroll origin is the right edge — see I18N_WIRING.md §8
-   for the matching drawBracketLines() change (inline style wins over this). */
-[dir=rtl] .bsvg { left: auto; right: 0; }
-
 /* Phone numbers, codes, hex colours, URLs: always LTR */
 .reg-phone, .player-db-phone, .text-mono, .seed-tag,
 input[type="tel"], input[type="url"], input[type="time"], input[type="number"],
@@ -917,3 +915,25 @@ input[type="password"] { direction: ltr; }
 }
 :where(:lang(he)) :where(.form-row label, .stbl th, .scoring-rules-tbl th) { letter-spacing: 0; text-transform: none; }
 body:lang(he) { letter-spacing: 0; }
+
+/* Register extras, registrations tools, image drop zone */
+.d-cat-single{font-weight:600;color:var(--text);padding:6px 0}
+.d-muted{color:var(--text3);font-size:13px}
+.d-reg-mine-row{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.d-receipt-title{margin:0 0 12px;font-size:18px}
+.d-receipt-line{display:flex;gap:10px;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)}
+.d-receipt #receipt-pay-wrap{margin:14px 0 6px}
+.d-receipt .submit-btn{margin-top:14px}
+.d-info-card{display:flex;flex-wrap:wrap;gap:8px 18px;margin:0 0 14px;padding:12px 14px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r,12px);font-size:14px;color:var(--text)}
+.d-info-item{display:flex;gap:6px;align-items:baseline}
+#reg-note{margin:0 0 14px}
+.d-reg-tools{display:flex;gap:8px;align-items:center;margin-top:10px}
+.d-reg-tools input{flex:1;min-width:0}
+.d-reg-counts{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:10px;font-size:12px;color:var(--text2)}
+.d-reg-count strong{color:var(--text)}
+.d-drop{display:flex;align-items:center;justify-content:center;min-width:200px;min-height:72px;padding:10px;border:2px dashed var(--border2);border-radius:var(--rs,8px);cursor:pointer;text-align:center}
+.d-drop:focus-visible,.d-drop.d-drop-over{border-color:var(--primary);background:var(--surface)}
+.d-drop[aria-busy="true"]{opacity:.6;cursor:progress}
+.d-drop-hint{font-size:12px;color:var(--text3)}
+.d-drop-err{font-size:12px;color:var(--red,#DC2626)}
+.d-paid-toggle{display:inline-flex;gap:4px;align-items:center;font-size:12px;color:var(--text2);white-space:nowrap;cursor:pointer}

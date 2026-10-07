@@ -558,21 +558,21 @@ export function createLegacy(ctx) {
     if (sa===''||sb==='') return null;
     const a=parseInt(sa), b=parseInt(sb);
     if (isNaN(a)||isNaN(b)) return null;
-    if (a < 0 || b < 0) return 'Scores must be 0 or higher';
+    if (a < 0 || b < 0) return { key:'score.nonNegative' };
     const cat = categories.find(c=>c.id===catId);
     const cfg = cat?.cfg || DEF_CAT_CFG;
     if (cfg.sets===3) {
       const hi=Math.max(a,b), lo=Math.min(a,b);
-      if (hi>2||lo<0) return 'Sets won: 2:0 or 2:1';
-      if (hi!==2) return 'Winner must have 2 sets';
+      if (hi>2||lo<0) return { key:'score.setsFormat' };
+      if (hi!==2) return { key:'score.setsWinner' };
       return null;
     }
     const ptw = ptwOverride || cfg.pointsToWin||21;
     const hi=Math.max(a,b), lo=Math.min(a,b);
-    if (hi===lo) return `Scores can't be equal`;
-    if (hi<ptw) return `Must reach ${ptw} · e.g. ${ptw}–${lo}`;
-    if (hi===ptw && hi-lo<2) return `Need 2-point lead`;
-    if (hi>ptw && hi-lo!==2) return `Above ${ptw}: exactly 2 apart`;
+    if (hi===lo) return { key:'score.noDraw' };
+    if (hi<ptw) return { key:'score.mustReachEg', params:{ n:ptw, lo } };
+    if (hi===ptw && hi-lo<2) return { key:'score.needLead', params:{ n:2 } };
+    if (hi>ptw && hi-lo!==2) return { key:'score.exactlyTwoAbove', params:{ n:ptw } };
     return null;
   }
 

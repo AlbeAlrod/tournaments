@@ -3,7 +3,8 @@ import {
   getFirestore, doc, getDoc, setDoc, onSnapshot, serverTimestamp,
   collection, addDoc, getDocs, updateDoc, deleteDoc, query, orderBy, FieldPath
 } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
-import { pickImage, attachDropZone } from "./uploader.js";
+import { pickImage, attachDropZone } from "./uploader.js?v=67";
+import { t, initLang, setLang, getLang, applyStatic, fmtDate, tRound, tSlot } from './i18n.js?v=67';
 
 // ============ FIREBASE ============
 const firebaseConfig = {
@@ -27,6 +28,7 @@ let meta = { name:'', logoUrl:'', primaryColor:'#6B21A8', secondaryColor:'#7C3AE
   eventDate:'', venue:'', price:'',   // optional tournament info card (Register + Schedule)
   groupColors: [],   // [gi0,gi1,gi2,gi3] — empty = use defaults
   bgColor: '',       // override body background — empty = auto from primary
+  lang: 'he',
   phase:'registration', regOpen:true, showRegistered:true };
 let categories = [];   // [{id, name, cfg}]
 let state = {};        // {[catId]: {roster:[], groups:[], sched:[], ko:[]}}
@@ -70,7 +72,7 @@ const dn = s => {
   if (s.includes('/')) return s;
   return s.replace(/\sו([^\s])/g, ' $1');
 };
-const dnH = s => escH(dn(s));
+const dnH = s => `<bdi dir="auto">${escH(dn(s))}</bdi>`;
 
 // ============ KO SCORING RULES (per round position from end) ============
 const DEF_KO_RULES = {
@@ -453,10 +455,11 @@ function selectLoginRole(role) {
 }
 
 function updateRoleButtons() {
-  const on  = `flex:1;padding:10px 6px;border-radius:var(--rs);border:2px solid var(--primary);background:var(--primary);color:#fff;font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:700;cursor:pointer`;
-  const off = `flex:1;padding:10px 6px;border-radius:var(--rs);border:2px solid var(--border2);background:transparent;color:var(--primary);font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:700;cursor:pointer`;
-  document.getElementById('role-btn-admin')?.setAttribute('style',   loginRole==='admin'  ? on : off);
-  document.getElementById('role-btn-master')?.setAttribute('style', loginRole==='master' ? on : off);
+  ['admin','master'].forEach(role => {
+    const el = document.getElementById('role-btn-' + role);
+    el?.classList.toggle('on', loginRole === role);
+    el?.setAttribute('aria-pressed', loginRole === role);
+  });
 }
 
 async function tryLogin() {
@@ -507,7 +510,7 @@ function refreshAdmin() {
   const btn  = document.getElementById('abtn');
   const bar  = document.getElementById('mode-bar');
   const mtxt = document.getElementById('mode-text');
-  if (txt) txt.textContent = adminLevel===2 ? 'Master ✓' : adminLevel===1 ? 'Admin ✓' : 'Admin';
+  if (txt) txt.textContent = t(adminLevel===2 ? 'admin.btnMasterOn' : adminLevel===1 ? 'admin.btnAdminOn' : 'admin.btn');
   if (btn) btn.classList.toggle('on', admin);
   const syncDot = document.getElementById('sync-indicator');
   if (syncDot) syncDot.classList.toggle('h', !admin);
@@ -515,10 +518,10 @@ function refreshAdmin() {
   const adminBar = document.getElementById('admin-bar');
   if (adminBar) adminBar.classList.toggle('mode-admin', admin);
   if (mtxt) {
-    if (!admin) mtxt.textContent = 'View only — tap Admin to manage';
-    else if (meta.phase==='registration') mtxt.textContent = adminLevel===2 ? 'Master mode — full access' : 'Admin mode — approvals & add players';
-    else if (meta.phase==='built') mtxt.textContent = adminLevel===2 ? 'Master mode — tournament built' : 'Admin mode — edit roster';
-    else mtxt.textContent = 'Admin mode — score entry';
+    if (!admin) mtxt.textContent = t('admin.modeView');
+    else if (meta.phase==='registration') mtxt.textContent = t(adminLevel===2 ? 'admin.modeMasterReg' : 'admin.modeAdminReg');
+    else if (meta.phase==='built') mtxt.textContent = t(adminLevel===2 ? 'admin.modeMasterBuilt' : 'admin.modeAdminBuilt');
+    else mtxt.textContent = t('admin.modeScores');
   }
   // Hide Register tab when admin is logged in (registration phase)
   const regTab = document.getElementById('tab-register');
@@ -564,20 +567,21 @@ async function confirmStartTournament() {
 // --- pure helpers (no DOM) ---
 const NAME_MAX = 30;
 const cleanName = s => String(s||'').replace(/\s+/g, ' ').trim();
-// Israeli mobile: 05XXXXXXXX or +9725XXXXXXXX (spaces, dashes, dots, parens ignored).
+// Israeli mobile: 05XXXXXXXX, +9725XXXXXXXX or 009725XXXXXXXX (anything but digits and + ignored).
 // Returns the local form "05XXXXXXXX", or '' when invalid.
 function normPhone(raw) {
-  let d = String(raw||'').replace(/[\s\-().]/g, '');
+  let d = String(raw||'').replace(/[^\d+]/g, '').replace(/^00/, '+');
   if (/^\+?9725\d{8}$/.test(d)) d = '0' + d.replace(/^\+?972/, '');
   return /^05\d{8}$/.test(d) ? d : '';
 }
+// Both players are required (pairs only); this is the single place that rule lives.
 function validateNames(p1, p2) {
-  for (const [label, n] of [['Player 1', p1], ['Player 2', p2]]) {
-    if (!n) return `${label} name is required.`;
-    if (n.length > NAME_MAX) return `${label} name is too long (max ${NAME_MAX} characters).`;
-    if (n.includes('/')) return `${label} name can't contain "/".`;
+  for (const [who, n] of [[t('common.player1'), p1], [t('common.player2'), p2]]) {
+    if (!n) return t('errors.nameRequired', { who });
+    if (n.length > NAME_MAX) return t('errors.nameTooLong', { who, max: NAME_MAX });
+    if (n.includes('/')) return t('errors.nameSlash', { who });
   }
-  if (normName(p1) === normName(p2)) return 'Player 1 and Player 2 must be different people.';
+  if (normName(p1) === normName(p2)) return t('errors.sameNames');
   return null;
 }
 const pairKey = (a, b) => [normName(a), normName(b)].sort().join('|');
@@ -587,7 +591,7 @@ function findDuplicateReg(p1, p2, phone, catId) {
   return registrations.find(r => r.category === catId && (
     pairKey(r.p1, r.p2) === key || (phone && normPhone(r.phone) === phone)));
 }
-const REG_STATUS_TXT = { pending:'pending approval', approved:'approved', rejected:'rejected' };
+const statusTxt = st => t('admin.status.' + st);
 
 // "My registration" — remembered per tournament in this browser only.
 const MYREG_KEY = () => 'luz.myReg.' + tId;
@@ -612,26 +616,26 @@ function renderMyReg() {
   el.innerHTML = `
     <div class="d-reg-mine-row">
       <div>
-        <div><strong>Your registration:</strong> ${escH(REG_STATUS_TXT[r.status] || r.status)}</div>
-        <div class="d-muted">${escH(regPairName(r))}${cat ? ' · ' + escH(cat.name) : ''}</div>
+        <div><strong>${t('reg.mine')}</strong> ${escH(statusTxt(r.status))}</div>
+        <div class="d-muted">${dnH(regPairName(r))}${cat ? ' · ' + escH(cat.name) : ''}</div>
       </div>
       ${r.status === 'pending'
-        ? `<button type="button" class="reg-btn reject" onclick="cancelMyRegistration()">Cancel</button>`
-        : `<span class="d-muted">To cancel, contact the organizer.</span>`}
+        ? `<button type="button" class="reg-btn reject" onclick="cancelMyRegistration()">${t('common.cancel')}</button>`
+        : `<span class="d-muted">${t('reg.cancelContact')}</span>`}
     </div>`;
 }
 
 async function cancelMyRegistration() {
   const mine = getMyReg();
   if (!mine) return;
-  if (!confirm('Cancel your registration?')) return;
+  if (!confirm(t('reg.confirmCancel'))) return;
   try {
     await deleteDoc(doc(db, 'tournaments', tId, 'registrations', mine.regId));
     setMyReg(null);
     lastReceipt = null;
     registrations = registrations.filter(r => r.id !== mine.regId);
     renderRegisterPage();
-  } catch(e) { alert('Could not cancel. Please try again.'); }
+  } catch(e) { alert(t('errors.cancelFailed')); }
 }
 
 function renderReceipt() {
@@ -642,13 +646,13 @@ function renderReceipt() {
   el.style.display = '';
   el.innerHTML = `
     <div class="form-card d-receipt" role="status">
-      <h3 class="d-receipt-title">Registration received ✓</h3>
-      <div class="d-receipt-line"><span class="d-muted">Pair</span> <strong>${escH(lastReceipt.p1)} / ${escH(lastReceipt.p2)}</strong></div>
-      <div class="d-receipt-line"><span class="d-muted">Category</span> <strong>${escH(cat ? cat.name : '')}</strong></div>
-      <div class="d-receipt-line"><span class="d-muted">Status</span> <strong>Pending approval</strong></div>
+      <h3 class="d-receipt-title">${t('reg.receiptTitle')}</h3>
+      <div class="d-receipt-line"><span class="d-muted">${t('reg.receiptPair')}</span> <strong>${dnH(lastReceipt.p1 + ' / ' + lastReceipt.p2)}</strong></div>
+      <div class="d-receipt-line"><span class="d-muted">${t('reg.catLabel')}</span> <strong>${escH(cat ? cat.name : '')}</strong></div>
+      <div class="d-receipt-line"><span class="d-muted">${t('reg.receiptStatus')}</span> <strong>${t('reg.pendingApproval')}</strong></div>
       <div id="receipt-pay-wrap"></div>
-      <p id="receipt-pay-note" class="d-muted" style="display:none">Please write your names in the payment note.</p>
-      <button type="button" class="submit-btn" onclick="registerAnother()">Register another pair</button>
+      <p id="receipt-pay-note" class="d-muted" style="display:none">${t('reg.payNote')}</p>
+      <button type="button" class="submit-btn" onclick="registerAnother()">${t('reg.another')}</button>
     </div>`;
   renderPayLink('receipt-pay-wrap');
   const hasPay = !document.getElementById('receipt-pay-wrap')?.classList.contains('h');
@@ -673,22 +677,19 @@ async function submitRegistration() {
   const fail = msg => { err.textContent = msg; err.classList.remove('h'); };
   const nameErr = validateNames(p1, p2);
   if (nameErr) return fail(nameErr);
-  if (!phoneRaw) return fail('Phone number is required.');
+  if (!phoneRaw) return fail(t('errors.phoneRequired'));
   const phone = normPhone(phoneRaw);
-  if (!phone) return fail('Please enter a valid mobile number (05X-XXXXXXX).');
-  if (!catId) return fail('Please select a category.');
+  if (!phone) return fail(t('errors.phoneInvalid'));
+  if (!catId) return fail(t('errors.catRequired'));
   const dup = findDuplicateReg(p1, p2, phone, catId);
-  if (dup) {
-    const same = pairKey(dup.p1, dup.p2) === pairKey(p1, p2) ? 'This pair is' : 'This phone number is';
-    return fail(`${same} already registered in this category (status: ${REG_STATUS_TXT[dup.status] || dup.status}).`);
-  }
+  if (dup) return fail(t(pairKey(dup.p1, dup.p2) === pairKey(p1, p2) ? 'errors.dupPair' : 'errors.dupPhone', { status: statusTxt(dup.status) }));
   // meta is kept live by onSnapshot — the organizer may have closed registration
   // while this form was open.
-  if (!meta.regOpen) { renderRegisterPage(); err.textContent = 'Registration is currently closed.'; err.classList.remove('h'); return; }
+  if (!meta.regOpen) { renderRegisterPage(); err.textContent = t('reg.closed'); err.classList.remove('h'); return; }
   const btn = document.getElementById('frm-submit');
   if (btn?.disabled) return;           // double tap while a write is in flight
   const btnTxt = btn ? btn.textContent : '';
-  if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
+  if (btn) { btn.disabled = true; btn.textContent = t('reg.sending'); }
   const unlock = () => { if (btn) { btn.disabled = false; btn.textContent = btnTxt; } };
   try {
     const ref = await addDoc(REGS_REF, {
@@ -708,7 +709,7 @@ async function submitRegistration() {
     document.getElementById('reg-receipt')?.scrollIntoView({ block: 'nearest' });
   } catch(e) {
     unlock();
-    err.textContent = 'Submission failed. Please try again.';
+    err.textContent = t('errors.submitFailed');
     err.classList.remove('h');
   }
 }
@@ -717,7 +718,7 @@ async function setRegStatus(id, status) {
   if (!admin) return;
   try {
     if (status === 'rejected') {
-      if (!confirm('Reject and permanently remove this registration?')) return;
+      if (!confirm(t('admin.confirmDelete'))) return;
       // Hard delete — also remove from build roster if present
       const reg = registrations.find(r => r.id === id);
       if (reg) {
@@ -734,15 +735,17 @@ async function setRegStatus(id, status) {
       const r = registrations.find(r => r.id === id);
       await updateDoc(doc(db, 'tournaments', tId, 'registrations', id), { status });
       if (r) {
+        const wasApproved = r.status === 'approved';
         r.status = status;
         // Any approval → make sure the pair is in its category's build roster.
         if (status === 'approved' && addRegToRoster(r)) await pushToCloud();
+        if (wasApproved && status !== 'approved' && removeRegFromRoster(r)) await pushToCloud();
       }
     }
     renderRegistrations();
     renderParticipants();
     renderBuildPage();
-  } catch(e) { alert('Error updating status'); }
+  } catch(e) { alert(t('errors.statusUpdate')); }
 }
 
 // Ensure an approved registration's pair is in its category roster.
@@ -765,6 +768,14 @@ function addRegToRoster(r) {
   return true;
 }
 
+function removeRegFromRoster(r) {
+  const roster = state[r.category]?.roster;
+  const i = roster ? roster.findIndex(n => normName(n) === normName(regPairName(r))) : -1;
+  if (i < 0) return false;
+  roster.splice(i, 1);
+  return true;
+}
+
 async function setRegPaid(id, paid) {
   if (!admin) return;
   try {
@@ -772,7 +783,7 @@ async function setRegPaid(id, paid) {
     const r = registrations.find(r => r.id === id);
     if (r) r.paid = paid;
     renderRegistrations();
-  } catch(e) { alert('Could not update payment status'); renderRegistrations(); }
+  } catch(e) { alert(t('errors.paidUpdate')); renderRegistrations(); }
 }
 
 function selectRegCat(btn) {
@@ -852,7 +863,7 @@ function renderRegistrations() {
       || (qDigits.length >= 3 && String(r.phone||'').replace(/\D/g, '').includes(qDigits)));
   }
   if (!list.length) {
-    el.innerHTML = `<div class="empty"><h3>No registrations</h3></div>`;
+    el.innerHTML = `<div class="empty"><h3>${t('admin.noRegs')}</h3></div>`;
     return;
   }
   el.innerHTML = list.map(r => {
@@ -861,19 +872,19 @@ function renderRegistrations() {
     const wa = waLink(r.phone);
     const phoneHtml = wa
       ? `<a href="${escH(wa)}" target="_blank" rel="noopener" title="WhatsApp">${escH(r.phone)}</a>`
-      : escH(r.phone||'—');
+      : escH(r.phone||t('admin.noPhone'));
     return `<div class="reg-row status-${escH(r.status)}">
       <div class="reg-info">
-        <div class="reg-name">${escH(r.p1)}${r.p2 ? ' / ' + escH(r.p2) : ''}</div>
-        <div class="reg-meta">${escH(catName)} · ${new Date(r.createdAt?.seconds*1000||0).toLocaleDateString()}</div>
+        <div class="reg-name">${escH(regPairName(r))}</div>
+        <div class="reg-meta">${escH(catName)} · <span class="num">${fmtDate(r.createdAt)}</span></div>
         <div class="reg-phone">${phoneHtml}</div>
       </div>
-      <span class="status-badge badge-${escH(r.status)}">${escH(r.status)}</span>
-      <label class="d-paid-toggle"><input type="checkbox" ${r.paid ? 'checked' : ''} onchange="setRegPaid('${r.id}',this.checked)"/> Paid</label>
+      <span class="status-badge badge-${escH(r.status)}">${escH(statusTxt(r.status))}</span>
+      <label class="d-paid-toggle"><input type="checkbox" ${r.paid ? 'checked' : ''} onchange="setRegPaid('${r.id}',this.checked)"/> ${t('admin.paid')}</label>
       <div class="reg-actions">
-        ${r.status !== 'approved' ? `<button class="reg-btn approve" onclick="setRegStatus('${r.id}','approved')">Approve</button>` : ''}
-        ${r.status === 'approved'  ? `<button class="reg-btn" onclick="setRegStatus('${r.id}','pending')">Undo</button>` : ''}
-        <button class="reg-btn reject" onclick="setRegStatus('${r.id}','rejected')" title="Permanently remove">Delete</button>
+        ${r.status !== 'approved' ? `<button class="reg-btn approve" onclick="setRegStatus('${r.id}','approved')">${t('admin.approve')}</button>` : ''}
+        ${r.status === 'approved'  ? `<button class="reg-btn" onclick="setRegStatus('${r.id}','pending')">${t('admin.undo')}</button>` : ''}
+        <button class="reg-btn reject" onclick="setRegStatus('${r.id}','rejected')" title="${t('admin.deleteTitle')}">${t('admin.delete')}</button>
       </div>
     </div>`;
   }).join('');
@@ -891,7 +902,7 @@ function renderParticipants() {
   hiddenMsg?.classList.add('h');
   const approved = registrations.filter(r => r.status === 'approved');
   if (!approved.length) {
-    el.innerHTML = `<div class="empty"><h3>No approved participants yet</h3></div>`;
+    el.innerHTML = `<div class="empty"><h3>${t('parts.empty')}</h3></div>`;
     return;
   }
   const byCat = {};
@@ -907,7 +918,7 @@ function renderParticipants() {
       <div class="part-cat-title">${escH(cat.name)}</div>
       <div class="part-grid">${list.map((r,i) => `
         <div class="part-card">
-          <span class="part-num">${i+1}</span>
+          <span class="part-num num">${i+1}</span>
           <span class="part-name">${dnH(r.p1)}${r.p2 ? ' / '+dnH(r.p2) : ''}</span>
         </div>`).join('')}
       </div>
@@ -919,15 +930,15 @@ function renderPayLink(wrapId) {
   const wrap = document.getElementById(wrapId);
   if (!wrap) return;
   const links = [
-    { url: meta.paymentLink,  label: meta.paymentLinkLabel  || 'Payment Link'   },
-    { url: meta.paymentLink2, label: meta.paymentLink2Label || 'Payment Link 2' },
+    { url: meta.paymentLink,  label: meta.paymentLinkLabel  || t('reg.payLink')  },
+    { url: meta.paymentLink2, label: meta.paymentLink2Label || t('reg.payLink2') },
   ].filter(l => /^https?:\/\//i.test(l.url || ''));   // only real http(s) links (blocks javascript: etc.)
 
   if (!links.length) { wrap.className = 'pay-section h'; wrap.innerHTML = ''; return; }
 
   wrap.className = 'pay-section';
   wrap.innerHTML = `
-    <span class="pay-label">Payment</span>
+    <span class="pay-label">${t('reg.payment')}</span>
     <div class="pay-links">
       ${links.map(l => `<a class="pay-link-btn" href="${escH(l.url)}" target="_blank" rel="noopener">${escH(l.label)}</a>`).join('')}
     </div>`;
@@ -937,7 +948,7 @@ function renderPayLink(wrapId) {
 function fmtEventDate(v) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(v || '')) return v || '';
   const d = new Date(v + 'T00:00:00');
-  return isNaN(d) ? v : d.toLocaleDateString(undefined, { weekday:'short', day:'numeric', month:'short', year:'numeric' });
+  return isNaN(d) ? v : d.toLocaleDateString(getLang() === 'he' ? 'he-IL' : 'en-GB', { weekday:'short', day:'numeric', month:'short', year:'numeric' });
 }
 function renderInfoCards() {
   const items = [
@@ -967,7 +978,7 @@ function renderRegisterPage() {
   if (formWrap) formWrap.style.display = (meta.regOpen && !noCats && !lastReceipt) ? '' : 'none';
   renderMyReg();
   renderReceipt();
-  if (sub) sub.textContent = meta.name ? `Register for ${meta.name}` : '';
+  if (sub) sub.textContent = meta.name ? t('reg.subtitle', { name: meta.name }) : '';
   const catWrap = document.getElementById('frm-cat-wrap');
   if (catWrap) {
     // Live snapshots re-render this page: keep the category the user already picked.
@@ -978,7 +989,7 @@ function renderRegisterPage() {
     if (categories.length === 1) catWrap.querySelector('.cat-pill')?.classList.add('on');
     // One option: keep the (selected) pill hidden but tell the user which category it is.
     const single = categories.length === 1;
-    catWrap.style.display = single ? 'none' : '';   // .h is not global in styles.css
+    catWrap.style.display = single ? 'none' : '';
     const catRow = catWrap.closest('.form-row');
     if (catRow) catRow.style.display = categories.length ? '' : 'none';
     const singleEl = document.getElementById('frm-cat-single');
@@ -1007,8 +1018,8 @@ function renderBuildPage() {
   // In 'built' phase show a status banner
   if (meta.phase === 'built') {
     const banner = document.createElement('div');
-    banner.style.cssText = 'margin-bottom:16px;padding:12px 16px;background:rgba(34,197,94,.12);border:1px solid rgba(34,197,94,.3);border-radius:var(--rs);font-size:13px;color:var(--text)';
-    banner.textContent = '✓ הטורניר בנוי — ניתן עדיין לערוך זוגות ולבנות מחדש';
+    banner.className = 'frm-ok';
+    banner.textContent = t('build.builtBanner');
     el.appendChild(banner);
   }
 
@@ -1033,16 +1044,16 @@ function renderBuildPage() {
     div.innerHTML = `
       <div class="build-cat-head">
         <span class="build-cat-name">${escH(cat.name)}</span>
-        <span class="build-cat-count">${roster.length} pairs</span>
+        <span class="build-cat-count">${t('build.pairsCount', { n: roster.length })}</span>
       </div>
       <div class="build-list" id="blist-${cat.id}" data-cat="${cat.id}"
         ondragover="onListDragOver(event)" ondrop="onListDrop(event,'${cat.id}')">
         ${roster.map((name,i) => buildItem(cat.id, name, i)).join('')}
       </div>
       <div class="build-foot">
-        <button class="build-btn" onclick="buildTournament('${cat.id}')">${meta.phase === 'built' ? '↺ Rebuild' : '▶ Build Tournament'}</button>
-        <button class="build-shuffle" onclick="shuffleBuildRoster('${cat.id}')">Shuffle</button>
-        <button class="build-add-pair" onclick="openAddPair('${cat.id}')">+ Add Pair</button>
+        <button class="build-btn" onclick="buildTournament('${cat.id}')">${t(meta.phase === 'built' ? 'build.rebuild' : 'build.build')}</button>
+        <button class="build-shuffle" onclick="shuffleBuildRoster('${cat.id}')">${t('build.shuffle')}</button>
+        <button class="build-add-pair" onclick="openAddPair('${cat.id}')">${t('build.addPair')}</button>
       </div>`;
     el.appendChild(div);
     setupDragDrop(cat.id);
@@ -1051,12 +1062,10 @@ function renderBuildPage() {
   // Start Tournament button — visible to any admin in registration / built phase
   const startWrap = document.createElement('div');
   startWrap.style.cssText = 'margin-top:24px;padding:16px;text-align:center;border-top:1px solid var(--border)';
-  const startNote = meta.phase === 'built'
-    ? 'הטורניר בנוי ומוכן. לחצי Start בתחילת התחרות.<br>לאחר מכן לא ניתן לשנות הגדרות.'
-    : 'בני תחילה את כל הקטגוריות, ולאחר מכן הפעילי את הטורניר.';
+  const startNote = t(meta.phase === 'built' ? 'build.startNoteBuilt' : 'build.startNoteReg');
   startWrap.innerHTML = `
     <p style="font-size:13px;color:var(--text3);margin-bottom:12px;line-height:1.5">${startNote}</p>
-    <button class="gen-btn" onclick="openStartModal()" ${meta.phase !== 'built' ? 'disabled style="opacity:.45;cursor:not-allowed"' : ''}>▶ Start Tournament</button>`;
+    <button class="gen-btn" onclick="openStartModal()" ${meta.phase !== 'built' ? 'disabled' : ''}>${t('build.start')}</button>`;
   el.appendChild(startWrap);
 }
 
@@ -1066,10 +1075,10 @@ function buildItem(catId, name, i) {
     ondrop="onDrop(event,'${catId}')" ondragend="onDragEnd(event)">
     <span class="build-rank">${i+1}</span>
     <span class="build-name">${dnH(name)}</span>
-    <button class="gedit-btn" onclick="editBuildItem('${catId}',${i})" title="Edit">Edit</button>
-    <button class="build-arrow" onclick="moveBuildItem('${catId}',${i},-1)" title="Up">↑</button>
-    <button class="build-arrow" onclick="moveBuildItem('${catId}',${i},1)" title="Down">↓</button>
-    <button class="team-del" onclick="deleteBuildItem('${catId}',${i})" title="Remove">✕</button>
+    <button class="gedit-btn" onclick="editBuildItem('${catId}',${i})">${t('common.edit')}</button>
+    <button class="build-arrow" onclick="moveBuildItem('${catId}',${i},-1)" title="${t('build.moveUp')}" aria-label="${t('build.moveUp')}">↑</button>
+    <button class="build-arrow" onclick="moveBuildItem('${catId}',${i},1)" title="${t('build.moveDown')}" aria-label="${t('build.moveDown')}">↓</button>
+    <button class="team-del" onclick="deleteBuildItem('${catId}',${i})" title="${t('common.remove')}" aria-label="${t('common.remove')}">✕</button>
   </div>`;
 }
 
@@ -1080,7 +1089,7 @@ function editBuildItem(catId, idx) {
   const parts = name.split('/').map(s => s.trim());
   document.getElementById('edit-p1').value = parts[0] || '';
   document.getElementById('edit-p2').value = parts[1] || '';
-  document.getElementById('edit-modal-title').textContent = 'Edit Pair';
+  document.getElementById('edit-modal-title').textContent = t('build.editPair');
   const catRow = document.getElementById('edit-cat-row');
   const catSel = document.getElementById('edit-cat');
   if (catRow && catSel) {
@@ -1095,7 +1104,7 @@ function editBuildItem(catId, idx) {
 async function deleteBuildItem(catId, idx) {
   if (!admin || (meta.phase !== 'registration' && meta.phase !== 'built')) return;
   const name = state[catId]?.roster[idx];
-  if (!confirm(name ? `Remove "${name}" from the tournament?` : 'Remove this pair?')) return;
+  if (!confirm(name ? t('build.confirmRemove', { name }) : t('build.confirmRemoveAnon'))) return;
   if (name) {
     const parts = name.split(' / ').map(s => s.trim());
     const p1 = parts[0], p2 = parts[1] || '';
@@ -1420,7 +1429,7 @@ async function buildTournament(catId) {
     registrations.filter(r => r.status === 'approved' && r.category === catId)
       .map(r => r.p1 + (r.p2 ? ' / '+r.p2 : ''));
 
-  if (!roster.length) { alert('No approved pairs in this category.'); return; }
+  if (!roster.length) { alert(t('errors.noApproved')); return; }
 
   const cfg = cat.cfg || DEF_CAT_CFG;
   const ng  = cfg.numGroups || 2;
@@ -1744,21 +1753,21 @@ function scoreError(sa, sb, catId, ptwOverride) {
   if (sa===''||sb==='') return null;
   const a=parseInt(sa), b=parseInt(sb);
   if (isNaN(a)||isNaN(b)) return null;
-  if (a < 0 || b < 0) return 'Scores must be 0 or higher';
+  if (a < 0 || b < 0) return { key:'score.nonNegative' };
   const cat = categories.find(c=>c.id===catId);
   const cfg = cat?.cfg || DEF_CAT_CFG;
   if (cfg.sets===3) {
     const hi=Math.max(a,b), lo=Math.min(a,b);
-    if (hi>2||lo<0) return 'Sets won: 2:0 or 2:1';
-    if (hi!==2) return 'Winner must have 2 sets';
+    if (hi>2||lo<0) return { key:'score.setsFormat' };
+    if (hi!==2) return { key:'score.setsWinner' };
     return null;
   }
   const ptw = ptwOverride || cfg.pointsToWin||21;
   const hi=Math.max(a,b), lo=Math.min(a,b);
-  if (hi===lo) return `Scores can't be equal`;
-  if (hi<ptw) return `Must reach ${ptw} · e.g. ${ptw}–${lo}`;
-  if (hi===ptw && hi-lo<2) return `Need 2-point lead`;
-  if (hi>ptw && hi-lo!==2) return `Above ${ptw}: exactly 2 apart`;
+  if (hi===lo) return { key:'score.noDraw' };
+  if (hi<ptw) return { key:'score.mustReachEg', params:{ n:ptw, lo } };
+  if (hi===ptw && hi-lo<2) return { key:'score.needLead', params:{ n:2 } };
+  if (hi>ptw && hi-lo!==2) return { key:'score.exactlyTwoAbove', params:{ n:ptw } };
   return null;
 }
 
@@ -1815,28 +1824,28 @@ function makeStandingsCard(catId, grp, gi, catIdx) {
   const _grpOn      = _grpOnColors[gi % 4];
   card.style.setProperty('--cat-color',    _grpColor);
   card.style.setProperty('--cat-on-color', _grpOn);
-  const rows = st.map((t,i) => {
+  const rows = st.map((row,i) => {
     const isWinner = i<adv && poolDone;
-    const diff = t.diff||0;
+    const diff = row.diff||0;
     const diffStr = diff>0?`+${diff}`:String(diff);
     const diffClass = diff>0?'diff-pos':diff<0?'diff-neg':'diff-zero';
-    const ti = cs.groups[gi].teams.indexOf(t.name);
+    const ti = cs.groups[gi].teams.indexOf(row.name);
     const canEdit = superAdmin;
     const canDelete = superAdmin && (meta.phase === 'registration' || meta.phase === 'built');
     const adminCtrls = canEdit
-      ? `<td><button class="gedit-btn" onclick="openEditTeam('${catId}',${gi},${ti})">✎</button>${
-          canDelete?`<button class="team-del" onclick="deleteTeam('${catId}',${gi},${ti})">✕</button>`:''}</td>` : '';
+      ? `<td><button class="gedit-btn" onclick="openEditTeam('${catId}',${gi},${ti})" title="${t('stand.editAria')}" aria-label="${t('stand.editAria')}">✎</button>${
+          canDelete?`<button class="team-del" onclick="deleteTeam('${catId}',${gi},${ti})" title="${t('stand.removeAria')}" aria-label="${t('stand.removeAria')}">✕</button>`:''}</td>` : '';
     return `<tr class="${isWinner?'winner':''}">
-      <td><span class="rnk">#${i+1}</span>${dnH(t.name)}</td>
-      <td>${t.w}</td><td>${t.l}</td>
-      <td class="${diffClass}">${diff!==0||t.w>0||t.l>0?diffStr:'—'}</td>
-      <td><span class="pts-val">${t.pts}</span></td>
+      <td><span class="rnk num">#${i+1}</span>${dnH(row.name)}</td>
+      <td>${row.w}</td><td>${row.l}</td>
+      <td class="${diffClass}"><span class="num">${diff!==0||row.w>0||row.l>0?diffStr:'—'}</span></td>
+      <td><span class="pts-val">${row.pts}</span></td>
       ${adminCtrls}
     </tr>`;
   }).join('');
   const adminTh = superAdmin ? '<th></th>' : '';
-  card.innerHTML = `<div class="scard-head"><span class="scard-name">Group ${escH(grp.name)}</span></div>
-    <table class="stbl"><thead><tr><th>Team</th><th>W</th><th>L</th><th>+/−</th><th>Pts</th>${adminTh}</tr></thead>
+  card.innerHTML = `<div class="scard-head"><span class="scard-name">${t('stand.group', { name: escH(grp.name) })}</span></div>
+    <table class="stbl"><thead><tr><th>${t('stand.col.team')}</th><th>${t('stand.col.w')}</th><th>${t('stand.col.l')}</th><th>${t('stand.col.diff')}</th><th>${t('stand.col.pts')}</th>${adminTh}</tr></thead>
     <tbody>${rows}</tbody></table>`;
   return card;
 }
@@ -1863,7 +1872,7 @@ function renderStandings() {
     grid.appendChild(sub);
   });
   if (!grid.children.length) {
-    grid.innerHTML = `<div class="empty"><h3>No tournament data yet</h3><p>Build the tournament first.</p></div>`;
+    grid.innerHTML = `<div class="empty"><h3>${t('stand.emptyH')}</h3><p>${t('common.buildFirst')}</p></div>`;
   }
 }
 
@@ -1884,7 +1893,7 @@ function openEditTeam(catId, gi, ti) {
   }
   document.getElementById('edit-p1').value = p1||'';
   document.getElementById('edit-p2').value = p2||'';
-  document.getElementById('edit-modal-title').textContent = `Edit — Group ${state[catId].groups[gi].name}`;
+  document.getElementById('edit-modal-title').textContent = t('stand.editTitle', { name: state[catId].groups[gi].name });
   // Show category selector in tournament phase too
   const catRow = document.getElementById('edit-cat-row');
   const catSel = document.getElementById('edit-cat');
@@ -1952,8 +1961,8 @@ function deleteTeam(catId, gi, ti) {
   if (!superAdmin || (meta.phase !== 'registration' && meta.phase !== 'built')) return;
   const cs  = state[catId];
   const grp = cs.groups[gi];
-  if (grp.teams.length<=1) { alert('Group needs at least 1 team'); return; }
-  if (!confirm(`Remove "${grp.teams[ti]}" from group ${grp.name}?`)) return;
+  if (grp.teams.length<=1) { alert(t('errors.groupMin')); return; }
+  if (!confirm(t('stand.confirmRemove', { name: grp.teams[ti], group: grp.name }))) return;
   grp.teams.splice(ti,1);
   // Coordinated mode: re-run the whole shared-grid scheduler so the board updates itself.
   if (meta.coordinated) { generateCoordinatedSchedule(); pushToCloud(); renderAll(); return; }
@@ -1983,16 +1992,22 @@ function queueScoreWrite(catId, now) {
   else scoreTimer = setTimeout(flushScoreWrites, SCORE_DEBOUNCE_MS);
 }
 
+// A category with any invalid score is never sent; it stays pending until fixed.
+const catHasScoreError = cid => {
+  const cs = state[cid];
+  return cs.sched.some(g => scoreError(g.sa, g.sb, cid, getRuleForGame(cid, g, false).pts))
+    || cs.ko.some(r => r.some(g => g && scoreError(g.sa, g.sb, cid, getRuleForGame(cid, g, true).pts)));
+};
+
 async function flushScoreWrites() {
   clearTimeout(scoreTimer); scoreTimer = null;
-  if (!pendingScoreCats.size) return;
-  const cats = [...pendingScoreCats];
-  pendingScoreCats.clear();
   if (!firebaseReady || applyingRemote || !TREF) return;
+  const cats = [...pendingScoreCats].filter(cid => state[cid] && !catHasScoreError(cid));
+  if (!cats.length) return;
+  cats.forEach(cid => pendingScoreCats.delete(cid));
   // One updateDoc for all pending categories — same serialized shape as pushToCloud.
   const args = [];
-  cats.forEach(cid => { if (state[cid]) args.push(new FieldPath('state', cid), catStateToFB(state[cid])); });
-  if (!args.length) return;
+  cats.forEach(cid => args.push(new FieldPath('state', cid), catStateToFB(state[cid])));
   args.push('updatedAt', serverTimestamp());
   skipNextSnapshot++;
   try {
@@ -2002,7 +2017,9 @@ async function flushScoreWrites() {
     skipNextSnapshot--;
     console.error('Score push error', e);
     setSyncStatus(false);
-    cats.forEach(cid => pendingScoreCats.add(cid));   // retry on next edit / blur
+    cats.forEach(cid => pendingScoreCats.add(cid));
+    clearTimeout(scoreTimer);
+    scoreTimer = setTimeout(flushScoreWrites, 3000);
   }
 }
 
@@ -2011,7 +2028,7 @@ function showScoreErr(errId, err, commit) {
   if (!errEl) return;
   // While typing, "2" on the way to "21" is not an error — only show on commit.
   const show = !!err && commit;
-  errEl.textContent = show ? err : '';
+  errEl.textContent = show ? t(err.key, err.params) : '';
   errEl.style.display = show ? 'block' : 'none';
 }
 
@@ -2022,7 +2039,8 @@ function setGS(catId, idx, k, v, commit) {
   const rule = getRuleForGame(catId, g, false);
   const err = scoreError(g.sa, g.sb, catId, rule.pts);
   showScoreErr(`gerr-${catId}-${idx}`, err, commit);
-  if (!err) { updateKOForCat(catId); queueScoreWrite(catId, commit); renderStandings(); }
+  if (err) { clearTimeout(scoreTimer); scoreTimer = setTimeout(flushScoreWrites, SCORE_DEBOUNCE_MS); return; }
+  updateKOForCat(catId); queueScoreWrite(catId, commit); renderStandings();
 }
 function setKS(catId, ri, gi, k, v, commit) {
   if (!admin || meta.phase !== 'tournament') return;
@@ -2032,7 +2050,8 @@ function setKS(catId, ri, gi, k, v, commit) {
   const rule = getRuleForGame(catId, g, true);
   const err = scoreError(g.sa, g.sb, catId, rule.pts);
   showScoreErr(`kerr-${catId}-${ri}-${gi}`, err, commit);
-  if (!err) { updateKOForCat(catId); queueScoreWrite(catId, commit); }
+  if (err) { clearTimeout(scoreTimer); scoreTimer = setTimeout(flushScoreWrites, SCORE_DEBOUNCE_MS); return; }
+  updateKOForCat(catId); queueScoreWrite(catId, commit);
 }
 
 // ============ KO UPDATE ============
@@ -2136,7 +2155,12 @@ function koGameLabel(catId, ri, gi) {
   return `G${num}`;
 }
 
-// ============ ONE-TIME BRACKET FIX ============
+// Display text for koGameLabel()'s 'Final' / 'SF2' / 'QF3' / 'R16-2' / 'G1'.
+function tGameLbl(s) {
+  const m = /^(Final|SF|QF|R16-|G)(\d*)$/.exec(s);
+  return m ? t('bracket.lbl.' + { Final:'final', SF:'sf', QF:'qf', 'R16-':'r16', G:'game' }[m[1]], { n: m[2] }) : s;
+}
+
 // ============ SCHEDULE PAGE ============
 function renderStats() {
   const el = document.getElementById('sbar');
@@ -2159,9 +2183,9 @@ function renderStats() {
   // does NOT move when the evening runs late. Calling it an estimate would lie
   // exactly when people care most.
   el.innerHTML = `
-    <div class="sc"><div class="sl">Pool games played</div><div class="sv">${donePool}/${totalPool}</div></div>
-    <div class="sc"><div class="sl">Knockout games</div><div class="sv">${totalKO}</div></div>
-    <div class="sc"><div class="sl">Scheduled end</div><div class="sv a">${addM(lastTime,lastDur)}</div></div>`;
+    <div class="sc"><div class="sl">${t('sched.statPool')}</div><div class="sv">${donePool}/${totalPool}</div></div>
+    <div class="sc"><div class="sl">${t('sched.statKO')}</div><div class="sv">${totalKO}</div></div>
+    <div class="sc"><div class="sl">${t('sched.statEnd')}</div><div class="sv a">${addM(lastTime,lastDur)}</div></div>`;
 }
 
 function buildGameRow(catId, g, idx, isKO) {
@@ -2174,25 +2198,25 @@ function buildGameRow(catId, g, idx, isKO) {
   const pc = `gi${(isKO || (g.gi ?? 0) < 0) ? (g.court-1)%4 : g.gi % 4}`;
   const wrap = document.createElement('div');
   const row  = document.createElement('div');
-  const koLbl = isKO ? koGameLabel(catId, g.ri, g.gi) : '';
+  const koLbl = isKO ? tGameLbl(koGameLabel(catId, g.ri, g.gi)) : '';
   row.className = 'gc'+(done?' done':'')+(isKO?' ko-game':'');
   const setter = k => isKO ? `setKS('${catId}',${g.ri},${g.gi},'${k}',this.value` : `setGS('${catId}',${idx},'${k}',this.value`;
   // Stable ids let the focus-preserving re-render put the caret back.
   const sid = k => isKO ? `si-${catId}-k${g.ri}-${g.gi}-${k}` : `si-${catId}-${idx}-${k}`;
   const scoreCell = (admin && meta.phase === 'tournament')
-    ? `<input class="si" id="${sid('sa')}" type="number" min="0" inputmode="numeric" placeholder="—" value="${escH(String(g.sa ?? ''))}"
+    ? `<input class="si" id="${sid('sa')}" type="number" min="0" inputmode="numeric" placeholder="—" aria-label="${t('sched.scoreA')}" value="${escH(String(g.sa ?? ''))}"
          oninput="${setter('sa')})" onchange="${setter('sa')},true)"/>
        <span class="ssep">:</span>
-       <input class="si" id="${sid('sb')}" type="number" min="0" inputmode="numeric" placeholder="—" value="${escH(String(g.sb ?? ''))}"
+       <input class="si" id="${sid('sb')}" type="number" min="0" inputmode="numeric" placeholder="—" aria-label="${t('sched.scoreB')}" value="${escH(String(g.sb ?? ''))}"
          oninput="${setter('sb')})" onchange="${setter('sb')},true)"/>`
     : `<span class="ssep">${done?`${g.sa} : ${g.sb}`:'— : —'}</span>`;
 
   row.innerHTML = `
-    <span class="pill ${pc}">C${g.court}</span>
+    <span class="pill ${pc}">${t('sched.courtShort', { n: g.court })}</span>
     ${koLbl?`<span class="ko-lbl">${koLbl}</span>`:''}
-    <span class="gt">${dnH(g.a)}${!isKO&&g.gn?`<span class="gtag">${escH(g.gn)}</span>`:''}</span>
-    <span class="gvs">vs</span>
-    <span class="gt r">${dnH(g.b)}</span>
+    <span class="gt">${dnH(tSlot(g.a))}${!isKO&&g.gn?`<span class="gtag">${escH(g.gn)}</span>`:''}</span>
+    <span class="gvs">${t('sched.vs')}</span>
+    <span class="gt r">${dnH(tSlot(g.b))}</span>
     <span class="sw">${scoreCell}</span>`;
   const errId = isKO ? `kerr-${catId}-${g.ri}-${g.gi}` : `gerr-${catId}-${idx}`;
   const errD  = document.createElement('div');
@@ -2208,7 +2232,7 @@ function renderScheduleContent() {
   cats.forEach(cat => { if (state[cat.id]) updateKOForCat(cat.id); });
   const hasAny = cats.some(cat => (state[cat.id]?.sched||[]).length>0);
   if (!hasAny) {
-    el.innerHTML = `<div class="empty"><h3>No schedule yet</h3><p>Build the tournament first.</p></div>`;
+    el.innerHTML = `<div class="empty"><h3>${t('sched.emptyH')}</h3><p>${t('common.buildFirst')}</p></div>`;
     return;
   }
   const allGames = [];
@@ -2219,9 +2243,9 @@ function renderScheduleContent() {
       .forEach(g => allGames.push({...g,_catId:cat.id,_idx:cs.sched.indexOf(g),_isKO:false,_rn:null}));
     cs.ko.flatMap((r,ri)=>r.map((g,gi)=>({...g,ri,gi})))
       .filter(g=>!g.isBye && (activeCourt==='all'||g.court===activeCourt))
-      .forEach(g=>allGames.push({...g,_catId:cat.id,_idx:-1,_isKO:true,_rn:getKORoundName(cat.id,g.ri)}));
+      .forEach(g=>allGames.push({...g,_catId:cat.id,_idx:-1,_isKO:true,_rn:getKORoundName(cat.id,g.ri),_fe:cs.ko.length-1-g.ri}));
   });
-  if (!allGames.length) { el.innerHTML=`<div class="empty"><h3>No games</h3></div>`; return; }
+  if (!allGames.length) { el.innerHTML=`<div class="empty"><h3>${t('sched.noGames')}</h3></div>`; return; }
 
   const inp = document.getElementById('sched-search');
   const q   = (inp?.value||'').trim().toLowerCase();
@@ -2229,7 +2253,7 @@ function renderScheduleContent() {
     ? allGames.filter(g => g.a.toLowerCase().includes(q)||g.b.toLowerCase().includes(q))
     : allGames;
   if (q && !filtered.length) {
-    el.innerHTML=`<div class="empty"><h3>No match for "${escH(q)}"</h3></div>`; return;
+    el.innerHTML=`<div class="empty"><h3>${t('sched.noMatch', { q: escH(q) })}</h3></div>`; return;
   }
 
   const byTime = {};
@@ -2237,14 +2261,15 @@ function renderScheduleContent() {
   el.innerHTML = '';
   // Global breaks (e.g. Friday-dinner) shown as their own marker block, in time order.
   const brs = (meta.breaks||[]).map(b=>({at:t2m(b.atTime), min:b.minutes||0, done:false})).sort((a,b)=>a.at-b.at);
-  const dinnerNote = meta.dinnerBreakNote || 'הפסקה';
+  const dinnerNote = meta.dinnerBreakNote || t('sched.breakDefault');
   Object.keys(byTime).sort((a,b)=>t2m(a)-t2m(b)).forEach(time => {
     brs.forEach(b=>{ if(!b.done && t2m(time) >= b.at){ b.done=true;
       const bl=document.createElement('div'); bl.className='tblock';
       bl.innerHTML=`<div class="thdr"><span class="tlbl">${m2t(b.at)}</span><div class="tline"></div></div>`+
         `<div style="margin:6px 0 2px;padding:11px 14px;border:1.5px dashed var(--primary,#652d92);border-radius:12px;`+
         `background:color-mix(in srgb,var(--primary,#652d92) 7%,transparent);font-weight:600;color:var(--primary,#652d92);display:flex;gap:8px;align-items:center">`+
-        `<span style="font-size:18px">🍽️</span><span>${escH(dinnerNote)} — הפסקה ${b.min} דק׳ · ${m2t(b.at)}–${m2t(b.at+b.min)} · כל המגרשים</span></div>`;
+        `<span style="font-size:18px">🍽️</span><span>${t('sched.breakLine', { note: escH(dinnerNote), min: b.min,
+          from: `<span class="num">${m2t(b.at)}</span>`, to: `<span class="num">${m2t(b.at+b.min)}</span>` })}</span></div>`;
       el.appendChild(bl);
     }});
     const games = byTime[time];
@@ -2256,9 +2281,11 @@ function renderScheduleContent() {
       const isThirdPlace = !g._isKO && g.gi === -1;
       let key, label;
       const catName = categories.find(c=>c.id===g._catId)?.name || '';
-      if (g._isKO) { key = `ko-${g._catId}-${g._rn}`; label = catName ? `${catName} — ${g._rn}` : g._rn; }
-      else if (isThirdPlace) { key = `3p-${g._catId}`; label = catName ? `${catName} — 3/4` : '3/4'; }
-      else { key = `pool-${g._catId}`; label = catName ? `${catName} — Pools` : 'Pools'; }
+      const stage = g._isKO ? tRound(g._fe) : t(isThirdPlace ? 'sched.third' : 'sched.pools');
+      if (g._isKO) key = `ko-${g._catId}-${g._rn}`;
+      else if (isThirdPlace) key = `3p-${g._catId}`;
+      else key = `pool-${g._catId}`;
+      label = catName ? t('sched.subLabel', { cat: catName, stage }) : stage;
       if (!subGroups.has(key)) subGroups.set(key, {label, games:[]});
       subGroups.get(key).games.push(g);
     });
@@ -2270,7 +2297,7 @@ function renderScheduleContent() {
         sh.className = 'tsub-hdr';
         const firstG = sg[0];
         const r = getRuleForGame(firstG._catId, firstG, firstG._isKO);
-        const ruleStr = (meta.sport === 'volleyball') ? '' : (r.change ? ` (to ${r.pts} switch ${r.change})` : ` (to ${r.pts})`);
+        const ruleStr = (meta.sport === 'volleyball') ? '' : (r.change ? t('sched.ruleSwitch', { pts: r.pts, change: r.change }) : t('sched.rule', { pts: r.pts }));
         sh.textContent = label + ruleStr;
         block.appendChild(sh);
       }
@@ -2298,9 +2325,9 @@ function renderCourtFilter() {
       for (let i=1; i<=(cat.cfg?.courts||2); i++) courts.add(i);
     }
   });
-  el.innerHTML = `<button class="cf-btn ${activeCourt==='all'?'on':''}" onclick="setCourt('all')">All</button>`
+  el.innerHTML = `<button class="cf-btn ${activeCourt==='all'?'on':''}" onclick="setCourt('all')">${t('common.all')}</button>`
     + [...courts].sort((a,b)=>a-b).map(c =>
-        `<button class="cf-btn ${activeCourt===c?'on':''}" onclick="setCourt(${c})">Court ${c}</button>`).join('');
+        `<button class="cf-btn ${activeCourt===c?'on':''}" onclick="setCourt(${c})">${t('sched.court', { n: c })}</button>`).join('');
 }
 
 function setCourt(c) { activeCourt=c; renderCourtFilter(); renderScheduleContent(); }
@@ -2321,8 +2348,8 @@ function renderBracketForCat(catId, container) {
   const total = poolGames.length;
   const info  = document.createElement('div');
   info.className='binfo';
-  info.innerHTML = !total ? 'No pool stage scheduled yet.'
-    : `Pool: <span>${done}/${total} played</span> — bracket updates live`;
+  info.innerHTML = !total ? t('bracket.noPool')
+    : t('bracket.poolInfo', { progress: `<span class="num">${t('bracket.poolPlayed', { done, total })}</span>` });
   container.appendChild(info);
   if (!cs.ko.length) return;
 
@@ -2344,11 +2371,11 @@ function renderBracketForCat(catId, container) {
     if (g.isBye) {
       const seed=g.seedA||g.a||'TBD';
       const res=resolvePoolSeed(catId,seed);
-      const label=dnH(res.known?res.label:seed);
+      const label=dnH(tSlot(res.known?res.label:seed));
       const box=document.createElement('div'); box.className='bmatch-box bmatch-box--bye';
       box.innerHTML=`<div class="bmatch bmatch-bye">
         <div class="bteam ${res.known?'win':'tbd'}">
-          <span class="bname">${label}</span><span class="bye-badge">Direct ↗</span>
+          <span class="bname">${label}</span><span class="bye-badge">${t('bracket.direct')} <span class="flip-rtl">↗</span></span>
         </div>
       </div>`;
       return box;
@@ -2360,7 +2387,7 @@ function renderBracketForCat(catId, container) {
     if (ri===0) {
       const sAk=g.seedA||seedPairs[gi]?.[0]||'TBD', sBk=g.seedB||seedPairs[gi]?.[1]||'TBD';
       const sA=resolvePoolSeed(catId,sAk), sB=resolvePoolSeed(catId,sBk);
-      labelA=dnH(sA.known?sA.label:sAk); labelB=dnH(sB.known?sB.label:sBk);
+      labelA=dnH(tSlot(sA.known?sA.label:sAk)); labelB=dnH(tSlot(sB.known?sB.label:sBk));
       codeA=sA.known?sAk:''; codeB=sB.known?sBk:'';
       knownA=sA.known; knownB=sB.known;
     } else {
@@ -2369,16 +2396,16 @@ function renderBracketForCat(catId, container) {
       knownB=!isSeed(g.b);
       if (g.directSeedA&&knownA) codeA=g.directSeedA;
       if (g.directSeedB&&knownB) codeB=g.directSeedB;
-      labelA=dnH(labelA); labelB=dnH(labelB);
+      labelA=dnH(tSlot(labelA)); labelB=dnH(tSlot(labelB));
     }
     const box=document.createElement('div'); box.className='bmatch-box';
-    const glbl=koGameLabel(catId,ri,gi);
+    const glbl=tGameLbl(koGameLabel(catId,ri,gi));
     box.innerHTML=(glbl?`<div class="bm-label">${glbl}</div>`:'')+`<div class="bmatch">
       <div class="bteam ${wa?'win':''} ${knownA?'':'tbd'}${g.directSeedA?' bdirect':''}">
-        <span class="bname">${labelA}</span>${codeA?`<span class="bsc seed-tag">${codeA}</span>`:''}${hs?`<span class="bsc">${g.sa}</span>`:''}
+        <span class="bname">${labelA}</span>${codeA?`<span class="bsc seed-tag">${codeA}</span>`:''}${hs?`<span class="bsc num">${g.sa}</span>`:''}
       </div>
       <div class="bteam ${wb?'win':''} ${knownB?'':'tbd'}${g.directSeedB?' bdirect':''}">
-        <span class="bname">${labelB}</span>${codeB?`<span class="bsc seed-tag">${codeB}</span>`:''}${hs?`<span class="bsc">${g.sb}</span>`:''}
+        <span class="bname">${labelB}</span>${codeB?`<span class="bsc seed-tag">${codeB}</span>`:''}${hs?`<span class="bsc num">${g.sb}</span>`:''}
       </div>
     </div>`;
     return box;
@@ -2394,7 +2421,7 @@ function renderBracketForCat(catId, container) {
   if (isHybrid) {
     // Render r0+r1 as paired horizontal lanes in one column
     const col=document.createElement('div'); col.className='bround';
-    col.innerHTML=`<div class="brnd-title">${getKORoundName(catId,0)} <span class="brnd-arrow">→</span> ${getKORoundName(catId,1)}</div>`;
+    col.innerHTML=`<div class="brnd-title">${tRound(cs.ko.length-1)} <span class="brnd-arrow">→</span> ${tRound(cs.ko.length-2)}</div>`;
     const lanesEl=document.createElement('div'); lanesEl.className='brnd-matches hybrid-lanes';
     cs.ko[0].forEach((g0,gi) => {
       const g1 = cs.ko[1][gi];
@@ -2416,7 +2443,7 @@ function renderBracketForCat(catId, container) {
   cs.ko.forEach((round, ri) => {
     if (ri < startRi) return;
     const col=document.createElement('div'); col.className='bround';
-    col.innerHTML=`<div class="brnd-title">${getKORoundName(catId,ri)}</div>`;
+    col.innerHTML=`<div class="brnd-title">${tRound(cs.ko.length-1-ri)}</div>`;
     const matchesEl=document.createElement('div'); matchesEl.className='brnd-matches';
     let halvings=0;
     for (let k=startRi+1;k<=ri;k++) { if(cs.ko[k].length<cs.ko[k-1].length) halvings++; }
@@ -2458,14 +2485,14 @@ function renderBracketForCat(catId, container) {
       const hs3=isValidScore(sa3,sb3,catId,getRuleForGame(catId,thirdGame,false).pts);
       const wa3=hs3&&sa3>sb3, wb3=hs3&&sb3>sa3;
       const isSeed3=s=>!s||s.startsWith('Loser')||/^[A-Z]\d+(\/[A-Z]\d+)?$/.test(s);
-      const lA3=dnH(thirdGame.a||'TBD'), lB3=dnH(thirdGame.b||'TBD');
+      const lA3=dnH(tSlot(thirdGame.a)), lB3=dnH(tSlot(thirdGame.b));
       const knownA3=!isSeed3(thirdGame.a), knownB3=!isSeed3(thirdGame.b);
       const div3=document.createElement('div');
       div3.style.cssText='border-top:1px solid var(--border2);margin-top:16px;padding-top:10px;';
       const box3=document.createElement('div'); box3.className='bmatch-box';
-      box3.innerHTML=`<div class="bm-label">3rd Place</div><div class="bmatch">
-        <div class="bteam ${wa3?'win':''} ${knownA3?'':'tbd'}"><span class="bname">${lA3}</span>${hs3?`<span class="bsc">${thirdGame.sa}</span>`:''}</div>
-        <div class="bteam ${wb3?'win':''} ${knownB3?'':'tbd'}"><span class="bname">${lB3}</span>${hs3?`<span class="bsc">${thirdGame.sb}</span>`:''}</div>
+      box3.innerHTML=`<div class="bm-label">${t('bracket.third')}</div><div class="bmatch">
+        <div class="bteam ${wa3?'win':''} ${knownA3?'':'tbd'}"><span class="bname">${lA3}</span>${hs3?`<span class="bsc num">${thirdGame.sa}</span>`:''}</div>
+        <div class="bteam ${wb3?'win':''} ${knownB3?'':'tbd'}"><span class="bname">${lB3}</span>${hs3?`<span class="bsc num">${thirdGame.sb}</span>`:''}</div>
       </div>`;
       div3.appendChild(box3);
       lastCol.appendChild(div3);
@@ -2481,7 +2508,7 @@ function renderBracketForCat(catId, container) {
     if (isValidScore(fsa,fsb,catId,getRuleForGame(catId,fin,true).pts)) {
       const w=fsa>fsb?fin.a:fin.b;
       const champEl=document.createElement('div');
-      champEl.innerHTML=`<div class="champ-wrap"><div class="ci">CHAMPION</div><div class="champ-name">${dnH(w)}</div></div>`;
+      champEl.innerHTML=`<div class="champ-wrap"><div class="ci">${t('bracket.champion')}</div><div class="champ-name">${dnH(w)}</div></div>`;
       container.appendChild(champEl);
     }
   }
@@ -2496,10 +2523,13 @@ function drawBracketLines(scroll, catId) {
     const sR = scroll.getBoundingClientRect();
     if (!sR.width) return false;
     const SL = scroll.scrollLeft, ST = scroll.scrollTop;
+    // RTL: round 0 sits on the right, and the content starts X0 px left of the scroller's edge.
+    const rtl = getComputedStyle(scroll).direction === 'rtl';
+    const X0 = rtl ? Math.min(0, scroll.clientWidth - scroll.scrollWidth) : 0;
     const svg = document.createElementNS('http://www.w3.org/2000/svg','svg');
     svg.setAttribute('class', 'bsvg');  // SVG className is read-only (SVGAnimatedString)
     Object.assign(svg.style, {
-      position:'absolute', top:'0', left:'0', pointerEvents:'none',
+      position:'absolute', top:'0', left: X0+'px', pointerEvents:'none',
       width: scroll.scrollWidth+'px', height: scroll.scrollHeight+'px',
       overflow:'visible', zIndex:'0'
     });
@@ -2522,9 +2552,11 @@ function drawBracketLines(scroll, catId) {
       const b = wrap.querySelector('.bmatch-box');
       if (!b) return null;
       const r = b.getBoundingClientRect();
+      const left = r.left - sR.left + SL - X0, right = left + r.width;
+      // rx = edge facing the next round, lx = edge facing the previous one
       return {
-        rx: r.left - sR.left + SL + r.width,
-        lx: r.left - sR.left + SL,
+        rx: rtl ? left : right,
+        lx: rtl ? right : left,
         my: r.top  - sR.top  + ST + r.height / 2
       };
     };
@@ -2550,7 +2582,7 @@ function drawBracketLines(scroll, catId) {
         dstPos.forEach((dst, di) => {
           const s0 = srcPos[di*2], s1 = srcPos[di*2+1];
           if (!s0) return;
-          const vx = (Math.max(s0.rx, s1?.rx ?? s0.rx) + dst.lx) / 2;
+          const vx = ((rtl ? Math.min : Math.max)(s0.rx, s1?.rx ?? s0.rx) + dst.lx) / 2;
           mk(s0.rx, s0.my, vx, s0.my);
           if (s1) { mk(s1.rx, s1.my, vx, s1.my); mk(vx, s0.my, vx, s1.my); }
           mk(vx, dst.my, dst.lx, dst.my);
@@ -2616,7 +2648,7 @@ function renderCatFilters() {
   }
   el.classList.remove('h');
   el.innerHTML = `<div class="cat-filter">
-    <button class="cat-btn ${!activeCat?'on':''}" onclick="setCat(null)">All</button>
+    <button class="cat-btn ${!activeCat?'on':''}" onclick="setCat(null)">${t('common.all')}</button>
     ${categories.map(c=>`<button class="cat-btn ${activeCat===c.id?'on':''}" onclick="setCat('${escH(c.id)}')">${escH(c.name)}</button>`).join('')}
   </div>`;
 }
@@ -2633,18 +2665,30 @@ function renderSettings() {
   const dsec = document.createElement('div');
   dsec.className = 'sett-section';
   dsec.innerHTML = `
-    <div class="sett-section-title">Design</div>
+    <div class="sett-section-title">${t('settings.design')}</div>
     <div class="sett-row">
-      <div class="sett-label"><span class="sett-name">Tournament Name</span></div>
+      <div class="sett-label"><span class="sett-name">${t('settings.name')}</span></div>
       <div class="sett-ctrl">
-        <input class="text-inp" style="width:220px" value="${escH(meta.name)}"
-          onchange="updateMeta('name',this.value)" placeholder="Tournament name"/>
+        <input class="text-inp" style="width:220px" dir="auto" value="${escH(meta.name)}"
+          onchange="updateMeta('name',this.value)" placeholder="${t('settings.namePh')}"/>
       </div>
     </div>
     <div class="sett-row">
       <div class="sett-label">
-        <span class="sett-name">Primary Color</span>
-        <span class="sett-desc">Main accent — headers, buttons</span>
+        <span class="sett-name">${t('settings.lang')}</span>
+        <span class="sett-desc">${t('settings.langDesc')}</span>
+      </div>
+      <div class="sett-ctrl">
+        <select class="text-inp" aria-label="${t('lang.aria')}" onchange="updateMeta('lang',this.value)">
+          <option value="he" ${meta.lang!=='en'?'selected':''}>עברית</option>
+          <option value="en" ${meta.lang==='en'?'selected':''}>English</option>
+        </select>
+      </div>
+    </div>
+    <div class="sett-row">
+      <div class="sett-label">
+        <span class="sett-name">${t('settings.primary')}</span>
+        <span class="sett-desc">${t('settings.primaryDesc')}</span>
       </div>
       <div class="sett-ctrl color-pick-row">
         <input type="color" class="color-inp" id="cp-primary" value="${pc}"
@@ -2655,8 +2699,8 @@ function renderSettings() {
     </div>
     <div class="sett-row">
       <div class="sett-label">
-        <span class="sett-name">Secondary Color</span>
-        <span class="sett-desc">Gradient & accent buttons</span>
+        <span class="sett-name">${t('settings.secondary')}</span>
+        <span class="sett-desc">${t('settings.secondaryDesc')}</span>
       </div>
       <div class="sett-ctrl color-pick-row">
         <input type="color" class="color-inp" id="cp-secondary" value="${sc}"
@@ -2666,22 +2710,22 @@ function renderSettings() {
       </div>
     </div>
     <div class="sett-row">
-      <div class="sett-label"><span class="sett-name">Preview</span></div>
+      <div class="sett-label"><span class="sett-name">${t('settings.preview')}</span></div>
       <div class="theme-preview" style="background:linear-gradient(135deg,${pc},${sc})">
-        <span style="color:${onColor(pc)};font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:14px;letter-spacing:1px">Aa</span>
+        <span style="color:${onColor(pc)};font-family:inherit;font-weight:700;font-size:14px;letter-spacing:1px">Aa</span>
       </div>
     </div>
     <div class="sett-row" style="border-bottom:none;padding-bottom:0">
       <div class="sett-label">
-        <span class="sett-name">Background Color</span>
-        <span class="sett-desc">Site background override</span>
+        <span class="sett-name">${t('settings.bg')}</span>
+        <span class="sett-desc">${t('settings.bgDesc')}</span>
       </div>
       <div class="sett-ctrl color-pick-row">
         <input type="color" class="color-inp" id="cp-bg" value="${meta.bgColor||'#ffffff'}"
           oninput="document.getElementById('ct-bg').value=this.value;updateBgColor(this.value)"/>
         <input class="text-inp text-mono" id="ct-bg" style="width:100px" value="${meta.bgColor||'#ffffff'}"
           onchange="if(/^#[0-9A-Fa-f]{6}$/.test(this.value)){document.getElementById('cp-bg').value=this.value;updateBgColor(this.value)}"/>
-        <button class="add-cat-btn" style="font-size:11px;padding:5px 10px" onclick="updateBgColor('')">Reset</button>
+        <button class="add-cat-btn" style="padding:5px 10px" onclick="updateBgColor('')">${t('common.reset')}</button>
       </div>
     </div>`;
   container.appendChild(dsec);
@@ -2690,49 +2734,50 @@ function renderSettings() {
   const lsec = document.createElement('div');
   lsec.className = 'sett-section';
   lsec.innerHTML = `
-    <div class="sett-section-title">Logo</div>
+    <div class="sett-section-title">${t('settings.logo')}</div>
     <div class="sett-row" style="border-bottom:none">
       <div class="sett-label">
-        <span class="sett-name">Logo</span>
-        <span class="sett-desc">Upload an image (PNG/JPG/WebP — resized automatically) or paste an image URL.</span>
+        <span class="sett-name">${t('settings.logo')}</span>
+        <span class="sett-desc">${t('settings.logoUploadDesc')}</span>
       </div>
       <div class="sett-ctrl" style="flex-direction:column;align-items:flex-end;gap:10px">
-        <div class="d-drop" id="logo-drop" aria-label="Upload logo: click, drop or paste an image">
+        <div class="d-drop" id="logo-drop" aria-label="${t('settings.logoDropAria')}">
           ${meta.logoUrl
-            ? `<img src="${escH(meta.logoUrl)}" class="logo-prev-img" alt="Current logo" onerror="this.style.display='none'"/>`
-            : `<span class="d-drop-hint">Drop logo here, click to choose, or paste</span>`}
+            ? `<img src="${escH(meta.logoUrl)}" class="logo-prev-img" alt="${t('settings.logoCurrent')}" onerror="this.style.display='none'"/>`
+            : `<span class="d-drop-hint">${t('settings.logoDropHint')}</span>`}
         </div>
         <div id="logo-drop-err" class="d-drop-err" role="alert" style="display:none"></div>
-        ${meta.logoUrl ? `<button type="button" class="add-cat-btn" style="font-size:11px;padding:5px 10px" onclick="removeLogo()">Remove logo</button>` : ''}
-        <input class="text-inp" style="width:260px" value="${isDataUrl(meta.logoUrl) ? '' : escH(meta.logoUrl)}"
+        ${meta.logoUrl ? `<button type="button" class="add-cat-btn" style="padding:5px 10px" onclick="removeLogo()">${t('settings.removeLogo')}</button>` : ''}
+        <input class="text-inp" type="url" dir="ltr" style="width:260px" value="${isDataUrl(meta.logoUrl) ? '' : escH(meta.logoUrl)}"
           onchange="updateMeta('logoUrl',this.value.trim());renderSettings()"
-          placeholder="${isDataUrl(meta.logoUrl) ? 'Uploaded image — paste a URL to replace' : 'https://…'}" aria-label="Logo URL"/>
+          placeholder="${isDataUrl(meta.logoUrl) ? t('settings.uploadedPh') : 'https://…'}" aria-label="${t('settings.logoUrl')}"/>
       </div>
     </div>`;
   container.appendChild(lsec);
   attachDropZone(lsec.querySelector('#logo-drop'), (url, err) => {
+    if (url && !metaFits({ logoUrl: url })) { url = null; err = t('errors.metaFull'); }
     const errEl = document.getElementById('logo-drop-err');
     if (errEl) { errEl.textContent = err || ''; errEl.style.display = err ? '' : 'none'; }
     if (url) { updateMeta('logoUrl', url); renderSettings(); }
-  });
+  }, { maxBytes: 60000 });
 
   // ── GROUP COLORS ─────────────────────────────────────────────────
   const grpNames = ['A','B','C','D'];
   const grpDefaults = ['#E91E8C','#111111','#FFD600','#111111'];
   const gcsec = document.createElement('div');
   gcsec.className = 'sett-section';
-  gcsec.innerHTML = `<div class="sett-section-title">Group Colors</div>` +
+  gcsec.innerHTML = `<div class="sett-section-title">${t('settings.groupColors')}</div>` +
     grpNames.map((n,i) => {
       const cur = (meta.groupColors||[])[i] || grpDefaults[i];
       return `<div class="sett-row${i===grpNames.length-1?' last-row':''}">
-        <div class="sett-label"><span class="sett-name">Group ${n}</span></div>
+        <div class="sett-label"><span class="sett-name">${t('stand.group', { name: n })}</span></div>
         <div class="sett-ctrl color-pick-row">
           <input type="color" class="color-inp" id="gcp-${i}" value="${cur}"
             oninput="document.getElementById('gct-${i}').value=this.value;updateGroupColor(${i},this.value)"/>
           <input class="text-inp text-mono" id="gct-${i}" style="width:100px" value="${cur}"
             onchange="if(/^#[0-9A-Fa-f]{6}$/.test(this.value)){document.getElementById('gcp-${i}').value=this.value;updateGroupColor(${i},this.value)}"/>
-          <button class="add-cat-btn" style="font-size:11px;padding:5px 10px"
-            onclick="updateGroupColor(${i},'${grpDefaults[i]}');renderSettings()">Reset</button>
+          <button class="add-cat-btn" style="padding:5px 10px"
+            onclick="updateGroupColor(${i},'${grpDefaults[i]}');renderSettings()">${t('common.reset')}</button>
         </div>
       </div>`;
     }).join('');
@@ -2743,25 +2788,25 @@ function renderSettings() {
   ssec.className = 'sett-section';
   const logos = Array.isArray(meta.sponsorLogos) ? meta.sponsorLogos : [];
   ssec.innerHTML = `
-    <div class="sett-section-title">Sponsors</div>
+    <div class="sett-section-title">${t('settings.sponsors')}</div>
     <div id="sponsor-edit-list">${logos.length
       ? logos.map((l,i) => `
         <div class="sprow">
           <div class="sp-thumb">${l.url
             ? `<img src="${escH(l.url)}" alt="" onerror="this.style.display='none'" style="max-width:52px;max-height:32px;object-fit:contain"/>`
             : `<span style="color:var(--text3);font-size:20px;line-height:1">+</span>`}</div>
-          <input class="text-inp" style="flex:1;min-width:0" value="${isDataUrl(l.url) ? '' : escH(l.url)}"
-            placeholder="${isDataUrl(l.url) ? 'Uploaded image — paste URL to replace' : 'Image URL…'}" onchange="updateSponsorLogo(${i},'url',this.value.trim())"/>
-          <button type="button" class="add-cat-btn" style="font-size:11px;padding:5px 10px;flex-shrink:0" onclick="uploadSponsorLogo(${i})">Upload</button>
-          <input class="text-inp" style="width:100px;flex-shrink:0" value="${escH(l.alt)}"
-            placeholder="Name…" onchange="updateSponsorLogo(${i},'alt',this.value)"/>
-          <button class="team-del" onclick="removeSponsorLogo(${i})" title="Remove">✕</button>
+          <input class="text-inp" type="url" dir="ltr" style="flex:1;min-width:0" value="${isDataUrl(l.url) ? '' : escH(l.url)}"
+            placeholder="${isDataUrl(l.url) ? t('settings.uploadedPh') : t('settings.sponsorUrlPh')}" onchange="updateSponsorLogo(${i},'url',this.value.trim())"/>
+          <button type="button" class="add-cat-btn" style="padding:5px 10px;flex-shrink:0" onclick="uploadSponsorLogo(${i})">${t('settings.upload')}</button>
+          <input class="text-inp" dir="auto" style="width:100px;flex-shrink:0" value="${escH(l.alt)}"
+            placeholder="${t('settings.sponsorNamePh')}" onchange="updateSponsorLogo(${i},'alt',this.value)"/>
+          <button class="team-del" onclick="removeSponsorLogo(${i})" title="${t('common.remove')}" aria-label="${t('common.remove')}">✕</button>
         </div>`).join('')
-      : `<p class="sett-empty-note">No sponsors yet — add one below.</p>`}
+      : `<p class="sett-empty-note">${t('settings.noSponsors')}</p>`}
     </div>
     <div id="sponsor-upload-err" class="d-drop-err" role="alert" style="display:none"></div>
     <div class="sett-add-row">
-      <button class="add-cat-btn" onclick="addSponsorLogo()">+ Add Sponsor</button>
+      <button class="add-cat-btn" onclick="addSponsorLogo()">${t('settings.addSponsor')}</button>
     </div>`;
   container.appendChild(ssec);
 
@@ -2781,26 +2826,26 @@ function renderSettings() {
         ${cs.groups.map((grp, gi) => `
           <div class="grp-row">
             <div class="grp-row-head">
-              <span style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;flex-shrink:0">Group</span>
-              <input class="text-inp" style="width:54px;font-weight:800;text-align:center;font-size:15px;padding:5px 4px"
+              <span style="font-size:11px;color:var(--text3);flex-shrink:0">${t('settings.groupLabel')}</span>
+              <input class="text-inp" dir="auto" style="width:54px;font-weight:800;text-align:center;padding:5px 4px"
                 value="${escH(grp.name)}" onchange="renameGroup('${cat.id}',${gi},this.value)"/>
-              <span style="font-size:11px;color:var(--text3);margin-left:4px">${grp.teams.length} teams</span>
+              <span style="font-size:11px;color:var(--text3);margin-inline-start:4px">${t('settings.teamsCount', { n: grp.teams.length })}</span>
             </div>
             <div class="grp-teams-list">
               ${grp.teams.map((team, ti) => `
                 <div class="grp-team-item">
-                  <span class="grp-team-name">${escH(team)}</span>
+                  <span class="grp-team-name">${dnH(team)}</span>
                   ${cs.groups.length > 1 ? `<select class="move-sel"
                     onchange="moveTeam('${cat.id}',${gi},${ti},parseInt(this.value));this.selectedIndex=0">
-                    <option value="" disabled selected>Move to…</option>
-                    ${cs.groups.map((tg,gj) => gj===gi ? '' : `<option value="${gj}">→ ${escH(tg.name)}</option>`).join('')}
+                    <option value="" disabled selected>${t('settings.moveTo')}</option>
+                    ${cs.groups.map((tg,gj) => gj===gi ? '' : `<option value="${gj}">${t('settings.moveToGroup', { name: escH(tg.name) })}</option>`).join('')}
                   </select>` : ''}
                 </div>`).join('')}
             </div>
           </div>`).join('')}
       </div>`;
     }).join('');
-    gsec.innerHTML = `<div class="sett-section-title">Groups</div>${gHtml}`;
+    gsec.innerHTML = `<div class="sett-section-title">${t('settings.groups')}</div>${gHtml}`;
     container.appendChild(gsec);
   }
 
@@ -2809,14 +2854,14 @@ function renderSettings() {
   // ── SPORT ───────────────────────────────────────────────────────
   const sportSection = document.createElement('div');
   sportSection.className = 'sett-section';
-  sportSection.innerHTML = `<div class="sett-section-title">Sport</div>
+  sportSection.innerHTML = `<div class="sett-section-title">${t('settings.sport')}</div>
     <div class="sett-row" style="border-bottom:none;align-items:flex-start">
-      <div class="sett-label"><span class="sett-name">Sport</span>
-        <span class="sett-desc">Volleyball hides the per-stage "(to 21 switch 7)" note — scoring is always to 21. Footvolley shows custom per-stage points.</span></div>
+      <div class="sett-label"><span class="sett-name">${t('settings.sport')}</span>
+        <span class="sett-desc">${t('settings.sportDesc')}</span></div>
       <div class="sett-ctrl">
         <select class="text-inp" onchange="updateMeta('sport',this.value)">
-          <option value="footvolley" ${meta.sport!=='volleyball'?'selected':''}>Footvolley / custom</option>
-          <option value="volleyball" ${meta.sport==='volleyball'?'selected':''}>Volleyball (עד 21)</option>
+          <option value="footvolley" ${meta.sport!=='volleyball'?'selected':''}>${t('settings.sportFootvolley')}</option>
+          <option value="volleyball" ${meta.sport==='volleyball'?'selected':''}>${t('settings.sportVolleyball')}</option>
         </select>
       </div>
     </div>`;
@@ -2825,56 +2870,56 @@ function renderSettings() {
   // ── REGISTRATION ────────────────────────────────────────────────
   const regSection = document.createElement('div');
   regSection.className = 'sett-section';
-  regSection.innerHTML = `<div class="sett-section-title">Registration</div>
+  regSection.innerHTML = `<div class="sett-section-title">${t('settings.registration')}</div>
     <div class="toggle-row">
-      <span class="toggle-label">Registration Open</span>
+      <span class="toggle-label">${t('settings.regOpen')}</span>
       <label class="toggle-switch"><input type="checkbox" ${meta.regOpen?'checked':''} onchange="updateMeta('regOpen',this.checked)"/><span class="toggle-slider"></span></label>
     </div>
     <div class="toggle-row" style="border-bottom:none">
-      <span class="toggle-label">Show Participant List (public)</span>
+      <span class="toggle-label">${t('settings.showList')}</span>
       <label class="toggle-switch"><input type="checkbox" ${meta.showRegistered?'checked':''} onchange="updateMeta('showRegistered',this.checked)"/><span class="toggle-slider"></span></label>
     </div>
     <div class="sett-row" style="align-items:flex-start;padding-top:16px">
       <div class="sett-label">
-        <span class="sett-name">Registration Note</span>
-        <span class="sett-desc">Shown above the registration form.</span>
+        <span class="sett-name">${t('settings.regNote')}</span>
+        <span class="sett-desc">${t('settings.regNoteDesc')}</span>
       </div>
       <div class="sett-ctrl">
-        <textarea class="text-inp" style="width:240px;height:76px;resize:vertical;line-height:1.5"
+        <textarea class="text-inp" dir="auto" style="width:240px;height:76px;resize:vertical;line-height:1.5"
           onchange="updateMeta('regNote',this.value)"
-          placeholder="e.g. Payment deadline is Friday…">${escH(meta.regNote)}</textarea>
+          placeholder="${t('settings.regNotePh')}">${escH(meta.regNote)}</textarea>
       </div>
     </div>
     <div class="sett-row" style="align-items:flex-start;padding-top:16px">
       <div class="sett-label">
-        <span class="sett-name">Tournament Info</span>
-        <span class="sett-desc">Optional. Shown at the top of Register and Schedule.</span>
+        <span class="sett-name">${t('settings.info')}</span>
+        <span class="sett-desc">${t('settings.infoDesc')}</span>
       </div>
       <div class="sett-ctrl" style="flex-direction:column;align-items:flex-end;gap:8px">
-        <input class="text-inp" type="date" style="width:190px" value="${escH(meta.eventDate)}" aria-label="Event date"
+        <input class="text-inp" type="date" style="width:190px" value="${escH(meta.eventDate)}" aria-label="${t('settings.eventDate')}"
           onchange="updateMeta('eventDate',this.value)"/>
-        <input class="text-inp" style="width:240px" value="${escH(meta.venue)}" placeholder="Venue, e.g. Gordon Beach" aria-label="Venue"
+        <input class="text-inp" dir="auto" style="width:240px" value="${escH(meta.venue)}" placeholder="${t('settings.venuePh')}" aria-label="${t('settings.venue')}"
           onchange="updateMeta('venue',this.value.trim())"/>
-        <input class="text-inp" style="width:240px" value="${escH(meta.price)}" placeholder="Price, e.g. ₪150 per pair" aria-label="Price"
+        <input class="text-inp" dir="auto" style="width:240px" value="${escH(meta.price)}" placeholder="${t('settings.pricePh')}" aria-label="${t('settings.price')}"
           onchange="updateMeta('price',this.value.trim())"/>
       </div>
     </div>
     <div class="sett-row" style="align-items:flex-start;padding-top:16px">
       <div class="sett-label">
-        <span class="sett-name">Payment Links</span>
-        <span class="sett-desc">Shown in the registration form.</span>
+        <span class="sett-name">${t('settings.payLinks')}</span>
+        <span class="sett-desc">${t('settings.payLinksDesc')}</span>
       </div>
       <div class="sett-ctrl" style="flex-direction:column;align-items:flex-end;gap:8px">
         <div style="display:flex;gap:6px;align-items:center">
-          <input class="text-inp" value="${escH(meta.paymentLinkLabel)}" style="width:100px" placeholder="Label…"
+          <input class="text-inp" dir="auto" value="${escH(meta.paymentLinkLabel)}" style="width:100px" placeholder="${t('settings.labelPh')}"
             onchange="updateMeta('paymentLinkLabel',this.value)"/>
-          <input class="text-inp" value="${escH(meta.paymentLink)}" style="width:190px" placeholder="https://…"
+          <input class="text-inp" type="url" dir="ltr" value="${escH(meta.paymentLink)}" style="width:190px" placeholder="https://…"
             onchange="updateMeta('paymentLink',this.value)"/>
         </div>
         <div style="display:flex;gap:6px;align-items:center">
-          <input class="text-inp" value="${escH(meta.paymentLink2Label)}" style="width:100px" placeholder="Label…"
+          <input class="text-inp" dir="auto" value="${escH(meta.paymentLink2Label)}" style="width:100px" placeholder="${t('settings.labelPh')}"
             onchange="updateMeta('paymentLink2Label',this.value)"/>
-          <input class="text-inp" value="${escH(meta.paymentLink2)}" style="width:190px" placeholder="https://… (optional)"
+          <input class="text-inp" type="url" dir="ltr" value="${escH(meta.paymentLink2)}" style="width:190px" placeholder="${t('settings.urlOptionalPh')}"
             onchange="updateMeta('paymentLink2',this.value)"/>
         </div>
       </div>
@@ -2884,14 +2929,14 @@ function renderSettings() {
   // ── CATEGORIES ──────────────────────────────────────────────────
   const catSection = document.createElement('div');
   catSection.className = 'sett-section';
-  catSection.innerHTML = `<div class="sett-section-title">Categories</div>
+  catSection.innerHTML = `<div class="sett-section-title">${t('settings.categories')}</div>
     <div id="cat-list">${categories.map((cat,ci)=>renderCatItem(cat,ci)).join('')}</div>
     <div class="sett-row" style="border-top:1px solid var(--border);margin-top:8px;padding-top:14px;border-bottom:none;padding-bottom:0">
       <div class="sett-label">
-        <span class="sett-name">Add Category</span>
-        <span class="sett-desc">Create a new category for this tournament</span>
+        <span class="sett-name">${t('settings.addCategory')}</span>
+        <span class="sett-desc">${t('settings.addCategoryDesc')}</span>
       </div>
-      <button class="add-cat-btn" onclick="addCategory()">+ Add</button>
+      <button class="add-cat-btn" onclick="addCategory()">${t('common.addPlus')}</button>
     </div>`;
   container.appendChild(catSection);
 
@@ -2900,12 +2945,9 @@ function renderSettings() {
   startSection.className = 'sett-section';
   startSection.style.textAlign = 'center';
   startSection.innerHTML = `
-    <div class="sett-section-title">Start Tournament</div>
-    <p style="font-size:13px;color:var(--text3);margin-bottom:16px;line-height:1.55">
-      When all pairs are ready, start the tournament.<br>
-      Pairs and settings cannot be changed after this.
-    </p>
-    <button class="gen-btn" onclick="openStartModal()">▶ Start Tournament</button>`;
+    <div class="sett-section-title">${t('settings.start')}</div>
+    <p style="font-size:13px;color:var(--text3);margin-bottom:16px;line-height:1.55">${t('settings.startNote')}</p>
+    <button class="gen-btn" onclick="openStartModal()">${t('build.start')}</button>`;
   container.appendChild(startSection);
 }
 
@@ -2986,6 +3028,8 @@ function updateSponsorLogo(i, key, val) {
   pushMetaOnly();
 }
 const isDataUrl = u => /^data:image\//i.test(u || '');
+// The tournament doc must stay well under Firestore's 1 MiB limit (images are data URLs).
+const metaFits = patch => JSON.stringify({ ...meta, ...patch }).length <= 500000;
 function removeLogo() {
   updateMeta('logoUrl', '');
   renderSettings();
@@ -2993,13 +3037,16 @@ function removeLogo() {
 async function uploadSponsorLogo(i) {
   const errEl = () => document.getElementById('sponsor-upload-err');
   try {
-    const url = await pickImage({ maxPx: 512, maxBytes: 80000 });
+    const url = await pickImage({ maxPx: 512, maxBytes: 25000 });
+    const logos = [...(meta.sponsorLogos || [])];
+    logos[i] = { ...(logos[i] || { alt: '' }), url };
+    if (!metaFits({ sponsorLogos: logos })) throw new Error(t('errors.metaFull'));
     const e = errEl(); if (e) e.style.display = 'none';
     updateSponsorLogo(i, 'url', url);
   } catch (e) {
     if (e && e.cancelled) return;
     const el = errEl();
-    if (el) { el.textContent = (e && e.message) || 'Upload failed'; el.style.display = ''; }
+    if (el) { el.textContent = (e && e.message) || t('errors.uploadFailed'); el.style.display = ''; }
   }
 }
 function removeSponsorLogo(i) {
@@ -3021,51 +3068,45 @@ function renderCatItem(cat, ci) {
   const catColor = cat.color || defaultColors[ci] || '#6B21A8';
   return `<div class="cat-item">
     <div class="cat-item-head">
-      <input class="text-inp" style="width:150px;font-weight:600" value="${escH(cat.name)}" onchange="updateCatName(${ci},this.value)"/>
-      <div class="color-pick-row" style="margin-left:auto;margin-right:8px">
+      <input class="text-inp" dir="auto" style="width:150px;font-weight:600" value="${escH(cat.name)}" onchange="updateCatName(${ci},this.value)"/>
+      <div class="color-pick-row" style="margin-inline-start:auto;margin-inline-end:8px">
         <input type="color" class="color-inp" id="ccp-${ci}" style="width:36px;height:32px" value="${catColor}"
           oninput="document.getElementById('cct-${ci}').value=this.value;updateCatColor(${ci},this.value)"/>
         <input class="text-inp text-mono" id="cct-${ci}" style="width:84px;padding:5px 8px;font-size:12px" value="${catColor}"
           onchange="if(/^#[0-9A-Fa-f]{6}$/.test(this.value)){document.getElementById('ccp-${ci}').value=this.value;updateCatColor(${ci},this.value)}"/>
       </div>
-      <button class="team-del" onclick="deleteCategory(${ci})" title="Delete">✕</button>
+      <button class="team-del" onclick="deleteCategory(${ci})" title="${t('settings.deleteCategory')}" aria-label="${t('settings.deleteCategory')}">✕</button>
     </div>
     <div class="cat-settings-grid">
-      ${catNumField('Courts', ci, 'courts', cfg.courts, 1, 8)}
-      ${catNumField('Groups', ci, 'numGroups', cfg.numGroups, 2, 16)}
-      ${catNumField('Adv/Group', ci, 'advPerGroup', cfg.advPerGroup, 1, 8)}
-      ${catNumField('Game min', ci, 'gameDur', cfg.gameDur, 5, 120)}
-      ${catNumField('Break min', ci, 'breakDur', cfg.breakDur, 0, 60)}
+      ${catNumField(t('settings.courts'), ci, 'courts', cfg.courts, 1, 8)}
+      ${catNumField(t('settings.numGroups'), ci, 'numGroups', cfg.numGroups, 2, 16)}
+      ${catNumField(t('settings.advPerGroup'), ci, 'advPerGroup', cfg.advPerGroup, 1, 8)}
+      ${catNumField(t('settings.gameDur'), ci, 'gameDur', cfg.gameDur, 5, 120)}
+      ${catNumField(t('settings.breakDur'), ci, 'breakDur', cfg.breakDur, 0, 60)}
       <div class="cat-sett-field">
-        <span class="cat-sett-label">Sets</span>
+        <span class="cat-sett-label">${t('settings.sets')}</span>
         <div class="cat-sett-ctrl">
-          <select class="form-input" style="width:80px;padding:4px 6px;font-size:13px" onchange="updateCatCfg(${ci},'sets',parseInt(this.value))">
+          <select class="form-input" style="width:80px;padding:4px 6px" onchange="updateCatCfg(${ci},'sets',parseInt(this.value))">
             <option value="1" ${cfg.sets===1?'selected':''}>1</option>
             <option value="3" ${cfg.sets===3?'selected':''}>3</option>
           </select>
         </div>
       </div>
-      ${cfg.sets===3?catNumField('3rd set pts', ci, 'pointsThirdSet', cfg.pointsThirdSet||15, 11, 30):''}
+      ${cfg.sets===3?catNumField(t('settings.thirdSetPts'), ci, 'pointsThirdSet', cfg.pointsThirdSet||15, 11, 30):''}
       <div class="cat-sett-field">
-        <span class="cat-sett-label">Start Time</span>
+        <span class="cat-sett-label">${t('settings.startTime')}</span>
         <div class="cat-sett-ctrl">
           <input type="time" class="time-inp" style="width:100px" value="${cfg.startTime||'08:00'}" onchange="updateCatCfg(${ci},'startTime',this.value)"/>
         </div>
       </div>
     </div>
     <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
-      <div class="cat-sett-label" style="margin-bottom:8px;font-size:10px;letter-spacing:2px">SCORING RULES</div>
+      <div class="cat-sett-label" style="margin-bottom:8px">${t('settings.scoringRules')}</div>
       <table class="scoring-rules-tbl">
-        <thead><tr><th>Stage</th><th>Pts to win</th><th>Switch @</th><th>Min</th></tr></thead>
+        <thead><tr><th>${t('settings.rules.stage')}</th><th>${t('settings.rules.pts')}</th><th>${t('settings.rules.switch')}</th><th>${t('settings.rules.min')}</th></tr></thead>
         <tbody>
-          ${[
-            ['pool',  'Pool'],
-            ['r16',   'R16 (שמינית)'],
-            ['qf',    'QF (רבע)'],
-            ['sf',    'SF (חצי)'],
-            ['third', '3/4'],
-            ['final', 'Final (גמר)'],
-          ].map(([key, label]) => {
+          ${['pool', 'r16', 'qf', 'sf', 'third', 'final'].map(key => {
+            const label = t('settings.stage.' + key);
             const r = { ...DEF_KO_RULES[key], ...(cfg.koRules?.[key]||{}) };
             return `<tr>
               <td class="srt-label">${label}</td>
@@ -3110,7 +3151,7 @@ function updateMeta(key, val) {
   }
   if (key==='name') {
     document.getElementById('header-name').textContent=val;
-    document.title=val||'Tournaments';
+    document.title=val||t('common.appName');
     const ll=document.getElementById('logo-letter');
     if (ll) ll.textContent=(val||'T')[0].toUpperCase();
   }
@@ -3128,6 +3169,7 @@ function updateMeta(key, val) {
   if (key === 'regNote') renderRegisterPage();
   if (['eventDate','venue','price'].includes(key)) renderInfoCards();
   if (key === 'sport') renderAll();
+  if (key === 'lang') { initLang(val); applyStatic(); renderAll(); }
   pushMetaOnly();
 }
 
@@ -3178,13 +3220,13 @@ function adjCatCfg(ci, key, delta, min, max) {
 
 function addCategory() {
   const id='cat_'+Date.now();
-  categories.push({ id, name:'New Category', cfg:{...DEF_CAT_CFG} });
+  categories.push({ id, name:t('settings.newCategory'), cfg:{...DEF_CAT_CFG} });
   state[id]={ roster:[], groups:[], sched:[], ko:[] };
   pushToCloud(); renderSettings();
 }
 function deleteCategory(ci) {
-  if (meta.phase === 'tournament') { alert('Cannot delete categories during an active tournament.'); return; }
-  if (!confirm('Delete this category?')) return;
+  if (meta.phase === 'tournament') { alert(t('settings.cantDeleteCat')); return; }
+  if (!confirm(t('settings.confirmDeleteCat'))) return;
   const id=categories[ci].id;
   categories.splice(ci,1);
   delete state[id];
@@ -3192,7 +3234,7 @@ function deleteCategory(ci) {
 }
 
 function resetAllScores() {
-  if (!superAdmin||!confirm('Reset ALL scores?')) return;
+  if (!superAdmin||!confirm(t('settings.confirmResetScores'))) return;
   categories.forEach(cat => {
     const cs=state[cat.id];
     if (!cs) return;
@@ -3289,8 +3331,12 @@ function renderChrome() {
   applyTheme(meta.primaryColor, meta.secondaryColor);
   applyGroupColors();
   applyLogo(meta.logoUrl);
-  document.getElementById('header-name').textContent = meta.name||'Tournament';
-  document.title = meta.name||'Tournaments';
+  document.getElementById('header-name').textContent = meta.name||t('common.tournament');
+  document.title = meta.name||t('common.appName');
+  document.querySelectorAll('.langsw__b').forEach(b => {
+    b.classList.toggle('is-on', b.dataset.lang === getLang());
+    b.setAttribute('aria-pressed', b.dataset.lang === getLang());
+  });
   const ll=document.getElementById('logo-letter');
   if (ll) ll.textContent=(meta.name||'T')[0].toUpperCase();
 
@@ -3333,7 +3379,7 @@ Object.assign(window, {
   updateSponsorLogo, removeSponsorLogo, addSponsorLogo, uploadSponsorLogo, removeLogo, renderSettings,
   updateCatColor, renameGroup, moveTeam,
   updateGroupColor, updateBgColor,
-  updateKORuleField,
+  updateKORuleField, setLang,
   addPlayerToDB, removePlayerFromDB, importPlayersFromTournament
 });
 
@@ -3378,26 +3424,24 @@ function renderPlayerDBSection(container) {
   const sec = document.createElement('div');
   sec.className = 'sett-section';
   sec.innerHTML = `
-    <div class="sett-section-title">Players Database</div>
+    <div class="sett-section-title">${t('settings.players')}</div>
     <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
-      <input class="text-inp" id="new-player-name" style="flex:1;min-width:120px" placeholder="Player name…"/>
-      <input class="text-inp" id="new-player-phone" style="width:130px" placeholder="Phone (optional)"/>
-      <button class="add-cat-btn" onclick="addPlayerToDB(document.getElementById('new-player-name').value,document.getElementById('new-player-phone').value);document.getElementById('new-player-name').value='';document.getElementById('new-player-phone').value=''">+ Add</button>
+      <input class="text-inp" id="new-player-name" dir="auto" style="flex:1;min-width:120px" placeholder="${t('settings.playerNamePh')}"/>
+      <input class="text-inp" id="new-player-phone" type="tel" dir="ltr" style="width:130px" placeholder="${t('settings.playerPhonePh')}"/>
+      <button class="add-cat-btn" onclick="addPlayerToDB(document.getElementById('new-player-name').value,document.getElementById('new-player-phone').value);document.getElementById('new-player-name').value='';document.getElementById('new-player-phone').value=''">${t('common.addPlus')}</button>
     </div>
     <div style="margin-bottom:10px">
-      <button class="add-cat-btn" onclick="importPlayersFromTournament()" style="font-size:12px">
-        ↓ Import all players from this tournament
-      </button>
-      <span style="font-size:11px;color:var(--text3);margin-left:8px">${playerDB.length} players</span>
+      <button class="add-cat-btn" onclick="importPlayersFromTournament()">${t('settings.importPlayers')}</button>
+      <span style="font-size:11px;color:var(--text3);margin-inline-start:8px">${t('settings.playersCount', { n: playerDB.length })}</span>
     </div>
     <div class="player-db-list">${playerDB.length
       ? playerDB.map((p,i) => `
         <div class="player-db-row">
-          <span class="player-db-name">${escH(p.name)}</span>
+          <span class="player-db-name">${dnH(p.name)}</span>
           <span class="player-db-phone">${escH(p.phone||'')}</span>
-          <button class="team-del" onclick="removePlayerFromDB(${i})">✕</button>
+          <button class="team-del" onclick="removePlayerFromDB(${i})" title="${t('common.remove')}" aria-label="${t('common.remove')}">✕</button>
         </div>`).join('')
-      : '<p class="sett-empty-note">No players yet — click Import or add pairs via the modal.</p>'}
+      : `<p class="sett-empty-note">${t('settings.noPlayers')}</p>`}
     </div>`;
   container.appendChild(sec);
 }
@@ -3424,9 +3468,9 @@ async function importPlayersFromTournament() {
   if (added > 0) {
     await savePlayerDB();
     renderSettings();
-    alert(`Imported ${added} new players.`);
+    alert(t('settings.imported', { n: added }));
   } else {
-    alert('All players are already in the database.');
+    alert(t('settings.allImported'));
   }
 }
 
@@ -3450,9 +3494,15 @@ async function autoAddPairToDB(name) {
 document.addEventListener('visibilitychange', () => { if (document.hidden) flushScoreWrites(); });
 window.addEventListener('pagehide', () => flushScoreWrites());
 
+window.addEventListener('langchange', () => { applyStatic(); renderAll(); });
+
 window.addEventListener('load', async () => {
+  initLang();
+  applyStatic();
   const ok = await loadTournament();
   if (!ok) return;
+  initLang(meta.lang);
+  applyStatic();
 
   activeCat = null;
   firebaseReady = true;
