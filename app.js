@@ -38,6 +38,8 @@ let loginRole = 'admin';
 
 let activeCat = null;  // selected category id for tournament views
 let regFilter = 'all'; // pending|approved|rejected|all
+let regPaidFilter = 'all'; // all|paid|unpaid
+let regSearch = '';
 let schedFilter = [];
 let activeCourt = 'all';
 let applyingRemote = false;
@@ -769,7 +771,7 @@ async function setRegPaid(id, paid) {
     const r = registrations.find(r => r.id === id);
     if (r) r.paid = paid;
     renderRegistrations();
-  } catch(e) {}
+  } catch(e) { alert('Could not update payment status'); renderRegistrations(); }
 }
 
 function selectRegCat(btn) {
@@ -785,11 +787,69 @@ function setRegFilter(f) {
   renderRegistrations();
 }
 
+function setRegPaidFilter(f) {
+  regPaidFilter = f;
+  ['all','paid','unpaid'].forEach(k => document.getElementById('rpf-' + k)?.classList.toggle('on', k === f));
+  renderRegistrations();
+}
+function setRegSearch(v) { regSearch = v || ''; renderRegistrations(); }
+
+// wa.me needs international digits: 05XXXXXXXX → 9725XXXXXXXX. '' if not a valid IL mobile.
+function waLink(phone) {
+  const n = normPhone(phone);
+  return n ? 'https://wa.me/972' + n.slice(1) : '';
+}
+
+// Per-category counts (all statuses, not affected by filters).
+function renderRegCounts() {
+  const el = document.getElementById('reg-counts');
+  if (!el) return;
+  const rows = categories.map(c => {
+    const rs = registrations.filter(r => r.category === c.id);
+    const appr = rs.filter(r => r.status === 'approved').length;
+    const pend = rs.filter(r => r.status === 'pending').length;
+    const paid = rs.filter(r => r.paid).length;
+    return `<span class="d-reg-count"><strong>${escH(c.name)}</strong> ${rs.length} · ✓${appr} · ⏳${pend} · ₪${paid}</span>`;
+  });
+  el.innerHTML = rows.join('');
+}
+
+function csvCell(v) {
+  let s = String(v ?? '');
+  if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;          // keep spreadsheets from running formulas
+  return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+function exportRegistrationsCSV() {
+  if (!admin) return;
+  const head = ['name1','name2','phone','category','status','paid','createdAt'];
+  const lines = [head.join(',')].concat(registrations.map(r => {
+    const cat = categories.find(c => c.id === r.category);
+    const t = r.createdAt?.seconds ? new Date(r.createdAt.seconds * 1000).toISOString() : '';
+    return [r.p1, r.p2, r.phone, cat ? cat.name : r.category, r.status, r.paid ? 'yes' : 'no', t].map(csvCell).join(',');
+  }));
+  // BOM so Excel opens Hebrew names as UTF-8
+  const blob = new Blob(['\ufeff' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `registrations-${tId}.csv`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
 function renderRegistrations() {
   const el = document.getElementById('registrations-list');
   if (!el) return;
+  renderRegCounts();
   let list = [...registrations];
   if (regFilter !== 'all') list = list.filter(r => r.status === regFilter);
+  if (regPaidFilter === 'paid')   list = list.filter(r => r.paid);
+  if (regPaidFilter === 'unpaid') list = list.filter(r => !r.paid);
+  const q = regSearch.trim().toLowerCase();
+  if (q) {
+    const qDigits = q.replace(/\D/g, '');
+    list = list.filter(r => `${r.p1||''} ${r.p2||''}`.toLowerCase().includes(q)
+      || (qDigits.length >= 3 && String(r.phone||'').replace(/\D/g, '').includes(qDigits)));
+  }
   if (!list.length) {
     el.innerHTML = `<div class="empty"><h3>No registrations</h3></div>`;
     return;
@@ -797,13 +857,18 @@ function renderRegistrations() {
   el.innerHTML = list.map(r => {
     const cat = categories.find(c => c.id === r.category);
     const catName = cat ? cat.name : r.category;
-    return `<div class="reg-row status-${r.status}">
+    const wa = waLink(r.phone);
+    const phoneHtml = wa
+      ? `<a href="${escH(wa)}" target="_blank" rel="noopener" title="WhatsApp">${escH(r.phone)}</a>`
+      : escH(r.phone||'—');
+    return `<div class="reg-row status-${escH(r.status)}">
       <div class="reg-info">
         <div class="reg-name">${escH(r.p1)}${r.p2 ? ' / ' + escH(r.p2) : ''}</div>
         <div class="reg-meta">${escH(catName)} · ${new Date(r.createdAt?.seconds*1000||0).toLocaleDateString()}</div>
-        <div class="reg-phone">${escH(r.phone||'—')}</div>
+        <div class="reg-phone">${phoneHtml}</div>
       </div>
-      <span class="status-badge badge-${r.status}">${r.status}</span>
+      <span class="status-badge badge-${escH(r.status)}">${escH(r.status)}</span>
+      <label class="d-paid-toggle"><input type="checkbox" ${r.paid ? 'checked' : ''} onchange="setRegPaid('${r.id}',this.checked)"/> Paid</label>
       <div class="reg-actions">
         ${r.status !== 'approved' ? `<button class="reg-btn approve" onclick="setRegStatus('${r.id}','approved')">Approve</button>` : ''}
         ${r.status === 'approved'  ? `<button class="reg-btn" onclick="setRegStatus('${r.id}','pending')">Undo</button>` : ''}
@@ -3223,7 +3288,8 @@ Object.assign(window, {
   adminClick, selectLoginRole, tryLogin, closeLogin,
   openStartModal, closeStartModal, confirmStartTournament,
   goPage, setCat, setCourt,
-  submitRegistration, cancelMyRegistration, registerAnother, setRegStatus, setRegPaid, setRegFilter, selectRegCat,
+  submitRegistration, cancelMyRegistration, registerAnother, setRegStatus, setRegPaid, setRegFilter,
+  setRegPaidFilter, setRegSearch, exportRegistrationsCSV, selectRegCat,
   openAddPair, closeAddPair, saveAddPair,
   buildTournament, shuffleBuildRoster, moveBuildItem,
   onDragStart, onDragEnd, onDragOver, onDrop, onListDragOver, onListDrop,

@@ -19,6 +19,11 @@
 .d-info-card{display:flex;flex-wrap:wrap;gap:8px 18px;margin:0 0 14px;padding:12px 14px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r,12px);font-size:14px;color:var(--text)}
 .d-info-item{display:flex;gap:6px;align-items:baseline}
 #reg-note{margin:0 0 14px}
+.d-reg-tools{display:flex;gap:8px;align-items:center;margin-top:10px}
+.d-reg-tools input{flex:1;min-width:0}
+.d-reg-counts{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:10px;font-size:12px;color:var(--text2)}
+.d-reg-count strong{color:var(--text)}
+.d-paid-toggle{display:inline-flex;gap:4px;align-items:center;font-size:12px;color:var(--text2);white-space:nowrap;cursor:pointer}
 </style>
 </head>
 <body>
@@ -152,6 +157,16 @@
           <button class="filter-btn" id="rf-approved" onclick="setRegFilter('approved')">Approved</button>
           <button class="filter-btn" id="rf-rejected" onclick="setRegFilter('rejected')">Rejected</button>
         </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
+          <button class="filter-btn on" id="rpf-all" onclick="setRegPaidFilter('all')">Paid + unpaid</button>
+          <button class="filter-btn" id="rpf-paid" onclick="setRegPaidFilter('paid')">Paid</button>
+          <button class="filter-btn" id="rpf-unpaid" onclick="setRegPaidFilter('unpaid')">Unpaid</button>
+        </div>
+        <div class="d-reg-tools">
+          <input class="team-search-input" id="reg-search" type="search" placeholder="Search name or phone…" aria-label="Search registrations" oninput="setRegSearch(this.value)"/>
+          <button class="filter-btn" type="button" onclick="exportRegistrationsCSV()">Export CSV</button>
+        </div>
+        <div id="reg-counts" class="d-reg-counts"></div>
       </div>
       <div id="registrations-list"></div>
     </div>
