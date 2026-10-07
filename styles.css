@@ -937,3 +937,8 @@ body:lang(he) { letter-spacing: 0; }
 .d-drop-hint{font-size:12px;color:var(--text3)}
 .d-drop-err{font-size:12px;color:var(--red,#DC2626)}
 .d-paid-toggle{display:inline-flex;gap:4px;align-items:center;font-size:12px;color:var(--text2);white-space:nowrap;cursor:pointer}
+
+/* Score rows not saved yet (in flight / incomplete) and rows with an invalid score */
+.gc.unsaved { border-color: var(--amber); border-style: dashed; }
+.gc.invalid { border-color: var(--red); border-style: solid; }
+.gc.invalid .si { border-color: var(--red); }

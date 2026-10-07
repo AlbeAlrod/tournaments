@@ -1,7 +1,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
 import {
   getFirestore, doc, getDoc, setDoc, onSnapshot, serverTimestamp,
-  collection, addDoc, getDocs, updateDoc, deleteDoc, query, orderBy, FieldPath
+  collection, addDoc, getDocs, updateDoc, deleteDoc, query, orderBy, FieldPath, runTransaction
 } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
 import { pickImage, attachDropZone } from "./uploader.js?v=67";
 import { t, initLang, setLang, getLang, applyStatic, fmtDate, tRound, tSlot } from './i18n.js?v=67';
@@ -223,11 +223,9 @@ async function loadTournament() {
     if (data.meta) meta = { ...meta, ...data.meta };
     if (data.categories) categories = data.categories;
     if (data.state) {
-      Object.entries(data.state).forEach(([cid, cs]) => {
-        // Unsent (debounced) score edits win over the remote copy of that category.
-        if (pendingScoreCats.has(cid)) return;
-        state[cid] = catStateFromFB(cs);
-      });
+      Object.entries(data.state).forEach(([cid, cs]) => { state[cid] = catStateFromFB(cs); });
+      // Scores typed here but not saved yet win over the remote copy of that game.
+      unsavedGames.forEach(e => { const g = gameRef(e); if (g) { g.sa = e.sa; g.sb = e.sb; } });
     }
     categories.forEach(cat => {
       if (!state[cat.id]) state[cat.id] = { roster:[], groups:[], sched:[], ko:[] };
@@ -1978,80 +1976,103 @@ function deleteTeam(catId, gi, ti) {
 
 // ============ SCORES ============
 // Score inputs call setGS/setKS on every keystroke (commit=false) and again on
-// change/blur (commit=true). Local state updates immediately; the cloud write is
-// debounced and only touches `state.<catId>` (not the whole doc), so two scorers
-// on different categories can no longer overwrite each other.
+// change/blur (commit=true). Saving is per game: each valid game's score is merged
+// into the latest server copy of its category in a transaction, so an invalid
+// score in one row never blocks the others, and two scorers on the same category
+// don't overwrite each other. (sched/ko are arrays in Firestore, so an element
+// can't be addressed by a field path — hence read-merge-write.)
 const SCORE_DEBOUNCE_MS = 600;
-const pendingScoreCats = new Set();
-let scoreTimer = null;
+const unsavedGames = new Map();   // gk -> {cid, idx} | {cid, ri, gi} + {sa, sb, shown}
+let scoreTimer = null, flushing = false;
 
-function queueScoreWrite(catId, now) {
-  pendingScoreCats.add(catId);
+const gameKey = (cid, idx, ri, gi) => ri == null ? `${cid}-${idx}` : `${cid}-k${ri}-${gi}`;
+const gameRef = e => e.ri == null ? state[e.cid]?.sched?.[e.idx] : state[e.cid]?.ko?.[e.ri]?.[e.gi];
+function scoreMsg(e) {
+  const g = gameRef(e);
+  if (!g) return '';
+  const err = scoreError(String(g.sa ?? ''), String(g.sb ?? ''), e.cid, getRuleForGame(e.cid, g, e.ri != null).pts);
+  return err ? t(err.key, err.params) : '';
+}
+const gameReady = e => !!gameRef(e) && !scoreMsg(e);
+
+function markGameRow(gk) {
+  const row = document.getElementById('gc-' + gk);
+  if (!row) return;
+  const e = unsavedGames.get(gk);
+  const msg = e ? scoreMsg(e) : '';
+  row.classList.toggle('unsaved', !!e);
+  row.classList.toggle('invalid', !!msg);
+  const err = document.getElementById('serr-' + gk);
+  if (err) { const show = !!msg && !!e.shown; err.textContent = show ? msg : ''; err.style.display = show ? 'block' : 'none'; }
+}
+
+function scheduleFlush(now) {
   clearTimeout(scoreTimer);
   if (now) flushScoreWrites();
   else scoreTimer = setTimeout(flushScoreWrites, SCORE_DEBOUNCE_MS);
 }
 
-// A category with any invalid score is never sent; it stays pending until fixed.
-const catHasScoreError = cid => {
-  const cs = state[cid];
-  return cs.sched.some(g => scoreError(g.sa, g.sb, cid, getRuleForGame(cid, g, false).pts))
-    || cs.ko.some(r => r.some(g => g && scoreError(g.sa, g.sb, cid, getRuleForGame(cid, g, true).pts)));
-};
-
 async function flushScoreWrites() {
   clearTimeout(scoreTimer); scoreTimer = null;
-  if (!firebaseReady || applyingRemote || !TREF) return;
-  const cats = [...pendingScoreCats].filter(cid => state[cid] && !catHasScoreError(cid));
-  if (!cats.length) return;
-  cats.forEach(cid => pendingScoreCats.delete(cid));
-  // One updateDoc for all pending categories — same serialized shape as pushToCloud.
-  const args = [];
-  cats.forEach(cid => args.push(new FieldPath('state', cid), catStateToFB(state[cid])));
-  args.push('updatedAt', serverTimestamp());
-  skipNextSnapshot++;
+  if (!firebaseReady || !TREF) return;
+  if (flushing) { scoreTimer = setTimeout(flushScoreWrites, SCORE_DEBOUNCE_MS); return; }
+  const sent = [...unsavedGames].filter(([, e]) => gameReady(e)).map(([gk, e]) => ({ gk, e, sa: e.sa, sb: e.sb }));
+  if (!sent.length) return;
+  flushing = true;
   try {
-    await updateDoc(TREF, ...args);
+    await runTransaction(db, async tx => {
+      const remote = (await tx.get(TREF)).data()?.state || {};
+      const cats = {};
+      sent.forEach(({ e, sa, sb }) => {
+        const cs = cats[e.cid] ??= catStateFromFB(structuredClone(remote[e.cid] || catStateToFB(state[e.cid])));
+        const g = e.ri == null ? cs.sched[e.idx] : cs.ko[e.ri]?.[e.gi];
+        if (g) Object.assign(g, { sa, sb });
+      });
+      const args = [];
+      Object.entries(cats).forEach(([cid, cs]) => {
+        // Re-derive knockout slot names from the merged scores (updateKOForCat reads state[cid]).
+        const mine = state[cid];
+        state[cid] = cs; updateKOForCat(cid); state[cid] = mine;
+        args.push(new FieldPath('state', cid), catStateToFB(cs));
+      });
+      args.push('updatedAt', serverTimestamp());
+      tx.update(TREF, ...args);
+    });
+    sent.forEach(({ gk, e, sa, sb }) => {
+      if (unsavedGames.get(gk) === e && e.sa === sa && e.sb === sb) unsavedGames.delete(gk);
+      markGameRow(gk);
+    });
     setSyncStatus(true);
   } catch(e) {
-    skipNextSnapshot--;
     console.error('Score push error', e);
     setSyncStatus(false);
-    cats.forEach(cid => pendingScoreCats.add(cid));
-    clearTimeout(scoreTimer);
     scoreTimer = setTimeout(flushScoreWrites, 3000);
-  }
+  } finally { flushing = false; }
 }
 
-function showScoreErr(errId, err, commit) {
-  const errEl = document.getElementById(errId);
-  if (!errEl) return;
-  // While typing, "2" on the way to "21" is not an error — only show on commit.
-  const show = !!err && commit;
-  errEl.textContent = show ? t(err.key, err.params) : '';
-  errEl.style.display = show ? 'block' : 'none';
+function scoreChanged(gk, ref, g, commit) {
+  const e = unsavedGames.get(gk) || ref;
+  e.sa = g.sa ?? ''; e.sb = g.sb ?? '';
+  if (commit) e.shown = true;
+  unsavedGames.set(gk, e);
+  updateKOForCat(ref.cid);
+  markGameRow(gk);
+  scheduleFlush(commit);
 }
 
 function setGS(catId, idx, k, v, commit) {
   if (!admin || meta.phase !== 'tournament') return;
-  state[catId].sched[idx][k] = v;
   const g = state[catId].sched[idx];
-  const rule = getRuleForGame(catId, g, false);
-  const err = scoreError(g.sa, g.sb, catId, rule.pts);
-  showScoreErr(`gerr-${catId}-${idx}`, err, commit);
-  if (err) { clearTimeout(scoreTimer); scoreTimer = setTimeout(flushScoreWrites, SCORE_DEBOUNCE_MS); return; }
-  updateKOForCat(catId); queueScoreWrite(catId, commit); renderStandings();
+  g[k] = v;
+  scoreChanged(gameKey(catId, idx), { cid: catId, idx }, g, commit);
+  renderStandings();
 }
 function setKS(catId, ri, gi, k, v, commit) {
   if (!admin || meta.phase !== 'tournament') return;
-  state[catId].ko[ri][gi][k] = v;
   const g = state[catId].ko[ri][gi];
+  g[k] = v;
   g.ri = ri;
-  const rule = getRuleForGame(catId, g, true);
-  const err = scoreError(g.sa, g.sb, catId, rule.pts);
-  showScoreErr(`kerr-${catId}-${ri}-${gi}`, err, commit);
-  if (err) { clearTimeout(scoreTimer); scoreTimer = setTimeout(flushScoreWrites, SCORE_DEBOUNCE_MS); return; }
-  updateKOForCat(catId); queueScoreWrite(catId, commit);
+  scoreChanged(gameKey(catId, null, ri, gi), { cid: catId, ri, gi }, g, commit);
 }
 
 // ============ KO UPDATE ============
@@ -2199,7 +2220,11 @@ function buildGameRow(catId, g, idx, isKO) {
   const wrap = document.createElement('div');
   const row  = document.createElement('div');
   const koLbl = isKO ? tGameLbl(koGameLabel(catId, g.ri, g.gi)) : '';
-  row.className = 'gc'+(done?' done':'')+(isKO?' ko-game':'');
+  const gk = isKO ? gameKey(catId, null, g.ri, g.gi) : gameKey(catId, idx);
+  const unsaved = unsavedGames.get(gk);
+  const msg = unsaved ? scoreMsg(unsaved) : '';
+  row.id = 'gc-' + gk;
+  row.className = 'gc'+(done?' done':'')+(isKO?' ko-game':'')+(unsaved?' unsaved':'')+(msg?' invalid':'');
   const setter = k => isKO ? `setKS('${catId}',${g.ri},${g.gi},'${k}',this.value` : `setGS('${catId}',${idx},'${k}',this.value`;
   // Stable ids let the focus-preserving re-render put the caret back.
   const sid = k => isKO ? `si-${catId}-k${g.ri}-${g.gi}-${k}` : `si-${catId}-${idx}-${k}`;
@@ -2218,9 +2243,10 @@ function buildGameRow(catId, g, idx, isKO) {
     <span class="gvs">${t('sched.vs')}</span>
     <span class="gt r">${dnH(tSlot(g.b))}</span>
     <span class="sw">${scoreCell}</span>`;
-  const errId = isKO ? `kerr-${catId}-${g.ri}-${g.gi}` : `gerr-${catId}-${idx}`;
   const errD  = document.createElement('div');
-  errD.id = errId; errD.className = 'score-err'; errD.style.display = 'none';
+  errD.id = 'serr-' + gk; errD.className = 'score-err';
+  const showErr = !!msg && !!unsaved.shown;
+  errD.textContent = showErr ? msg : ''; errD.style.display = showErr ? 'block' : 'none';
   wrap.appendChild(row); wrap.appendChild(errD);
   return wrap;
 }
@@ -3235,6 +3261,7 @@ function deleteCategory(ci) {
 
 function resetAllScores() {
   if (!superAdmin||!confirm(t('settings.confirmResetScores'))) return;
+  unsavedGames.clear();
   categories.forEach(cat => {
     const cs=state[cat.id];
     if (!cs) return;
