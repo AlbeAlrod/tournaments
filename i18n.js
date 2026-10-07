@@ -241,7 +241,7 @@ const DICT = {
 
     // ── registration form ──
     'reg.title':        'הרשמה',
-    'reg.subtitle':     'הרשמה ל{name}',
+    'reg.subtitle':     'הרשמה ל־{name}',
     'reg.closed':       'ההרשמה סגורה כרגע.',
     'reg.p1Label':      'שם שחקן/ית 1',
     'reg.p2Label':      'שם שחקן/ית 2',

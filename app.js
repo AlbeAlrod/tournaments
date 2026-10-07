@@ -648,7 +648,7 @@ function renderMyReg() {
     const cat = categories.find(c => c.id === r.category);
     return `<div class="d-reg-mine-row">
       <div>
-        <div>${dnH(regPairName(r))}${cat ? ' · ' + escH(cat.name) : ''}</div>
+        <div>${dnH(regPairName(r))}${cat ? ` · <bdi>${escH(cat.name)}</bdi>` : ''}</div>
         <span class="status-badge badge-${escH(r.status)}">${escH(statusTxt(r.status))}</span>
       </div>
       ${r.status === 'pending'
@@ -681,7 +681,7 @@ function renderReceipt() {
     <div class="form-card d-receipt" role="status">
       <h3 class="d-receipt-title">${t('reg.receiptTitle')}</h3>
       <div class="d-receipt-line"><span class="d-muted">${t('reg.receiptPair')}</span> <strong>${dnH(lastReceipt.p1 + ' / ' + lastReceipt.p2)}</strong></div>
-      <div class="d-receipt-line"><span class="d-muted">${t('reg.catLabel')}</span> <strong>${escH(cat ? cat.name : '')}</strong></div>
+      <div class="d-receipt-line"><span class="d-muted">${t('reg.catLabel')}</span> <strong><bdi>${escH(cat ? cat.name : '')}</bdi></strong></div>
       <div class="d-receipt-line"><span class="d-muted">${t('reg.receiptStatus')}</span> <strong>${t('reg.pendingApproval')}</strong></div>
       <div id="receipt-pay-wrap"></div>
       <p id="receipt-pay-note" class="d-muted" style="display:none">${t('reg.payNote')}</p>
@@ -944,7 +944,7 @@ function renderRegistrations() {
     return `<div class="reg-row status-${escH(r.status)}">
       <div class="reg-info">
         <div class="reg-name">${escH(regPairName(r))}</div>
-        <div class="reg-meta">${escH(catName)} · <span class="num">${fmtDate(r.createdAt)}</span></div>
+        <div class="reg-meta"><bdi>${escH(catName)}</bdi> · <span class="num">${fmtDate(r.createdAt)}</span></div>
         <div class="reg-phone">${phoneHtml}</div>
       </div>
       <span class="status-badge badge-${escH(r.status)}">${escH(statusTxt(r.status))}</span>
@@ -1021,11 +1021,11 @@ function fmtEventDate(v) {
 }
 function renderInfoCards() {
   const items = [
-    ['📅', fmtEventDate(meta.eventDate)],
-    ['📍', meta.venue],
-    ['💳', meta.price],
+    ['📅', fmtEventDate(meta.eventDate), 'bdi'],
+    ['📍', meta.venue, 'bdi'],
+    ['💳', meta.price, 'num'],   // "₪120" / "120 ש״ח" — isolated so the digits keep their place
   ].filter(([, v]) => v && String(v).trim());
-  const html = items.map(([ic, v]) => `<span class="d-info-item"><span aria-hidden="true">${ic}</span><span>${escH(v)}</span></span>`).join('');
+  const html = items.map(([ic, v, cls]) => `<span class="d-info-item"><span aria-hidden="true">${ic}</span><span class="${cls}">${escH(v)}</span></span>`).join('');
   ['reg-info-card', 'sched-info-card'].forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
@@ -1047,7 +1047,7 @@ function renderRegisterPage() {
   if (formWrap) formWrap.style.display = (meta.regOpen && !noCats && !lastReceipt) ? '' : 'none';
   renderMyReg();
   renderReceipt();
-  if (sub) sub.textContent = meta.name ? t('reg.subtitle', { name: meta.name }) : '';
+  if (sub) sub.innerHTML = meta.name ? t('reg.subtitle', { name: `<bdi>${escH(meta.name)}</bdi>` }) : '';
   const catWrap = document.getElementById('frm-cat-wrap');
   if (catWrap) {
     // Live snapshots re-render this page: keep the category the user already picked.
@@ -2424,7 +2424,7 @@ function renderScheduleContent() {
       if (g._isKO) key = `ko-${g._catId}-${g._rn}`;
       else if (isThirdPlace) key = `3p-${g._catId}`;
       else key = `pool-${g._catId}`;
-      label = catName ? t('sched.subLabel', { cat: catName, stage }) : stage;
+      label = catName ? t('sched.subLabel', { cat: `\u2068${catName}\u2069`, stage }) : stage;
       if (!subGroups.has(key)) subGroups.set(key, {label, games:[]});
       subGroups.get(key).games.push(g);
     });

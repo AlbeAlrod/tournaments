@@ -918,6 +918,8 @@ input, textarea, select { max-width: 100%; }
   unicode-bidi: plaintext; text-align: start;
 }
 .champ-name { unicode-bidi: plaintext; }   /* stays centred */
+/* Titles follow their own script, so a long name is cut at its END, not its start */
+.lname, .build-cat-name, .part-cat-title, .cat-section-header, .grp-cat-name { unicode-bidi: plaintext; text-align: start; }
 
 /* Arrows that app.js writes as "→" text */
 [dir=rtl] .hlane-arrow,
