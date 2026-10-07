@@ -733,13 +733,12 @@ function renderRegisterPage() {
   const closedMsg = document.getElementById('reg-closed-msg');
   const formWrap  = document.getElementById('reg-form-wrap');
   const sub       = document.getElementById('reg-subtitle');
-  if (!meta.regOpen) {
-    closedMsg?.classList.remove('h');
-    if (formWrap) formWrap.style.display = 'none';
-  } else {
-    closedMsg?.classList.add('h');
-    if (formWrap) formWrap.style.display = '';
-  }
+  const soonMsg   = document.getElementById('reg-soon-msg');
+  const noCats    = !categories.length;
+  // Closed wins over "opens soon"; with no categories there is nothing to register for.
+  closedMsg?.classList.toggle('h', !!meta.regOpen);
+  soonMsg?.classList.toggle('h', !meta.regOpen || !noCats);
+  if (formWrap) formWrap.style.display = (meta.regOpen && !noCats) ? '' : 'none';
   if (sub) sub.textContent = meta.name ? `Register for ${meta.name}` : '';
   const catWrap = document.getElementById('frm-cat-wrap');
   if (catWrap) {
@@ -749,9 +748,16 @@ function renderRegisterPage() {
       `<button type="button" class="cat-pill${c.id === prevSel ? ' on' : ''}" data-value="${escH(c.id)}" onclick="selectRegCat(this)">${escH(c.name)}</button>`
     ).join('');
     if (categories.length === 1) catWrap.querySelector('.cat-pill')?.classList.add('on');
-    // Hide category row when only one option
+    // One option: keep the (selected) pill hidden but tell the user which category it is.
+    const single = categories.length === 1;
+    catWrap.style.display = single ? 'none' : '';   // .h is not global in styles.css
     const catRow = catWrap.closest('.form-row');
-    if (catRow) catRow.style.display = categories.length === 1 ? 'none' : '';
+    if (catRow) catRow.style.display = categories.length ? '' : 'none';
+    const singleEl = document.getElementById('frm-cat-single');
+    if (singleEl) {
+      singleEl.style.display = single ? '' : 'none';
+      singleEl.textContent = single ? categories[0].name : '';
+    }
   }
   const noteEl = document.getElementById('reg-note');
   if (noteEl) {

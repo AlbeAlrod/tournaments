@@ -7,6 +7,10 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700;800;900&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="styles.css?v=66"/>
+<!-- Lane D temporary styles (d-*) — to be moved into styles.css by Lane E -->
+<style id="lane-d">
+.d-cat-single{font-weight:600;color:var(--text);padding:6px 0}
+</style>
 </head>
 <body>
 
@@ -87,6 +91,7 @@
         <p id="reg-subtitle"></p>
       </div>
       <div id="reg-closed-msg" class="info-box h">Registration is currently closed.</div>
+      <div id="reg-soon-msg" class="info-box h">Registration opens soon.</div>
       <div id="reg-form-wrap">
         <div class="form-card">
           <div class="form-row">
@@ -104,6 +109,7 @@
           <div class="form-row">
             <label>Category</label>
             <div id="frm-cat-wrap" class="cat-pills"></div>
+            <div id="frm-cat-single" class="d-cat-single" style="display:none"></div>
           </div>
           <div id="frm-err" class="frm-err h"></div>
           <div id="frm-ok" class="frm-ok h">Registration submitted! You will be notified upon approval.</div>
