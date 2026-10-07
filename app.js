@@ -2721,10 +2721,11 @@ function renderSettings() {
     </div>`;
   container.appendChild(lsec);
   attachDropZone(lsec.querySelector('#logo-drop'), (url, err) => {
+    if (url && !metaFits({ logoUrl: url })) { url = null; err = META_FULL_MSG; }
     const errEl = document.getElementById('logo-drop-err');
     if (errEl) { errEl.textContent = err || ''; errEl.style.display = err ? '' : 'none'; }
     if (url) { updateMeta('logoUrl', url); renderSettings(); }
-  });
+  }, { maxBytes: 60000 });
 
   // ── GROUP COLORS ─────────────────────────────────────────────────
   const grpNames = ['A','B','C','D'];
@@ -2996,6 +2997,9 @@ function updateSponsorLogo(i, key, val) {
   pushMetaOnly();
 }
 const isDataUrl = u => /^data:image\//i.test(u || '');
+// The tournament doc must stay well under Firestore's 1 MiB limit (images are data URLs).
+const metaFits = patch => JSON.stringify({ ...meta, ...patch }).length <= 500000;
+const META_FULL_MSG = 'Not enough room for this image. Remove a sponsor or logo, or use an image URL instead.';
 function removeLogo() {
   updateMeta('logoUrl', '');
   renderSettings();
@@ -3003,7 +3007,10 @@ function removeLogo() {
 async function uploadSponsorLogo(i) {
   const errEl = () => document.getElementById('sponsor-upload-err');
   try {
-    const url = await pickImage({ maxPx: 512, maxBytes: 80000 });
+    const url = await pickImage({ maxPx: 512, maxBytes: 25000 });
+    const logos = [...(meta.sponsorLogos || [])];
+    logos[i] = { ...(logos[i] || { alt: '' }), url };
+    if (!metaFits({ sponsorLogos: logos })) throw new Error(META_FULL_MSG);
     const e = errEl(); if (e) e.style.display = 'none';
     updateSponsorLogo(i, 'url', url);
   } catch (e) {
