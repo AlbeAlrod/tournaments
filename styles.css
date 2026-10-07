@@ -915,3 +915,25 @@ input[type="password"] { direction: ltr; }
 }
 :where(:lang(he)) :where(.form-row label, .stbl th, .scoring-rules-tbl th) { letter-spacing: 0; text-transform: none; }
 body:lang(he) { letter-spacing: 0; }
+
+/* Register extras, registrations tools, image drop zone */
+.d-cat-single{font-weight:600;color:var(--text);padding:6px 0}
+.d-muted{color:var(--text3);font-size:13px}
+.d-reg-mine-row{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.d-receipt-title{margin:0 0 12px;font-size:18px}
+.d-receipt-line{display:flex;gap:10px;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)}
+.d-receipt #receipt-pay-wrap{margin:14px 0 6px}
+.d-receipt .submit-btn{margin-top:14px}
+.d-info-card{display:flex;flex-wrap:wrap;gap:8px 18px;margin:0 0 14px;padding:12px 14px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r,12px);font-size:14px;color:var(--text)}
+.d-info-item{display:flex;gap:6px;align-items:baseline}
+#reg-note{margin:0 0 14px}
+.d-reg-tools{display:flex;gap:8px;align-items:center;margin-top:10px}
+.d-reg-tools input{flex:1;min-width:0}
+.d-reg-counts{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:10px;font-size:12px;color:var(--text2)}
+.d-reg-count strong{color:var(--text)}
+.d-drop{display:flex;align-items:center;justify-content:center;min-width:200px;min-height:72px;padding:10px;border:2px dashed var(--border2);border-radius:var(--rs,8px);cursor:pointer;text-align:center}
+.d-drop:focus-visible,.d-drop.d-drop-over{border-color:var(--primary);background:var(--surface)}
+.d-drop[aria-busy="true"]{opacity:.6;cursor:progress}
+.d-drop-hint{font-size:12px;color:var(--text3)}
+.d-drop-err{font-size:12px;color:var(--red,#DC2626)}
+.d-paid-toggle{display:inline-flex;gap:4px;align-items:center;font-size:12px;color:var(--text2);white-space:nowrap;cursor:pointer}
