@@ -556,7 +556,7 @@ main { position: relative; z-index: 5; max-width: 980px; margin: 0 auto; padding
 .num-val { font-size: var(--fs-lg); font-weight: 700; font-variant-numeric: tabular-nums;
   color: var(--primary-text); min-width: 36px; text-align: center; }
 .time-inp { background: var(--bg2); border: 1px solid var(--border2); border-radius: var(--rs);
-  color: var(--text); min-height: var(--tap); padding: 8px 12px; font-size: var(--fs-md); font-family: inherit; width: 120px; }
+  color: var(--text); min-height: var(--tap); padding: 8px 12px; font-size: var(--fs-md); font-family: inherit; width: auto; min-width: 128px; }
 .time-inp:focus { outline: none; border-color: var(--primary); }
 .sett-preview { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--r);
   padding: 16px; margin-bottom: 16px; }

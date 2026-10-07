@@ -539,7 +539,7 @@ function refreshAdmin() {
     if (!admin) mtxt.textContent = t('admin.modeView');
     else if (meta.phase==='registration') mtxt.textContent = t(adminLevel===2 ? 'admin.modeMasterReg' : 'admin.modeAdminReg');
     else if (meta.phase==='built') mtxt.textContent = t(adminLevel===2 ? 'admin.modeMasterBuilt' : 'admin.modeAdminBuilt');
-    else mtxt.textContent = t('admin.modeScores');
+    else mtxt.textContent = t(adminLevel===2 ? 'admin.modeMasterScores' : 'admin.modeScores');
   }
   // Hide Register tab when admin is logged in (registration phase)
   const regTab = document.getElementById('tab-register');
@@ -573,6 +573,7 @@ function closeStartModal() {
 }
 async function confirmStartTournament() {
   closeStartModal();
+  if (!categories.length) return;
   meta.phase = 'tournament';
   await pushMetaOnly();
   document.body.classList.remove('phase-registration');
@@ -1168,7 +1169,7 @@ function renderBuildPage() {
   const startNote = t(meta.phase === 'built' ? 'build.startNoteBuilt' : 'build.startNoteReg');
   startWrap.innerHTML = `
     <p style="font-size:13px;color:var(--text3);margin-bottom:12px;line-height:1.5">${startNote}</p>
-    <button class="gen-btn" onclick="openStartModal()" ${meta.phase !== 'built' ? 'disabled' : ''}>${t('build.start')}</button>`;
+    <button class="gen-btn" onclick="openStartModal()" ${meta.phase !== 'built' || !categories.length ? 'disabled' : ''}>${t('build.start')}</button>`;
   el.appendChild(startWrap);
 }
 
@@ -2795,6 +2796,8 @@ function renderCatFilters() {
 function renderSettings() {
   const container = document.getElementById('settings-container');
   if (!container || !superAdmin) return;
+  // Rebuilding empties the page for a moment — keep the scroll position (e.g. on "add category").
+  const keepY = window.scrollY;
   container.innerHTML = '';
 
   // ── DESIGN ──────────────────────────────────────────────────────
@@ -2987,7 +2990,7 @@ function renderSettings() {
     container.appendChild(gsec);
   }
 
-  if (meta.phase === 'tournament') return;
+  if (meta.phase === 'tournament') { window.scrollTo(0, keepY); return; }
 
   // ── SPORT ───────────────────────────────────────────────────────
   const sportSection = document.createElement('div');
@@ -3085,8 +3088,9 @@ function renderSettings() {
   startSection.innerHTML = `
     <div class="sett-section-title">${t('settings.start')}</div>
     <p style="font-size:13px;color:var(--text3);margin-bottom:16px;line-height:1.55">${t('settings.startNote')}</p>
-    <button class="gen-btn" onclick="openStartModal()">${t('build.start')}</button>`;
+    <button class="gen-btn" onclick="openStartModal()" ${categories.length ? '' : 'disabled'}>${t('build.start')}</button>`;
   container.appendChild(startSection);
+  window.scrollTo(0, keepY);
 }
 
 // ── Dynamic group color CSS ──────────────────────────────────────
@@ -3234,7 +3238,7 @@ function renderCatItem(cat, ci) {
       <div class="cat-sett-field">
         <span class="cat-sett-label">${t('settings.startTime')}</span>
         <div class="cat-sett-ctrl">
-          <input type="time" class="time-inp" style="width:100px" value="${cfg.startTime||'08:00'}" onchange="updateCatCfg(${ci},'startTime',this.value)"/>
+          <input type="time" class="time-inp" value="${cfg.startTime||'08:00'}" onchange="updateCatCfg(${ci},'startTime',this.value)"/>
         </div>
       </div>
     </div>
