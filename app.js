@@ -227,8 +227,12 @@ async function loadTournament() {
       if (!state[cat.id]) state[cat.id] = { roster:[], groups:[], sched:[], ko:[] };
     });
     applyingRemote = false;
-    applyTheme(meta.primaryColor, meta.secondaryColor);
-    renderAll();
+    // Remote update: refresh header/theme/phase, then only the page on screen
+    // (renderAll rebuilt every page on every score from every phone).
+    const _f = _focusSnapshot();
+    renderChrome();
+    rerender();
+    _focusRestore(_f);
     setSyncStatus(true);
   });
 
@@ -3000,7 +3004,8 @@ function renderAll() {
   renderAllInner();
   _focusRestore(_f);
 }
-function renderAllInner() {
+// Everything outside the pages: theme, logo, header, phase classes, sponsors, admin bar.
+function renderChrome() {
   applyTheme(meta.primaryColor, meta.secondaryColor);
   applyGroupColors();
   applyLogo(meta.logoUrl);
@@ -3014,8 +3019,11 @@ function renderAllInner() {
   document.body.classList.toggle('phase-tournament',   meta.phase === 'tournament');
 
   renderSponsorBar();
-  renderCatFilters();
   refreshAdmin();
+}
+function renderAllInner() {
+  renderChrome();
+  renderCatFilters();
   renderRegisterPage();
   renderParticipants();
   renderStandings();
