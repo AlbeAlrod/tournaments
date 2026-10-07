@@ -538,6 +538,14 @@ async function submitRegistration() {
   err.classList.add('h'); ok.classList.add('h');
   if (!p1) { err.textContent = 'Player 1 name is required.'; err.classList.remove('h'); return; }
   if (!catId) { err.textContent = 'Please select a category.'; err.classList.remove('h'); return; }
+  // meta is kept live by onSnapshot — the organizer may have closed registration
+  // while this form was open.
+  if (!meta.regOpen) { renderRegisterPage(); err.textContent = 'Registration is currently closed.'; err.classList.remove('h'); return; }
+  const btn = document.getElementById('frm-submit');
+  if (btn?.disabled) return;           // double tap while a write is in flight
+  const btnTxt = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
+  const unlock = () => { if (btn) { btn.disabled = false; btn.textContent = btnTxt; } };
   try {
     await addDoc(REGS_REF, {
       p1, p2, phone, category: catId,
@@ -550,7 +558,9 @@ async function submitRegistration() {
     ok.classList.remove('h');
     if (categories.length !== 1)
       document.querySelectorAll('#frm-cat-wrap .cat-pill').forEach(b => b.classList.remove('on'));
+    unlock();
   } catch(e) {
+    unlock();
     err.textContent = 'Submission failed. Please try again.';
     err.classList.remove('h');
   }
