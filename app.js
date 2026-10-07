@@ -734,9 +734,11 @@ async function setRegStatus(id, status) {
       const r = registrations.find(r => r.id === id);
       await updateDoc(doc(db, 'tournaments', tId, 'registrations', id), { status });
       if (r) {
+        const wasApproved = r.status === 'approved';
         r.status = status;
         // Any approval → make sure the pair is in its category's build roster.
         if (status === 'approved' && addRegToRoster(r)) await pushToCloud();
+        if (wasApproved && status !== 'approved' && removeRegFromRoster(r)) await pushToCloud();
       }
     }
     renderRegistrations();
@@ -762,6 +764,14 @@ function addRegToRoster(r) {
   const name = regPairName(r);
   if (cs.roster.some(n => normName(n) === normName(name))) return false;
   cs.roster.push(name);
+  return true;
+}
+
+function removeRegFromRoster(r) {
+  const roster = state[r.category]?.roster;
+  const i = roster ? roster.findIndex(n => normName(n) === normName(regPairName(r))) : -1;
+  if (i < 0) return false;
+  roster.splice(i, 1);
   return true;
 }
 
