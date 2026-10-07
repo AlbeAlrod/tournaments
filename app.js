@@ -561,6 +561,7 @@ function refreshAdmin() {
       document.getElementById('page-'+p)?.classList.contains('on'));
     if (onRegPage) goPage('standings');
   }
+  updateNavFade();
 }
 
 // ── Start Tournament ────────────────────────────────────────
@@ -3191,7 +3192,7 @@ function renderCatItem(cat, ci) {
     </div>
     <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
       <div class="cat-sett-label" style="margin-bottom:8px">${t('settings.scoringRules')}</div>
-      <table class="scoring-rules-tbl">
+      <div class="srt-wrap"><table class="scoring-rules-tbl">
         <thead><tr><th>${t('settings.rules.stage')}</th><th>${t('settings.rules.pts')}</th><th>${t('settings.rules.switch')}</th><th>${t('settings.rules.min')}</th></tr></thead>
         <tbody>
           ${['pool', 'r16', 'qf', 'sf', 'third', 'final'].map(key => {
@@ -3217,7 +3218,7 @@ function renderCatItem(cat, ci) {
             </tr>`;
           }).join('')}
         </tbody>
-      </table>
+      </table></div>
     </div>
   </div>`;
 }
@@ -3355,6 +3356,12 @@ function goPage(p) {
   if (p==='schedule')       { renderStats(); renderCourtFilter(); renderScheduleContent(); }
   if (p==='bracket')        renderBracket();
   if (p==='settings')       renderSettings();
+}
+
+// Fade the nav's end edge while more tabs are hidden past it (scroll hint).
+function updateNavFade() {
+  const nav = document.getElementById('main-nav');
+  if (nav) nav.classList.toggle('fade-end', nav.scrollWidth - nav.clientWidth - Math.abs(nav.scrollLeft) > 2);
 }
 
 function rerender() {
@@ -3585,6 +3592,8 @@ document.addEventListener('visibilitychange', () => { if (document.hidden) flush
 window.addEventListener('pagehide', () => flushScoreWrites());
 
 window.addEventListener('langchange', () => { applyStatic(); renderAll(); });
+window.addEventListener('resize', updateNavFade);
+document.getElementById('main-nav')?.addEventListener('scroll', updateNavFade, { passive: true });
 
 window.addEventListener('load', async () => {
   initLang();

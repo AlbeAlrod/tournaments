@@ -162,6 +162,10 @@ nav { display: flex; align-items: center; padding: 0 16px; gap: 4px;
   background: var(--nav-bg); backdrop-filter: blur(16px) saturate(150%);
   border-bottom: 1px solid var(--border); overflow-x: auto; scrollbar-width: none; transition: background .4s; }
 nav::-webkit-scrollbar { display: none; }
+#main-nav.fade-end { -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 40px), transparent);
+  mask-image: linear-gradient(to right, #000 calc(100% - 40px), transparent); }
+[dir=rtl] #main-nav.fade-end { -webkit-mask-image: linear-gradient(to left, #000 calc(100% - 40px), transparent);
+  mask-image: linear-gradient(to left, #000 calc(100% - 40px), transparent); }
 .tab { font-family: inherit; font-weight: 500; font-size: var(--fs-sm); line-height: 1.25;
   padding: 14px 16px; border: none; border-bottom: 2px solid transparent;
   background: none; color: var(--text2); cursor: pointer;
@@ -875,6 +879,17 @@ input, textarea, select { max-width: 100%; }
   .sett-ctrl textarea { width: 100% !important; }
 
   .sponsor-logo { height: 28px; }
+
+  /* Registration requests: name full width, badge + paid on one row, actions on their own row */
+  .reg-row { grid-template-columns: 1fr auto; }
+  .reg-row > .reg-info, .reg-row > .reg-actions { grid-column: 1 / -1; }
+  .reg-name, .reg-phone { overflow-wrap: anywhere; }
+  .reg-row > .status-badge { justify-self: start; }
+
+  /* Scoring-rules table: scrolls inside its card instead of widening the page */
+  .srt-wrap { overflow-x: auto; }
+  .scoring-rules-tbl td, .scoring-rules-tbl th { padding: 4px 2px; }
+  .cat-item { padding: 12px; }
   .build-foot { flex-wrap: wrap; }
 
   /* Bracket: momentum scroll on iOS; tighter boxes, text stays ≥ 13px */
