@@ -3162,11 +3162,7 @@ async function autoAddPairToDB(name) {
 }
 
 // ============ BOOT ============
-// Prevent pinch-to-zoom (iOS ignores user-scalable=no since iOS 10)
-document.addEventListener('touchmove', e => {
-  if (e.touches.length > 1) e.preventDefault();
-}, { passive: false });
-document.addEventListener('gesturestart', e => e.preventDefault());
+// Pinch zoom is allowed on purpose (accessibility: small names / scores).
 
 // Don't lose a debounced score when the scorer locks the phone / leaves the page.
 document.addEventListener('visibilitychange', () => { if (document.hidden) flushScoreWrites(); });
