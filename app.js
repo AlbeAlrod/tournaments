@@ -579,25 +579,37 @@ async function setRegStatus(id, status) {
       registrations = registrations.filter(r => r.id !== id);
     } else {
       const r = registrations.find(r => r.id === id);
-      const wasRejected = r?.status === 'rejected';
       await updateDoc(doc(db, 'tournaments', tId, 'registrations', id), { status });
       if (r) {
         r.status = status;
-        // Re-approve a rejected pair → add back to build roster
-        if (status === 'approved' && wasRejected) {
-          const catId = r.category;
-          const name = r.p1 + (r.p2 ? ' / ' + r.p2 : '');
-          if (state[catId]?.roster && !state[catId].roster.includes(name)) {
-            state[catId].roster.push(name);
-            await pushToCloud();
-          }
-        }
+        // Any approval → make sure the pair is in its category's build roster.
+        if (status === 'approved' && addRegToRoster(r)) await pushToCloud();
       }
     }
     renderRegistrations();
     renderParticipants();
     renderBuildPage();
   } catch(e) { alert('Error updating status'); }
+}
+
+// Ensure an approved registration's pair is in its category roster.
+// Empty roster → seed it from ALL approved registrations of that category (same
+// as the Build page does), so approving one pair never hides the others.
+// Returns true when the roster changed (caller pushes to cloud).
+function regPairName(r) { return r.p1 + (r.p2 ? ' / ' + r.p2 : ''); }
+function addRegToRoster(r) {
+  const catId = r.category;
+  if (!catId || !categories.some(c => c.id === catId)) return false;
+  if (!state[catId]) state[catId] = { roster:[], groups:[], sched:[], ko:[] };
+  const cs = state[catId];
+  if (!cs.roster.length) {
+    cs.roster = registrations.filter(x => x.status === 'approved' && x.category === catId).map(regPairName);
+    return cs.roster.length > 0;
+  }
+  const name = regPairName(r);
+  if (cs.roster.some(n => normName(n) === normName(name))) return false;
+  cs.roster.push(name);
+  return true;
 }
 
 async function setRegPaid(id, paid) {
