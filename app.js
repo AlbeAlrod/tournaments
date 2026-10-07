@@ -172,15 +172,11 @@ async function loadTournament() {
 
   const snap = await getDoc(TREF);
   if (!snap.exists()) {
-    applyingRemote = true;
-    const initData = {
-      meta: { ...meta },
-      categories: [],
-      state: {},
-      updatedAt: serverTimestamp()
-    };
-    await setDoc(TREF, initData);
-    applyingRemote = false;
+    // Unknown id (typo / deleted): never create a doc from a public link —
+    // tournaments are created in admin.html. Show a friendly not-found view.
+    document.getElementById('view-loading').classList.add('h');
+    document.getElementById('view-notfound')?.classList.remove('h');
+    return false;
   } else {
     const data = snap.data();
     if (data.meta) meta = { ...meta, ...data.meta };
