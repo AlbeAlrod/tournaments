@@ -887,13 +887,19 @@ function csvCell(v) {
   if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;          // keep spreadsheets from running formulas
   return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
 }
+// Phone as a ="…" formula so Excel keeps the leading 0 / + (only for plain numbers).
+const csvPhone = p => /^\+?\d+$/.test(p || '') ? `"=""${p}"""` : csvCell(p);
+// Same rows as on screen: current language, local time, active filters.
 function exportRegistrationsCSV() {
   if (!admin) return;
-  const head = ['name1','name2','phone','category','status','paid','createdAt'];
-  const lines = [head.join(',')].concat(registrations.map(r => {
+  const head = [t('common.player1'), t('common.player2'), t('reg.phoneLabel'), t('reg.catLabel'),
+    t('csv.status'), t('admin.paid'), t('csv.created')];
+  const lines = [head.map(csvCell).join(',')].concat(filteredRegs().map(r => {
     const cat = categories.find(c => c.id === r.category);
-    const t = r.createdAt?.seconds ? new Date(r.createdAt.seconds * 1000).toISOString() : '';
-    return [r.p1, r.p2, r.phone, cat ? cat.name : r.category, r.status, r.paid ? 'yes' : 'no', t].map(csvCell).join(',');
+    // sv-SE formats as "2026-10-07 17:34:00" in the viewer's own time zone
+    const at = r.createdAt?.seconds ? new Date(r.createdAt.seconds * 1000).toLocaleString('sv-SE') : '';
+    return [csvCell(r.p1), csvCell(r.p2), csvPhone(r.phone), ...[cat ? cat.name : r.category, statusTxt(r.status),
+      t(r.paid ? 'csv.yes' : 'csv.no'), at].map(csvCell)].join(',');
   }));
   // BOM so Excel opens Hebrew names as UTF-8
   const blob = new Blob(['\ufeff' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
@@ -904,10 +910,7 @@ function exportRegistrationsCSV() {
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
 
-function renderRegistrations() {
-  const el = document.getElementById('registrations-list');
-  if (!el) return;
-  renderRegCounts();
+function filteredRegs() {
   let list = [...registrations];
   if (regFilter !== 'all') list = list.filter(r => r.status === regFilter);
   if (regPaidFilter === 'paid')   list = list.filter(r => r.paid);
@@ -918,6 +921,14 @@ function renderRegistrations() {
     list = list.filter(r => `${r.p1||''} ${r.p2||''}`.toLowerCase().includes(q)
       || (qDigits.length >= 3 && String(r.phone||'').replace(/\D/g, '').includes(qDigits)));
   }
+  return list;
+}
+
+function renderRegistrations() {
+  const el = document.getElementById('registrations-list');
+  if (!el) return;
+  renderRegCounts();
+  const list = filteredRegs();
   if (!list.length) {
     el.innerHTML = `<div class="empty"><h3>${t('admin.noRegs')}</h3></div>`;
     return;
