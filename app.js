@@ -438,6 +438,7 @@ function applyTheme(primary, secondary) {
 function adminClick() {
   if (admin) {
     adminLevel = 0; admin = false; superAdmin = false;
+    try { sessionStorage.removeItem(AUTH_KEY()); } catch(_) {}
     refreshAdmin(); rerender(); return;
   }
   loginRole = 'admin';
@@ -481,15 +482,34 @@ async function tryLogin() {
         meta[field] = hashed;
       } catch(_) {}
     }
-    adminLevel = loginRole === 'master' ? 2 : 1;
-    admin      = true;
-    superAdmin = adminLevel === 2;
+    setRole(loginRole);
+    try { sessionStorage.setItem(AUTH_KEY(), JSON.stringify({ role: loginRole, h: hashed })); } catch(_) {}
     closeLogin(); refreshAdmin(); rerender();
   } else {
     document.getElementById('pw-err').classList.remove('h');
     document.getElementById('pw-inp').value = '';
     document.getElementById('pw-inp').focus();
   }
+}
+
+function setRole(role) {
+  adminLevel = role === 'master' ? 2 : 1;
+  admin      = true;
+  superAdmin = adminLevel === 2;
+}
+
+// Login survives reloads for this browser tab (sessionStorage, per tournament).
+// Stores the password hash and re-checks it, so a changed password logs out.
+const AUTH_KEY = () => 'luz.auth.' + tId;
+async function restoreLogin() {
+  let s = null;
+  try { s = JSON.parse(sessionStorage.getItem(AUTH_KEY()) || 'null'); } catch(_) {}
+  if (!s || !['admin','master'].includes(s.role)) return;
+  const expected = meta[s.role === 'master' ? 'masterPassword' : 'adminPassword'];
+  if (!expected) return;
+  const isHash = expected.length === 64 && /^[0-9a-f]+$/.test(expected);
+  if (s.h === (isHash ? expected : await sha256(expected))) setRole(s.role);
+  else try { sessionStorage.removeItem(AUTH_KEY()); } catch(_) {}
 }
 
 function closeLogin() {
@@ -3539,6 +3559,7 @@ window.addEventListener('load', async () => {
   applyStatic();
 
   activeCat = null;
+  await restoreLogin();
   firebaseReady = true;
   loadPlayerDB(); // load player database in background
   document.getElementById('view-loading').classList.add('h');
@@ -3546,5 +3567,5 @@ window.addEventListener('load', async () => {
 
   renderAll();
 
-  goPage(meta.phase === 'registration' ? 'register' : 'standings');
+  goPage(meta.phase !== 'registration' ? 'standings' : admin ? 'registrations' : 'register');
 });
