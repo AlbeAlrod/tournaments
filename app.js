@@ -3,10 +3,10 @@ import {
   getFirestore, doc, getDoc, setDoc, onSnapshot, serverTimestamp,
   collection, addDoc, getDocs, updateDoc, deleteDoc, query, orderBy, FieldPath, runTransaction
 } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
-import { pickImage, attachDropZone } from "./uploader.js?v=67";
-import { t, initLang, setLang, getLang, applyStatic, fmtDate, tRound, tSlot } from './i18n.js?v=67';
+import { pickImage, attachDropZone } from "./uploader.js?v=68";
+import { t, initLang, setLang, getLang, applyStatic, fmtDate, tRound, tSlot } from './i18n.js?v=68';
 // Same Firebase config as below, so common.js's initializeApp returns this app (no duplicate).
-import { onColor } from './common.js?v=67';
+import { onColor } from './common.js?v=68';
 
 // ============ FIREBASE ============
 const firebaseConfig = {
