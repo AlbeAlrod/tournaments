@@ -61,6 +61,9 @@ async function sha256(str) {
 // "תום ומוריאל" → "תום מוריאל"  |  "מרג' ואילי" → "מרג' אילי"
 const dn = s => {
   if (!s || s.startsWith('Winner') || /^[A-Z]\d+$/.test(s)) return s;
+  // Registered pairs are always "p1 / p2" — a "ו" there is part of a real name
+  // (e.g. "ורד"), so only strip the connector in slash-less legacy names.
+  if (s.includes('/')) return s;
   return s.replace(/\sו([^\s])/g, ' $1');
 };
 const dnH = s => escH(dn(s));
