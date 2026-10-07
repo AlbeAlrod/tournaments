@@ -23,6 +23,11 @@
 .d-reg-tools input{flex:1;min-width:0}
 .d-reg-counts{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:10px;font-size:12px;color:var(--text2)}
 .d-reg-count strong{color:var(--text)}
+.d-drop{display:flex;align-items:center;justify-content:center;min-width:200px;min-height:72px;padding:10px;border:2px dashed var(--border2);border-radius:var(--rs,8px);cursor:pointer;text-align:center}
+.d-drop:focus-visible,.d-drop.d-drop-over{border-color:var(--primary);background:var(--surface)}
+.d-drop[aria-busy="true"]{opacity:.6;cursor:progress}
+.d-drop-hint{font-size:12px;color:var(--text3)}
+.d-drop-err{font-size:12px;color:var(--red,#DC2626)}
 .d-paid-toggle{display:inline-flex;gap:4px;align-items:center;font-size:12px;color:var(--text2);white-space:nowrap;cursor:pointer}
 </style>
 </head>

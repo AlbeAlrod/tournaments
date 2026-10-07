@@ -3,6 +3,7 @@ import {
   getFirestore, doc, getDoc, setDoc, onSnapshot, serverTimestamp,
   collection, addDoc, getDocs, updateDoc, deleteDoc, query, orderBy, FieldPath
 } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
+import { pickImage, attachDropZone } from "./uploader.js";
 
 // ============ FIREBASE ============
 const firebaseConfig = {
@@ -2692,16 +2693,28 @@ function renderSettings() {
     <div class="sett-section-title">Logo</div>
     <div class="sett-row" style="border-bottom:none">
       <div class="sett-label">
-        <span class="sett-name">Logo URL</span>
-        <span class="sett-desc">Tournament logo image</span>
+        <span class="sett-name">Logo</span>
+        <span class="sett-desc">Upload an image (PNG/JPG/WebP — resized automatically) or paste an image URL.</span>
       </div>
       <div class="sett-ctrl" style="flex-direction:column;align-items:flex-end;gap:10px">
-        <input class="text-inp" style="width:260px" value="${escH(meta.logoUrl)}"
-          onchange="updateMeta('logoUrl',this.value)" placeholder="https://…"/>
-        ${meta.logoUrl ? `<img src="${escH(meta.logoUrl)}" class="logo-prev-img" alt="" onerror="this.style.display='none'"/>` : ''}
+        <div class="d-drop" id="logo-drop" aria-label="Upload logo: click, drop or paste an image">
+          ${meta.logoUrl
+            ? `<img src="${escH(meta.logoUrl)}" class="logo-prev-img" alt="Current logo" onerror="this.style.display='none'"/>`
+            : `<span class="d-drop-hint">Drop logo here, click to choose, or paste</span>`}
+        </div>
+        <div id="logo-drop-err" class="d-drop-err" role="alert" style="display:none"></div>
+        ${meta.logoUrl ? `<button type="button" class="add-cat-btn" style="font-size:11px;padding:5px 10px" onclick="removeLogo()">Remove logo</button>` : ''}
+        <input class="text-inp" style="width:260px" value="${isDataUrl(meta.logoUrl) ? '' : escH(meta.logoUrl)}"
+          onchange="updateMeta('logoUrl',this.value.trim());renderSettings()"
+          placeholder="${isDataUrl(meta.logoUrl) ? 'Uploaded image — paste a URL to replace' : 'https://…'}" aria-label="Logo URL"/>
       </div>
     </div>`;
   container.appendChild(lsec);
+  attachDropZone(lsec.querySelector('#logo-drop'), (url, err) => {
+    const errEl = document.getElementById('logo-drop-err');
+    if (errEl) { errEl.textContent = err || ''; errEl.style.display = err ? '' : 'none'; }
+    if (url) { updateMeta('logoUrl', url); renderSettings(); }
+  });
 
   // ── GROUP COLORS ─────────────────────────────────────────────────
   const grpNames = ['A','B','C','D'];
@@ -2737,14 +2750,16 @@ function renderSettings() {
           <div class="sp-thumb">${l.url
             ? `<img src="${escH(l.url)}" alt="" onerror="this.style.display='none'" style="max-width:52px;max-height:32px;object-fit:contain"/>`
             : `<span style="color:var(--text3);font-size:20px;line-height:1">+</span>`}</div>
-          <input class="text-inp" style="flex:1;min-width:0" value="${escH(l.url)}"
-            placeholder="Image URL…" onchange="updateSponsorLogo(${i},'url',this.value)"/>
+          <input class="text-inp" style="flex:1;min-width:0" value="${isDataUrl(l.url) ? '' : escH(l.url)}"
+            placeholder="${isDataUrl(l.url) ? 'Uploaded image — paste URL to replace' : 'Image URL…'}" onchange="updateSponsorLogo(${i},'url',this.value.trim())"/>
+          <button type="button" class="add-cat-btn" style="font-size:11px;padding:5px 10px;flex-shrink:0" onclick="uploadSponsorLogo(${i})">Upload</button>
           <input class="text-inp" style="width:100px;flex-shrink:0" value="${escH(l.alt)}"
             placeholder="Name…" onchange="updateSponsorLogo(${i},'alt',this.value)"/>
           <button class="team-del" onclick="removeSponsorLogo(${i})" title="Remove">✕</button>
         </div>`).join('')
       : `<p class="sett-empty-note">No sponsors yet — add one below.</p>`}
     </div>
+    <div id="sponsor-upload-err" class="d-drop-err" role="alert" style="display:none"></div>
     <div class="sett-add-row">
       <button class="add-cat-btn" onclick="addSponsorLogo()">+ Add Sponsor</button>
     </div>`;
@@ -2969,6 +2984,23 @@ function updateSponsorLogo(i, key, val) {
   renderSponsorBar();
   renderSettings();
   pushMetaOnly();
+}
+const isDataUrl = u => /^data:image\//i.test(u || '');
+function removeLogo() {
+  updateMeta('logoUrl', '');
+  renderSettings();
+}
+async function uploadSponsorLogo(i) {
+  const errEl = () => document.getElementById('sponsor-upload-err');
+  try {
+    const url = await pickImage({ maxPx: 512, maxBytes: 80000 });
+    const e = errEl(); if (e) e.style.display = 'none';
+    updateSponsorLogo(i, 'url', url);
+  } catch (e) {
+    if (e && e.cancelled) return;
+    const el = errEl();
+    if (el) { el.textContent = (e && e.message) || 'Upload failed'; el.style.display = ''; }
+  }
 }
 function removeSponsorLogo(i) {
   if (!Array.isArray(meta.sponsorLogos)) return;
@@ -3298,7 +3330,7 @@ Object.assign(window, {
   setGS, setKS, filterSchedule,
   updateMeta, updateCatName, updateCatCfg, adjCatCfg,
   addCategory, deleteCategory, resetAllScores,
-  updateSponsorLogo, removeSponsorLogo, addSponsorLogo,
+  updateSponsorLogo, removeSponsorLogo, addSponsorLogo, uploadSponsorLogo, removeLogo, renderSettings,
   updateCatColor, renameGroup, moveTeam,
   updateGroupColor, updateBgColor,
   updateKORuleField,
