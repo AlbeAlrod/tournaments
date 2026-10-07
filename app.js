@@ -2096,7 +2096,7 @@ function renderBracketForCat(catId, container) {
   const seedPairs=[];
   for (let i=0; i<Math.floor(nKO/2); i++) seedPairs.push([koSeeds[i],koSeeds[nKO-1-i]]);
 
-  const scroll=document.createElement('div'); scroll.className='bscroll';
+  const scroll=document.createElement('div'); scroll.className='bscroll'; scroll.dataset.cat=catId;
   const tree=document.createElement('div'); tree.className='btree';
   scroll.appendChild(tree);
   const HG=90, GAP=12;
@@ -2223,7 +2223,7 @@ function renderBracketForCat(catId, container) {
       const lA3=dnH(thirdGame.a||'TBD'), lB3=dnH(thirdGame.b||'TBD');
       const knownA3=!isSeed3(thirdGame.a), knownB3=!isSeed3(thirdGame.b);
       const div3=document.createElement('div');
-      div3.style.cssText='border-top:1px solid rgba(255,255,255,0.15);margin-top:16px;padding-top:10px;';
+      div3.style.cssText='border-top:1px solid var(--border2);margin-top:16px;padding-top:10px;';
       const box3=document.createElement('div'); box3.className='bmatch-box';
       box3.innerHTML=`<div class="bm-label">3rd Place</div><div class="bmatch">
         <div class="bteam ${wa3?'win':''} ${knownA3?'':'tbd'}"><span class="bname">${lA3}</span>${hs3?`<span class="bsc">${thirdGame.sa}</span>`:''}</div>
@@ -2259,7 +2259,7 @@ function drawBracketLines(scroll, catId) {
     if (!sR.width) return false;
     const SL = scroll.scrollLeft, ST = scroll.scrollTop;
     const svg = document.createElementNS('http://www.w3.org/2000/svg','svg');
-    svg.className = 'bsvg';
+    svg.setAttribute('class', 'bsvg');  // SVG className is read-only (SVGAnimatedString)
     Object.assign(svg.style, {
       position:'absolute', top:'0', left:'0', pointerEvents:'none',
       width: scroll.scrollWidth+'px', height: scroll.scrollHeight+'px',
@@ -2268,13 +2268,14 @@ function drawBracketLines(scroll, catId) {
     scroll.style.position = 'relative';
 
     const rounds = [...scroll.querySelectorAll('.bround')];
-    const C = 'rgba(255,255,255,0.25)';
+    // Theme token (set by applyTheme) — white lines were invisible on the light theme.
+    const C = 'var(--border2)';
 
     const mk = (x1,y1,x2,y2) => {
       const el = document.createElementNS('http://www.w3.org/2000/svg','line');
       el.setAttribute('x1',Math.round(x1)); el.setAttribute('y1',Math.round(y1));
       el.setAttribute('x2',Math.round(x2)); el.setAttribute('y2',Math.round(y2));
-      el.setAttribute('stroke',C); el.setAttribute('stroke-width','2');
+      el.style.stroke = C; el.setAttribute('stroke-width','2');
       el.setAttribute('stroke-linecap','round');
       svg.appendChild(el);
     };
@@ -2329,6 +2330,19 @@ function drawBracketLines(scroll, catId) {
     });
   });
 }
+
+// Connector lines are absolutely positioned from measured boxes, so they go
+// stale when the viewport changes. Redraw (debounced) on resize / rotation.
+let _bracketResizeT = null;
+function redrawBracketLinesSoon() {
+  clearTimeout(_bracketResizeT);
+  _bracketResizeT = setTimeout(() => {
+    if (!document.getElementById('page-bracket')?.classList.contains('on')) return;
+    document.querySelectorAll('#bracket-container .bscroll[data-cat]').forEach(sc => drawBracketLines(sc, sc.dataset.cat));
+  }, 200);
+}
+window.addEventListener('resize', redrawBracketLinesSoon);
+window.addEventListener('orientationchange', redrawBracketLinesSoon);
 
 function renderBracket() {
   const container=document.getElementById('bracket-container');
