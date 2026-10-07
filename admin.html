@@ -47,6 +47,10 @@
   color: var(--text3);
   margin-bottom: 20px;
 }
+.pw-wrap { display: flex; gap: 6px; align-items: center; }
+.pw-wrap > input { flex: 1; min-width: 0; }
+.pw-eye { min-width: 44px; min-height: 44px; padding: 0 10px; border: 1px solid var(--border2, #ccc);
+  border-radius: var(--rs); background: transparent; color: var(--text2); font: inherit; font-size: 13px; cursor: pointer; flex-shrink: 0; }
 .pw-err {
   color: #DC2626;
   font-size: 13px;
@@ -313,7 +317,7 @@
     </div>
     <p class="login-sub">הזינו את סיסמת מנהל העל כדי לנהל טורנירים.</p>
     <div class="form-row">
-      <input class="form-input" type="password" id="adm-pw" placeholder="סיסמה"/>
+      <input class="form-input" type="password" autocomplete="current-password" id="adm-pw" placeholder="סיסמה"/>
     </div>
     <div id="adm-pw-err" class="pw-err h">סיסמה שגויה.</div>
     <button class="submit-btn" style="margin-top:14px" onclick="checkAdminPw()">כניסה</button>
@@ -414,11 +418,11 @@
     <div class="pw-grid">
       <div class="form-group">
         <label class="form-label">סיסמת אדמין חדשה</label>
-        <input class="modal-input" id="ed-admin-pw" placeholder="ריק = ללא שינוי" style="width:100%"/>
+        <input class="modal-input" type="password" autocomplete="new-password" id="ed-admin-pw" placeholder="ריק = ללא שינוי" style="width:100%"/>
       </div>
       <div class="form-group">
         <label class="form-label">סיסמת מאסטר חדשה</label>
-        <input class="modal-input" id="ed-master-pw" placeholder="ריק = ללא שינוי" style="width:100%"/>
+        <input class="modal-input" type="password" autocomplete="new-password" id="ed-master-pw" placeholder="ריק = ללא שינוי" style="width:100%"/>
       </div>
     </div>
 
@@ -460,11 +464,11 @@
     <div class="pw-grid">
       <div class="form-group">
         <label class="form-label">סיסמת אדמין</label>
-        <input class="modal-input" id="dup-admin-pw" style="width:100%"/>
+        <input class="modal-input" type="password" autocomplete="new-password" id="dup-admin-pw" style="width:100%"/>
       </div>
       <div class="form-group">
         <label class="form-label">סיסמת מאסטר</label>
-        <input class="modal-input" id="dup-master-pw" style="width:100%"/>
+        <input class="modal-input" type="password" autocomplete="new-password" id="dup-master-pw" style="width:100%"/>
       </div>
     </div>
 
@@ -501,11 +505,11 @@
     <div class="pw-grid">
       <div class="form-group">
         <label class="form-label">סיסמת אדמין</label>
-        <input class="modal-input" id="cr-admin-pw" placeholder="סיסמה" style="width:100%"/>
+        <input class="modal-input" type="password" autocomplete="new-password" id="cr-admin-pw" placeholder="סיסמה" style="width:100%"/>
       </div>
       <div class="form-group">
         <label class="form-label">סיסמת מאסטר</label>
-        <input class="modal-input" id="cr-master-pw" placeholder="סיסמה" style="width:100%"/>
+        <input class="modal-input" type="password" autocomplete="new-password" id="cr-master-pw" placeholder="סיסמה" style="width:100%"/>
       </div>
     </div>
 
@@ -948,6 +952,23 @@ Object.assign(window, {
   openDupModal, duplicateTournament, setArchived,
   openEditModal, extendExpiry, saveEdit, revertPhase,
   openSponsorsModal, closeSponsorsModal, addSponsorRow, saveSponsors
+});
+
+// Show/hide toggle next to every password field
+document.querySelectorAll('input[type=password]').forEach(inp => {
+  const wrap = document.createElement('span');
+  wrap.className = 'pw-wrap';
+  inp.replaceWith(wrap);
+  const b = document.createElement('button');
+  b.type = 'button'; b.className = 'pw-eye'; b.textContent = 'הצגה';
+  b.setAttribute('aria-label', 'הצגת הסיסמה'); b.setAttribute('aria-pressed', 'false');
+  b.onclick = () => {
+    const show = inp.type === 'password';
+    inp.type = show ? 'text' : 'password';
+    b.textContent = show ? 'הסתרה' : 'הצגה';
+    b.setAttribute('aria-pressed', String(show));
+  };
+  wrap.append(inp, b);
 });
 
 $('adm-pw').addEventListener('keydown', e => {
