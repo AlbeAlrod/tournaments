@@ -988,7 +988,7 @@ function renderRegisterPage() {
     if (categories.length === 1) catWrap.querySelector('.cat-pill')?.classList.add('on');
     // One option: keep the (selected) pill hidden but tell the user which category it is.
     const single = categories.length === 1;
-    catWrap.style.display = single ? 'none' : '';   // .h is not global in styles.css
+    catWrap.style.display = single ? 'none' : '';
     const catRow = catWrap.closest('.form-row');
     if (catRow) catRow.style.display = categories.length ? '' : 'none';
     const singleEl = document.getElementById('frm-cat-single');
