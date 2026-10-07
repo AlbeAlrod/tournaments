@@ -585,12 +585,14 @@ async function confirmStartTournament() {
 // --- pure helpers (no DOM) ---
 const NAME_MAX = 30;
 const cleanName = s => String(s||'').replace(/\s+/g, ' ').trim();
-// Israeli mobile: 05XXXXXXXX, +9725XXXXXXXX or 009725XXXXXXXX (anything but digits and + ignored).
-// Returns the local form "05XXXXXXXX", or '' when invalid.
+// Israeli mobile: 05XXXXXXXX, +9725XXXXXXXX or 009725XXXXXXXX → local form "05XXXXXXXX".
+// Any other number given as + (or 00) and 8–15 digits → "+<digits>". Anything but digits
+// and + is ignored. Returns '' when invalid.
 function normPhone(raw) {
   let d = String(raw||'').replace(/[^\d+]/g, '').replace(/^00/, '+');
   if (/^\+?9725\d{8}$/.test(d)) d = '0' + d.replace(/^\+?972/, '');
-  return /^05\d{8}$/.test(d) ? d : '';
+  if (/^05\d{8}$/.test(d)) return d;
+  return /^\+\d{8,15}$/.test(d) ? d : '';
 }
 // Both players are required (pairs only); this is the single place that rule lives.
 function validateNames(p1, p2) {
@@ -835,10 +837,10 @@ function setRegPaidFilter(f) {
 }
 function setRegSearch(v) { regSearch = v || ''; renderRegistrations(); }
 
-// wa.me needs international digits: 05XXXXXXXX → 9725XXXXXXXX. '' if not a valid IL mobile.
+// wa.me needs international digits: 05XXXXXXXX → 9725XXXXXXXX, +CC… → CC…. '' if invalid.
 function waLink(phone) {
   const n = normPhone(phone);
-  return n ? 'https://wa.me/972' + n.slice(1) : '';
+  return n ? 'https://wa.me/' + (n[0] === '+' ? n.slice(1) : '972' + n.slice(1)) : '';
 }
 
 // Per-category counts (all statuses, not affected by filters).
