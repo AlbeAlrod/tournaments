@@ -2,11 +2,34 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>Tournaments</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700;800;900&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="styles.css?v=66"/>
+<!-- Lane D temporary styles (d-*) — to be moved into styles.css by Lane E -->
+<style id="lane-d">
+.d-cat-single{font-weight:600;color:var(--text);padding:6px 0}
+.d-muted{color:var(--text3);font-size:13px}
+.d-reg-mine-row{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.d-receipt-title{margin:0 0 12px;font-size:18px}
+.d-receipt-line{display:flex;gap:10px;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)}
+.d-receipt #receipt-pay-wrap{margin:14px 0 6px}
+.d-receipt .submit-btn{margin-top:14px}
+.d-info-card{display:flex;flex-wrap:wrap;gap:8px 18px;margin:0 0 14px;padding:12px 14px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r,12px);font-size:14px;color:var(--text)}
+.d-info-item{display:flex;gap:6px;align-items:baseline}
+#reg-note{margin:0 0 14px}
+.d-reg-tools{display:flex;gap:8px;align-items:center;margin-top:10px}
+.d-reg-tools input{flex:1;min-width:0}
+.d-reg-counts{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:10px;font-size:12px;color:var(--text2)}
+.d-reg-count strong{color:var(--text)}
+.d-drop{display:flex;align-items:center;justify-content:center;min-width:200px;min-height:72px;padding:10px;border:2px dashed var(--border2);border-radius:var(--rs,8px);cursor:pointer;text-align:center}
+.d-drop:focus-visible,.d-drop.d-drop-over{border-color:var(--primary);background:var(--surface)}
+.d-drop[aria-busy="true"]{opacity:.6;cursor:progress}
+.d-drop-hint{font-size:12px;color:var(--text3)}
+.d-drop-err{font-size:12px;color:var(--red,#DC2626)}
+.d-paid-toggle{display:inline-flex;gap:4px;align-items:center;font-size:12px;color:var(--text2);white-space:nowrap;cursor:pointer}
+</style>
 </head>
 <body>
 
@@ -23,6 +46,14 @@
   <div class="no-t-wrap">
     <h1>Tournaments</h1>
     <p>No tournament specified. Add <code>?t=tournament-id</code> to the URL.</p>
+  </div>
+</div>
+
+<!-- TOURNAMENT NOT FOUND -->
+<div id="view-notfound" class="view h">
+  <div class="no-t-wrap">
+    <h1>Tournament not found</h1>
+    <p>We couldn't find this tournament. Please check the link you received, or ask the organizer to send it again.</p>
   </div>
 </div>
 
@@ -78,32 +109,37 @@
         <h2 id="reg-title">Register</h2>
         <p id="reg-subtitle"></p>
       </div>
+      <div id="reg-info-card" class="d-info-card" style="display:none"></div>
+      <div id="reg-mine" class="info-box d-reg-mine" style="display:none"></div>
       <div id="reg-closed-msg" class="info-box h">Registration is currently closed.</div>
+      <div id="reg-soon-msg" class="info-box h">Registration opens soon.</div>
+      <div id="reg-note" class="reg-note h"></div>
+      <div id="reg-receipt" style="display:none"></div>
       <div id="reg-form-wrap">
         <div class="form-card">
           <div class="form-row">
-            <label>Player 1 Name</label>
-            <input class="form-input" id="frm-p1" placeholder="Name" autocomplete="off"/>
+            <label for="frm-p1">Player 1 Name</label>
+            <input class="form-input" id="frm-p1" placeholder="Name" autocomplete="name" maxlength="30" required/>
           </div>
           <div class="form-row">
-            <label>Player 2 Name</label>
-            <input class="form-input" id="frm-p2" placeholder="Name" autocomplete="off"/>
+            <label for="frm-p2">Player 2 Name</label>
+            <input class="form-input" id="frm-p2" placeholder="Name" autocomplete="off" maxlength="30" required/>
           </div>
           <div class="form-row">
-            <label>Phone</label>
-            <input class="form-input" id="frm-phone" type="tel" placeholder="050-0000000" autocomplete="off"/>
+            <label for="frm-phone">Phone</label>
+            <input class="form-input" id="frm-phone" type="tel" inputmode="tel" placeholder="050-0000000" autocomplete="tel" required/>
           </div>
           <div class="form-row">
-            <label>Category</label>
-            <div id="frm-cat-wrap" class="cat-pills"></div>
+            <label id="frm-cat-lbl">Category</label>
+            <div id="frm-cat-wrap" class="cat-pills" role="group" aria-labelledby="frm-cat-lbl"></div>
+            <div id="frm-cat-single" class="d-cat-single" style="display:none"></div>
           </div>
-          <div id="frm-err" class="frm-err h"></div>
+          <div id="frm-err" class="frm-err h" role="alert"></div>
           <div id="frm-ok" class="frm-ok h">Registration submitted! You will be notified upon approval.</div>
-          <button class="submit-btn" onclick="submitRegistration()">Submit Registration</button>
+          <button class="submit-btn" id="frm-submit" type="button" onclick="submitRegistration()">Submit Registration</button>
           <div id="reg-pay-wrap"></div>
         </div>
       </div>
-      <div id="reg-note" class="reg-note h"></div>
     </div>
 
     <!-- PARTICIPANTS page -->
@@ -126,6 +162,16 @@
           <button class="filter-btn" id="rf-approved" onclick="setRegFilter('approved')">Approved</button>
           <button class="filter-btn" id="rf-rejected" onclick="setRegFilter('rejected')">Rejected</button>
         </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
+          <button class="filter-btn on" id="rpf-all" onclick="setRegPaidFilter('all')">Paid + unpaid</button>
+          <button class="filter-btn" id="rpf-paid" onclick="setRegPaidFilter('paid')">Paid</button>
+          <button class="filter-btn" id="rpf-unpaid" onclick="setRegPaidFilter('unpaid')">Unpaid</button>
+        </div>
+        <div class="d-reg-tools">
+          <input class="team-search-input" id="reg-search" type="search" placeholder="Search name or phone…" aria-label="Search registrations" oninput="setRegSearch(this.value)"/>
+          <button class="filter-btn" type="button" onclick="exportRegistrationsCSV()">Export CSV</button>
+        </div>
+        <div id="reg-counts" class="d-reg-counts"></div>
       </div>
       <div id="registrations-list"></div>
     </div>
@@ -149,6 +195,7 @@
 
     <!-- SCHEDULE (tournament) -->
     <div class="pg" id="page-schedule">
+      <div id="sched-info-card" class="d-info-card" style="display:none"></div>
       <div class="sched-search-box">
         <input class="team-search-input" id="sched-search" placeholder="Search team…" oninput="filterSchedule()"/>
       </div>

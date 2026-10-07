@@ -1,8 +1,9 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
 import {
   getFirestore, doc, getDoc, setDoc, onSnapshot, serverTimestamp,
-  collection, addDoc, getDocs, updateDoc, deleteDoc, query, orderBy
+  collection, addDoc, getDocs, updateDoc, deleteDoc, query, orderBy, FieldPath
 } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
+import { pickImage, attachDropZone } from "./uploader.js";
 
 // ============ FIREBASE ============
 const firebaseConfig = {
@@ -23,6 +24,7 @@ const tId = new URLSearchParams(location.search).get('t');
 let meta = { name:'', logoUrl:'', primaryColor:'#6B21A8', secondaryColor:'#7C3AED',
   paymentLink:'', paymentLinkLabel:'', paymentLink2:'', paymentLink2Label:'',
   regNote:'', sponsorLogos: [],
+  eventDate:'', venue:'', price:'',   // optional tournament info card (Register + Schedule)
   groupColors: [],   // [gi0,gi1,gi2,gi3] — empty = use defaults
   bgColor: '',       // override body background — empty = auto from primary
   phase:'registration', regOpen:true, showRegistered:true };
@@ -37,6 +39,8 @@ let loginRole = 'admin';
 
 let activeCat = null;  // selected category id for tournament views
 let regFilter = 'all'; // pending|approved|rejected|all
+let regPaidFilter = 'all'; // all|paid|unpaid
+let regSearch = '';
 let schedFilter = [];
 let activeCourt = 'all';
 let applyingRemote = false;
@@ -61,6 +65,9 @@ async function sha256(str) {
 // "תום ומוריאל" → "תום מוריאל"  |  "מרג' ואילי" → "מרג' אילי"
 const dn = s => {
   if (!s || s.startsWith('Winner') || /^[A-Z]\d+$/.test(s)) return s;
+  // Registered pairs are always "p1 / p2" — a "ו" there is part of a real name
+  // (e.g. "ורד"), so only strip the connector in slash-less legacy names.
+  if (s.includes('/')) return s;
   return s.replace(/\sו([^\s])/g, ' $1');
 };
 const dnH = s => escH(dn(s));
@@ -169,15 +176,11 @@ async function loadTournament() {
 
   const snap = await getDoc(TREF);
   if (!snap.exists()) {
-    applyingRemote = true;
-    const initData = {
-      meta: { ...meta },
-      categories: [],
-      state: {},
-      updatedAt: serverTimestamp()
-    };
-    await setDoc(TREF, initData);
-    applyingRemote = false;
+    // Unknown id (typo / deleted): never create a doc from a public link —
+    // tournaments are created in admin.html. Show a friendly not-found view.
+    document.getElementById('view-loading').classList.add('h');
+    document.getElementById('view-notfound')?.classList.remove('h');
+    return false;
   } else {
     const data = snap.data();
     if (data.meta) meta = { ...meta, ...data.meta };
@@ -206,8 +209,8 @@ async function loadTournament() {
     if (!state[cat.id]) state[cat.id] = { roster:[], groups:[], sched:[], ko:[] };
   });
 
-  // Load registrations
-  await loadRegistrations();
+  // Registrations: live listener (Participants / my-registration status update by themselves)
+  await subscribeRegistrations();
 
   // Live listener
   onSnapshot(TREF, snap => {
@@ -219,6 +222,8 @@ async function loadTournament() {
     if (data.categories) categories = data.categories;
     if (data.state) {
       Object.entries(data.state).forEach(([cid, cs]) => {
+        // Unsent (debounced) score edits win over the remote copy of that category.
+        if (pendingScoreCats.has(cid)) return;
         state[cid] = catStateFromFB(cs);
       });
     }
@@ -226,12 +231,39 @@ async function loadTournament() {
       if (!state[cat.id]) state[cat.id] = { roster:[], groups:[], sched:[], ko:[] };
     });
     applyingRemote = false;
-    applyTheme(meta.primaryColor, meta.secondaryColor);
-    renderAll();
+    // Remote update: refresh header/theme/phase, then only the page on screen
+    // (renderAll rebuilt every page on every score from every phone).
+    const _f = _focusSnapshot();
+    renderChrome();
+    rerender();
+    _focusRestore(_f);
     setSyncStatus(true);
   });
 
   return true;
+}
+
+const regTime = r => r.createdAt?.seconds ?? 9e15;   // pending server timestamp → last
+let regsLoaded = false;
+// Resolves after the first snapshot so boot renders with data. No orderBy in the
+// query: docs whose createdAt is still pending would be dropped by it; sort here.
+function subscribeRegistrations() {
+  if (!REGS_REF) return Promise.resolve();
+  return new Promise(resolve => {
+    let first = true;
+    const done = () => { if (first) { first = false; resolve(); } };
+    onSnapshot(REGS_REF, snap => {
+      registrations = snap.docs.map(d => ({ id: d.id, ...d.data({ serverTimestamps: 'estimate' }) }))
+        .sort((a, b) => regTime(a) - regTime(b));
+      regsLoaded = true;
+      if (first) return done();
+      const active = ['register','participants','registrations']
+        .find(p => document.getElementById('page-'+p)?.classList.contains('on'));
+      if (active === 'register')      renderRegisterPage();
+      if (active === 'participants')  renderParticipants();
+      if (active === 'registrations') renderRegistrations();
+    }, e => { console.error('Registrations listener', e); done(); });
+  });
 }
 
 async function loadRegistrations() {
@@ -529,29 +561,153 @@ async function confirmStartTournament() {
 }
 
 // ============ REGISTRATION ============
+// --- pure helpers (no DOM) ---
+const NAME_MAX = 30;
+const cleanName = s => String(s||'').replace(/\s+/g, ' ').trim();
+// Israeli mobile: 05XXXXXXXX or +9725XXXXXXXX (spaces, dashes, dots, parens ignored).
+// Returns the local form "05XXXXXXXX", or '' when invalid.
+function normPhone(raw) {
+  let d = String(raw||'').replace(/[\s\-().]/g, '');
+  if (/^\+?9725\d{8}$/.test(d)) d = '0' + d.replace(/^\+?972/, '');
+  return /^05\d{8}$/.test(d) ? d : '';
+}
+function validateNames(p1, p2) {
+  for (const [label, n] of [['Player 1', p1], ['Player 2', p2]]) {
+    if (!n) return `${label} name is required.`;
+    if (n.length > NAME_MAX) return `${label} name is too long (max ${NAME_MAX} characters).`;
+    if (n.includes('/')) return `${label} name can't contain "/".`;
+  }
+  if (normName(p1) === normName(p2)) return 'Player 1 and Player 2 must be different people.';
+  return null;
+}
+const pairKey = (a, b) => [normName(a), normName(b)].sort().join('|');
+// Existing registration that clashes with this one (same pair or same phone, same category).
+function findDuplicateReg(p1, p2, phone, catId) {
+  const key = pairKey(p1, p2);
+  return registrations.find(r => r.category === catId && (
+    pairKey(r.p1, r.p2) === key || (phone && normPhone(r.phone) === phone)));
+}
+const REG_STATUS_TXT = { pending:'pending approval', approved:'approved', rejected:'rejected' };
+
+// "My registration" — remembered per tournament in this browser only.
+const MYREG_KEY = () => 'luz.myReg.' + tId;
+function getMyReg() {
+  try { const v = JSON.parse(localStorage.getItem(MYREG_KEY()) || 'null'); return v && v.tId === tId && v.regId ? v : null; }
+  catch(_) { return null; }
+}
+function setMyReg(v) {
+  try { v ? localStorage.setItem(MYREG_KEY(), JSON.stringify(v)) : localStorage.removeItem(MYREG_KEY()); } catch(_) {}
+}
+let lastReceipt = null;   // {p1,p2,catId} — receipt card shown instead of the form
+
+function renderMyReg() {
+  const el = document.getElementById('reg-mine');
+  if (!el) return;
+  const mine = getMyReg();
+  const r = mine && registrations.find(x => x.id === mine.regId);
+  if (mine && !r && regsLoaded) setMyReg(null);   // removed by organizer (or by us)
+  if (!r) { el.style.display = 'none'; el.innerHTML = ''; return; }
+  const cat = categories.find(c => c.id === r.category);
+  el.style.display = '';
+  el.innerHTML = `
+    <div class="d-reg-mine-row">
+      <div>
+        <div><strong>Your registration:</strong> ${escH(REG_STATUS_TXT[r.status] || r.status)}</div>
+        <div class="d-muted">${escH(regPairName(r))}${cat ? ' · ' + escH(cat.name) : ''}</div>
+      </div>
+      ${r.status === 'pending'
+        ? `<button type="button" class="reg-btn reject" onclick="cancelMyRegistration()">Cancel</button>`
+        : `<span class="d-muted">To cancel, contact the organizer.</span>`}
+    </div>`;
+}
+
+async function cancelMyRegistration() {
+  const mine = getMyReg();
+  if (!mine) return;
+  if (!confirm('Cancel your registration?')) return;
+  try {
+    await deleteDoc(doc(db, 'tournaments', tId, 'registrations', mine.regId));
+    setMyReg(null);
+    lastReceipt = null;
+    registrations = registrations.filter(r => r.id !== mine.regId);
+    renderRegisterPage();
+  } catch(e) { alert('Could not cancel. Please try again.'); }
+}
+
+function renderReceipt() {
+  const el = document.getElementById('reg-receipt');
+  if (!el) return;
+  if (!lastReceipt) { el.style.display = 'none'; el.innerHTML = ''; return; }
+  const cat = categories.find(c => c.id === lastReceipt.catId);
+  el.style.display = '';
+  el.innerHTML = `
+    <div class="form-card d-receipt" role="status">
+      <h3 class="d-receipt-title">Registration received ✓</h3>
+      <div class="d-receipt-line"><span class="d-muted">Pair</span> <strong>${escH(lastReceipt.p1)} / ${escH(lastReceipt.p2)}</strong></div>
+      <div class="d-receipt-line"><span class="d-muted">Category</span> <strong>${escH(cat ? cat.name : '')}</strong></div>
+      <div class="d-receipt-line"><span class="d-muted">Status</span> <strong>Pending approval</strong></div>
+      <div id="receipt-pay-wrap"></div>
+      <p id="receipt-pay-note" class="d-muted" style="display:none">Please write your names in the payment note.</p>
+      <button type="button" class="submit-btn" onclick="registerAnother()">Register another pair</button>
+    </div>`;
+  renderPayLink('receipt-pay-wrap');
+  const hasPay = !document.getElementById('receipt-pay-wrap')?.classList.contains('h');
+  const note = document.getElementById('receipt-pay-note');
+  if (note) note.style.display = hasPay ? '' : 'none';
+}
+
+function registerAnother() {
+  lastReceipt = null;
+  renderRegisterPage();
+  document.getElementById('frm-p1')?.focus();
+}
+
 async function submitRegistration() {
-  const p1   = document.getElementById('frm-p1').value.trim();
-  const p2   = document.getElementById('frm-p2').value.trim();
-  const phone = document.getElementById('frm-phone').value.trim();
+  const p1   = cleanName(document.getElementById('frm-p1').value);
+  const p2   = cleanName(document.getElementById('frm-p2').value);
+  const phoneRaw = document.getElementById('frm-phone').value.trim();
   const catId = document.querySelector('#frm-cat-wrap .cat-pill.on')?.dataset.value || '';
   const err = document.getElementById('frm-err');
   const ok  = document.getElementById('frm-ok');
   err.classList.add('h'); ok.classList.add('h');
-  if (!p1) { err.textContent = 'Player 1 name is required.'; err.classList.remove('h'); return; }
-  if (!catId) { err.textContent = 'Please select a category.'; err.classList.remove('h'); return; }
+  const fail = msg => { err.textContent = msg; err.classList.remove('h'); };
+  const nameErr = validateNames(p1, p2);
+  if (nameErr) return fail(nameErr);
+  if (!phoneRaw) return fail('Phone number is required.');
+  const phone = normPhone(phoneRaw);
+  if (!phone) return fail('Please enter a valid mobile number (05X-XXXXXXX).');
+  if (!catId) return fail('Please select a category.');
+  const dup = findDuplicateReg(p1, p2, phone, catId);
+  if (dup) {
+    const same = pairKey(dup.p1, dup.p2) === pairKey(p1, p2) ? 'This pair is' : 'This phone number is';
+    return fail(`${same} already registered in this category (status: ${REG_STATUS_TXT[dup.status] || dup.status}).`);
+  }
+  // meta is kept live by onSnapshot — the organizer may have closed registration
+  // while this form was open.
+  if (!meta.regOpen) { renderRegisterPage(); err.textContent = 'Registration is currently closed.'; err.classList.remove('h'); return; }
+  const btn = document.getElementById('frm-submit');
+  if (btn?.disabled) return;           // double tap while a write is in flight
+  const btnTxt = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
+  const unlock = () => { if (btn) { btn.disabled = false; btn.textContent = btnTxt; } };
   try {
-    await addDoc(REGS_REF, {
+    const ref = await addDoc(REGS_REF, {
       p1, p2, phone, category: catId,
       status: 'pending', paid: false,
       createdAt: serverTimestamp()
     });
+    setMyReg({ regId: ref.id, tId });
     document.getElementById('frm-p1').value = '';
     document.getElementById('frm-p2').value = '';
     document.getElementById('frm-phone').value = '';
-    ok.classList.remove('h');
     if (categories.length !== 1)
       document.querySelectorAll('#frm-cat-wrap .cat-pill').forEach(b => b.classList.remove('on'));
+    unlock();
+    lastReceipt = { p1, p2, catId };
+    renderRegisterPage();
+    document.getElementById('reg-receipt')?.scrollIntoView({ block: 'nearest' });
   } catch(e) {
+    unlock();
     err.textContent = 'Submission failed. Please try again.';
     err.classList.remove('h');
   }
@@ -576,25 +732,37 @@ async function setRegStatus(id, status) {
       registrations = registrations.filter(r => r.id !== id);
     } else {
       const r = registrations.find(r => r.id === id);
-      const wasRejected = r?.status === 'rejected';
       await updateDoc(doc(db, 'tournaments', tId, 'registrations', id), { status });
       if (r) {
         r.status = status;
-        // Re-approve a rejected pair → add back to build roster
-        if (status === 'approved' && wasRejected) {
-          const catId = r.category;
-          const name = r.p1 + (r.p2 ? ' / ' + r.p2 : '');
-          if (state[catId]?.roster && !state[catId].roster.includes(name)) {
-            state[catId].roster.push(name);
-            await pushToCloud();
-          }
-        }
+        // Any approval → make sure the pair is in its category's build roster.
+        if (status === 'approved' && addRegToRoster(r)) await pushToCloud();
       }
     }
     renderRegistrations();
     renderParticipants();
     renderBuildPage();
   } catch(e) { alert('Error updating status'); }
+}
+
+// Ensure an approved registration's pair is in its category roster.
+// Empty roster → seed it from ALL approved registrations of that category (same
+// as the Build page does), so approving one pair never hides the others.
+// Returns true when the roster changed (caller pushes to cloud).
+function regPairName(r) { return r.p1 + (r.p2 ? ' / ' + r.p2 : ''); }
+function addRegToRoster(r) {
+  const catId = r.category;
+  if (!catId || !categories.some(c => c.id === catId)) return false;
+  if (!state[catId]) state[catId] = { roster:[], groups:[], sched:[], ko:[] };
+  const cs = state[catId];
+  if (!cs.roster.length) {
+    cs.roster = registrations.filter(x => x.status === 'approved' && x.category === catId).map(regPairName);
+    return cs.roster.length > 0;
+  }
+  const name = regPairName(r);
+  if (cs.roster.some(n => normName(n) === normName(name))) return false;
+  cs.roster.push(name);
+  return true;
 }
 
 async function setRegPaid(id, paid) {
@@ -604,7 +772,7 @@ async function setRegPaid(id, paid) {
     const r = registrations.find(r => r.id === id);
     if (r) r.paid = paid;
     renderRegistrations();
-  } catch(e) {}
+  } catch(e) { alert('Could not update payment status'); renderRegistrations(); }
 }
 
 function selectRegCat(btn) {
@@ -620,11 +788,69 @@ function setRegFilter(f) {
   renderRegistrations();
 }
 
+function setRegPaidFilter(f) {
+  regPaidFilter = f;
+  ['all','paid','unpaid'].forEach(k => document.getElementById('rpf-' + k)?.classList.toggle('on', k === f));
+  renderRegistrations();
+}
+function setRegSearch(v) { regSearch = v || ''; renderRegistrations(); }
+
+// wa.me needs international digits: 05XXXXXXXX → 9725XXXXXXXX. '' if not a valid IL mobile.
+function waLink(phone) {
+  const n = normPhone(phone);
+  return n ? 'https://wa.me/972' + n.slice(1) : '';
+}
+
+// Per-category counts (all statuses, not affected by filters).
+function renderRegCounts() {
+  const el = document.getElementById('reg-counts');
+  if (!el) return;
+  const rows = categories.map(c => {
+    const rs = registrations.filter(r => r.category === c.id);
+    const appr = rs.filter(r => r.status === 'approved').length;
+    const pend = rs.filter(r => r.status === 'pending').length;
+    const paid = rs.filter(r => r.paid).length;
+    return `<span class="d-reg-count"><strong>${escH(c.name)}</strong> ${rs.length} · ✓${appr} · ⏳${pend} · ₪${paid}</span>`;
+  });
+  el.innerHTML = rows.join('');
+}
+
+function csvCell(v) {
+  let s = String(v ?? '');
+  if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;          // keep spreadsheets from running formulas
+  return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+function exportRegistrationsCSV() {
+  if (!admin) return;
+  const head = ['name1','name2','phone','category','status','paid','createdAt'];
+  const lines = [head.join(',')].concat(registrations.map(r => {
+    const cat = categories.find(c => c.id === r.category);
+    const t = r.createdAt?.seconds ? new Date(r.createdAt.seconds * 1000).toISOString() : '';
+    return [r.p1, r.p2, r.phone, cat ? cat.name : r.category, r.status, r.paid ? 'yes' : 'no', t].map(csvCell).join(',');
+  }));
+  // BOM so Excel opens Hebrew names as UTF-8
+  const blob = new Blob(['\ufeff' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `registrations-${tId}.csv`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
 function renderRegistrations() {
   const el = document.getElementById('registrations-list');
   if (!el) return;
+  renderRegCounts();
   let list = [...registrations];
   if (regFilter !== 'all') list = list.filter(r => r.status === regFilter);
+  if (regPaidFilter === 'paid')   list = list.filter(r => r.paid);
+  if (regPaidFilter === 'unpaid') list = list.filter(r => !r.paid);
+  const q = regSearch.trim().toLowerCase();
+  if (q) {
+    const qDigits = q.replace(/\D/g, '');
+    list = list.filter(r => `${r.p1||''} ${r.p2||''}`.toLowerCase().includes(q)
+      || (qDigits.length >= 3 && String(r.phone||'').replace(/\D/g, '').includes(qDigits)));
+  }
   if (!list.length) {
     el.innerHTML = `<div class="empty"><h3>No registrations</h3></div>`;
     return;
@@ -632,13 +858,18 @@ function renderRegistrations() {
   el.innerHTML = list.map(r => {
     const cat = categories.find(c => c.id === r.category);
     const catName = cat ? cat.name : r.category;
-    return `<div class="reg-row status-${r.status}">
+    const wa = waLink(r.phone);
+    const phoneHtml = wa
+      ? `<a href="${escH(wa)}" target="_blank" rel="noopener" title="WhatsApp">${escH(r.phone)}</a>`
+      : escH(r.phone||'—');
+    return `<div class="reg-row status-${escH(r.status)}">
       <div class="reg-info">
         <div class="reg-name">${escH(r.p1)}${r.p2 ? ' / ' + escH(r.p2) : ''}</div>
         <div class="reg-meta">${escH(catName)} · ${new Date(r.createdAt?.seconds*1000||0).toLocaleDateString()}</div>
-        <div class="reg-phone">${escH(r.phone||'—')}</div>
+        <div class="reg-phone">${phoneHtml}</div>
       </div>
-      <span class="status-badge badge-${r.status}">${r.status}</span>
+      <span class="status-badge badge-${escH(r.status)}">${escH(r.status)}</span>
+      <label class="d-paid-toggle"><input type="checkbox" ${r.paid ? 'checked' : ''} onchange="setRegPaid('${r.id}',this.checked)"/> Paid</label>
       <div class="reg-actions">
         ${r.status !== 'approved' ? `<button class="reg-btn approve" onclick="setRegStatus('${r.id}','approved')">Approve</button>` : ''}
         ${r.status === 'approved'  ? `<button class="reg-btn" onclick="setRegStatus('${r.id}','pending')">Undo</button>` : ''}
@@ -702,27 +933,59 @@ function renderPayLink(wrapId) {
     </div>`;
 }
 
+// Optional info card (date / venue / price) — hidden when none is set.
+function fmtEventDate(v) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(v || '')) return v || '';
+  const d = new Date(v + 'T00:00:00');
+  return isNaN(d) ? v : d.toLocaleDateString(undefined, { weekday:'short', day:'numeric', month:'short', year:'numeric' });
+}
+function renderInfoCards() {
+  const items = [
+    ['📅', fmtEventDate(meta.eventDate)],
+    ['📍', meta.venue],
+    ['💳', meta.price],
+  ].filter(([, v]) => v && String(v).trim());
+  const html = items.map(([ic, v]) => `<span class="d-info-item"><span aria-hidden="true">${ic}</span><span>${escH(v)}</span></span>`).join('');
+  ['reg-info-card', 'sched-info-card'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.innerHTML = html;
+    el.style.display = items.length ? '' : 'none';
+  });
+}
+
 function renderRegisterPage() {
+  renderInfoCards();
   const closedMsg = document.getElementById('reg-closed-msg');
   const formWrap  = document.getElementById('reg-form-wrap');
   const sub       = document.getElementById('reg-subtitle');
-  if (!meta.regOpen) {
-    closedMsg?.classList.remove('h');
-    if (formWrap) formWrap.style.display = 'none';
-  } else {
-    closedMsg?.classList.add('h');
-    if (formWrap) formWrap.style.display = '';
-  }
+  const soonMsg   = document.getElementById('reg-soon-msg');
+  const noCats    = !categories.length;
+  // Closed wins over "opens soon"; with no categories there is nothing to register for.
+  closedMsg?.classList.toggle('h', !!meta.regOpen);
+  soonMsg?.classList.toggle('h', !meta.regOpen || !noCats);
+  if (formWrap) formWrap.style.display = (meta.regOpen && !noCats && !lastReceipt) ? '' : 'none';
+  renderMyReg();
+  renderReceipt();
   if (sub) sub.textContent = meta.name ? `Register for ${meta.name}` : '';
   const catWrap = document.getElementById('frm-cat-wrap');
   if (catWrap) {
+    // Live snapshots re-render this page: keep the category the user already picked.
+    const prevSel = catWrap.querySelector('.cat-pill.on')?.dataset.value || '';
     catWrap.innerHTML = categories.map(c =>
-      `<button type="button" class="cat-pill" data-value="${escH(c.id)}" onclick="selectRegCat(this)">${escH(c.name)}</button>`
+      `<button type="button" class="cat-pill${c.id === prevSel ? ' on' : ''}" data-value="${escH(c.id)}" onclick="selectRegCat(this)">${escH(c.name)}</button>`
     ).join('');
     if (categories.length === 1) catWrap.querySelector('.cat-pill')?.classList.add('on');
-    // Hide category row when only one option
+    // One option: keep the (selected) pill hidden but tell the user which category it is.
+    const single = categories.length === 1;
+    catWrap.style.display = single ? 'none' : '';   // .h is not global in styles.css
     const catRow = catWrap.closest('.form-row');
-    if (catRow) catRow.style.display = categories.length === 1 ? 'none' : '';
+    if (catRow) catRow.style.display = categories.length ? '' : 'none';
+    const singleEl = document.getElementById('frm-cat-single');
+    if (singleEl) {
+      singleEl.style.display = single ? '' : 'none';
+      singleEl.textContent = single ? categories[0].name : '';
+    }
   }
   const noteEl = document.getElementById('reg-note');
   if (noteEl) {
@@ -1705,26 +1968,71 @@ function deleteTeam(catId, gi, ti) {
 }
 
 // ============ SCORES ============
-function setGS(catId, idx, k, v) {
+// Score inputs call setGS/setKS on every keystroke (commit=false) and again on
+// change/blur (commit=true). Local state updates immediately; the cloud write is
+// debounced and only touches `state.<catId>` (not the whole doc), so two scorers
+// on different categories can no longer overwrite each other.
+const SCORE_DEBOUNCE_MS = 600;
+const pendingScoreCats = new Set();
+let scoreTimer = null;
+
+function queueScoreWrite(catId, now) {
+  pendingScoreCats.add(catId);
+  clearTimeout(scoreTimer);
+  if (now) flushScoreWrites();
+  else scoreTimer = setTimeout(flushScoreWrites, SCORE_DEBOUNCE_MS);
+}
+
+async function flushScoreWrites() {
+  clearTimeout(scoreTimer); scoreTimer = null;
+  if (!pendingScoreCats.size) return;
+  const cats = [...pendingScoreCats];
+  pendingScoreCats.clear();
+  if (!firebaseReady || applyingRemote || !TREF) return;
+  // One updateDoc for all pending categories — same serialized shape as pushToCloud.
+  const args = [];
+  cats.forEach(cid => { if (state[cid]) args.push(new FieldPath('state', cid), catStateToFB(state[cid])); });
+  if (!args.length) return;
+  args.push('updatedAt', serverTimestamp());
+  skipNextSnapshot++;
+  try {
+    await updateDoc(TREF, ...args);
+    setSyncStatus(true);
+  } catch(e) {
+    skipNextSnapshot--;
+    console.error('Score push error', e);
+    setSyncStatus(false);
+    cats.forEach(cid => pendingScoreCats.add(cid));   // retry on next edit / blur
+  }
+}
+
+function showScoreErr(errId, err, commit) {
+  const errEl = document.getElementById(errId);
+  if (!errEl) return;
+  // While typing, "2" on the way to "21" is not an error — only show on commit.
+  const show = !!err && commit;
+  errEl.textContent = show ? err : '';
+  errEl.style.display = show ? 'block' : 'none';
+}
+
+function setGS(catId, idx, k, v, commit) {
   if (!admin || meta.phase !== 'tournament') return;
   state[catId].sched[idx][k] = v;
   const g = state[catId].sched[idx];
   const rule = getRuleForGame(catId, g, false);
   const err = scoreError(g.sa, g.sb, catId, rule.pts);
-  const errEl = document.getElementById(`gerr-${catId}-${idx}`);
-  if (errEl) { errEl.textContent=err||''; errEl.style.display=err?'block':'none'; }
-  if (!err) { updateKOForCat(catId); pushToCloud(); renderStandings(); }
+  showScoreErr(`gerr-${catId}-${idx}`, err, commit);
+  if (!err) { updateKOForCat(catId); queueScoreWrite(catId, commit); renderStandings(); }
 }
-function setKS(catId, ri, gi, k, v) {
+function setKS(catId, ri, gi, k, v, commit) {
   if (!admin || meta.phase !== 'tournament') return;
   state[catId].ko[ri][gi][k] = v;
   const g = state[catId].ko[ri][gi];
   g.ri = ri;
   const rule = getRuleForGame(catId, g, true);
   const err = scoreError(g.sa, g.sb, catId, rule.pts);
-  const errEl = document.getElementById(`kerr-${catId}-${ri}-${gi}`);
-  if (errEl) { errEl.textContent=err||''; errEl.style.display=err?'block':'none'; }
-  if (!err) { updateKOForCat(catId); pushToCloud(); }
+  showScoreErr(`kerr-${catId}-${ri}-${gi}`, err, commit);
+  if (!err) { updateKOForCat(catId); queueScoreWrite(catId, commit); }
 }
 
 // ============ KO UPDATE ============
@@ -1868,12 +2176,15 @@ function buildGameRow(catId, g, idx, isKO) {
   const row  = document.createElement('div');
   const koLbl = isKO ? koGameLabel(catId, g.ri, g.gi) : '';
   row.className = 'gc'+(done?' done':'')+(isKO?' ko-game':'');
+  const setter = k => isKO ? `setKS('${catId}',${g.ri},${g.gi},'${k}',this.value` : `setGS('${catId}',${idx},'${k}',this.value`;
+  // Stable ids let the focus-preserving re-render put the caret back.
+  const sid = k => isKO ? `si-${catId}-k${g.ri}-${g.gi}-${k}` : `si-${catId}-${idx}-${k}`;
   const scoreCell = (admin && meta.phase === 'tournament')
-    ? `<input class="si" type="number" min="0" inputmode="numeric" placeholder="—" value="${g.sa}"
-         oninput="${isKO?`setKS('${catId}',${g.ri},${g.gi},'sa',this.value)`:`setGS('${catId}',${idx},'sa',this.value)`}"/>
+    ? `<input class="si" id="${sid('sa')}" type="number" min="0" inputmode="numeric" placeholder="—" value="${escH(String(g.sa ?? ''))}"
+         oninput="${setter('sa')})" onchange="${setter('sa')},true)"/>
        <span class="ssep">:</span>
-       <input class="si" type="number" min="0" inputmode="numeric" placeholder="—" value="${g.sb}"
-         oninput="${isKO?`setKS('${catId}',${g.ri},${g.gi},'sb',this.value)`:`setGS('${catId}',${idx},'sb',this.value)`}"/>`
+       <input class="si" id="${sid('sb')}" type="number" min="0" inputmode="numeric" placeholder="—" value="${escH(String(g.sb ?? ''))}"
+         oninput="${setter('sb')})" onchange="${setter('sb')},true)"/>`
     : `<span class="ssep">${done?`${g.sa} : ${g.sb}`:'— : —'}</span>`;
 
   row.innerHTML = `
@@ -2023,7 +2334,7 @@ function renderBracketForCat(catId, container) {
   const seedPairs=[];
   for (let i=0; i<Math.floor(nKO/2); i++) seedPairs.push([koSeeds[i],koSeeds[nKO-1-i]]);
 
-  const scroll=document.createElement('div'); scroll.className='bscroll';
+  const scroll=document.createElement('div'); scroll.className='bscroll'; scroll.dataset.cat=catId;
   const tree=document.createElement('div'); tree.className='btree';
   scroll.appendChild(tree);
   const HG=90, GAP=12;
@@ -2150,7 +2461,7 @@ function renderBracketForCat(catId, container) {
       const lA3=dnH(thirdGame.a||'TBD'), lB3=dnH(thirdGame.b||'TBD');
       const knownA3=!isSeed3(thirdGame.a), knownB3=!isSeed3(thirdGame.b);
       const div3=document.createElement('div');
-      div3.style.cssText='border-top:1px solid rgba(255,255,255,0.15);margin-top:16px;padding-top:10px;';
+      div3.style.cssText='border-top:1px solid var(--border2);margin-top:16px;padding-top:10px;';
       const box3=document.createElement('div'); box3.className='bmatch-box';
       box3.innerHTML=`<div class="bm-label">3rd Place</div><div class="bmatch">
         <div class="bteam ${wa3?'win':''} ${knownA3?'':'tbd'}"><span class="bname">${lA3}</span>${hs3?`<span class="bsc">${thirdGame.sa}</span>`:''}</div>
@@ -2186,7 +2497,7 @@ function drawBracketLines(scroll, catId) {
     if (!sR.width) return false;
     const SL = scroll.scrollLeft, ST = scroll.scrollTop;
     const svg = document.createElementNS('http://www.w3.org/2000/svg','svg');
-    svg.className = 'bsvg';
+    svg.setAttribute('class', 'bsvg');  // SVG className is read-only (SVGAnimatedString)
     Object.assign(svg.style, {
       position:'absolute', top:'0', left:'0', pointerEvents:'none',
       width: scroll.scrollWidth+'px', height: scroll.scrollHeight+'px',
@@ -2195,13 +2506,14 @@ function drawBracketLines(scroll, catId) {
     scroll.style.position = 'relative';
 
     const rounds = [...scroll.querySelectorAll('.bround')];
-    const C = 'rgba(255,255,255,0.25)';
+    // Theme token (set by applyTheme) — white lines were invisible on the light theme.
+    const C = 'var(--border2)';
 
     const mk = (x1,y1,x2,y2) => {
       const el = document.createElementNS('http://www.w3.org/2000/svg','line');
       el.setAttribute('x1',Math.round(x1)); el.setAttribute('y1',Math.round(y1));
       el.setAttribute('x2',Math.round(x2)); el.setAttribute('y2',Math.round(y2));
-      el.setAttribute('stroke',C); el.setAttribute('stroke-width','2');
+      el.style.stroke = C; el.setAttribute('stroke-width','2');
       el.setAttribute('stroke-linecap','round');
       svg.appendChild(el);
     };
@@ -2256,6 +2568,19 @@ function drawBracketLines(scroll, catId) {
     });
   });
 }
+
+// Connector lines are absolutely positioned from measured boxes, so they go
+// stale when the viewport changes. Redraw (debounced) on resize / rotation.
+let _bracketResizeT = null;
+function redrawBracketLinesSoon() {
+  clearTimeout(_bracketResizeT);
+  _bracketResizeT = setTimeout(() => {
+    if (!document.getElementById('page-bracket')?.classList.contains('on')) return;
+    document.querySelectorAll('#bracket-container .bscroll[data-cat]').forEach(sc => drawBracketLines(sc, sc.dataset.cat));
+  }, 200);
+}
+window.addEventListener('resize', redrawBracketLinesSoon);
+window.addEventListener('orientationchange', redrawBracketLinesSoon);
 
 function renderBracket() {
   const container=document.getElementById('bracket-container');
@@ -2368,16 +2693,28 @@ function renderSettings() {
     <div class="sett-section-title">Logo</div>
     <div class="sett-row" style="border-bottom:none">
       <div class="sett-label">
-        <span class="sett-name">Logo URL</span>
-        <span class="sett-desc">Tournament logo image</span>
+        <span class="sett-name">Logo</span>
+        <span class="sett-desc">Upload an image (PNG/JPG/WebP — resized automatically) or paste an image URL.</span>
       </div>
       <div class="sett-ctrl" style="flex-direction:column;align-items:flex-end;gap:10px">
-        <input class="text-inp" style="width:260px" value="${escH(meta.logoUrl)}"
-          onchange="updateMeta('logoUrl',this.value)" placeholder="https://…"/>
-        ${meta.logoUrl ? `<img src="${escH(meta.logoUrl)}" class="logo-prev-img" alt="" onerror="this.style.display='none'"/>` : ''}
+        <div class="d-drop" id="logo-drop" aria-label="Upload logo: click, drop or paste an image">
+          ${meta.logoUrl
+            ? `<img src="${escH(meta.logoUrl)}" class="logo-prev-img" alt="Current logo" onerror="this.style.display='none'"/>`
+            : `<span class="d-drop-hint">Drop logo here, click to choose, or paste</span>`}
+        </div>
+        <div id="logo-drop-err" class="d-drop-err" role="alert" style="display:none"></div>
+        ${meta.logoUrl ? `<button type="button" class="add-cat-btn" style="font-size:11px;padding:5px 10px" onclick="removeLogo()">Remove logo</button>` : ''}
+        <input class="text-inp" style="width:260px" value="${isDataUrl(meta.logoUrl) ? '' : escH(meta.logoUrl)}"
+          onchange="updateMeta('logoUrl',this.value.trim());renderSettings()"
+          placeholder="${isDataUrl(meta.logoUrl) ? 'Uploaded image — paste a URL to replace' : 'https://…'}" aria-label="Logo URL"/>
       </div>
     </div>`;
   container.appendChild(lsec);
+  attachDropZone(lsec.querySelector('#logo-drop'), (url, err) => {
+    const errEl = document.getElementById('logo-drop-err');
+    if (errEl) { errEl.textContent = err || ''; errEl.style.display = err ? '' : 'none'; }
+    if (url) { updateMeta('logoUrl', url); renderSettings(); }
+  });
 
   // ── GROUP COLORS ─────────────────────────────────────────────────
   const grpNames = ['A','B','C','D'];
@@ -2413,14 +2750,16 @@ function renderSettings() {
           <div class="sp-thumb">${l.url
             ? `<img src="${escH(l.url)}" alt="" onerror="this.style.display='none'" style="max-width:52px;max-height:32px;object-fit:contain"/>`
             : `<span style="color:var(--text3);font-size:20px;line-height:1">+</span>`}</div>
-          <input class="text-inp" style="flex:1;min-width:0" value="${escH(l.url)}"
-            placeholder="Image URL…" onchange="updateSponsorLogo(${i},'url',this.value)"/>
+          <input class="text-inp" style="flex:1;min-width:0" value="${isDataUrl(l.url) ? '' : escH(l.url)}"
+            placeholder="${isDataUrl(l.url) ? 'Uploaded image — paste URL to replace' : 'Image URL…'}" onchange="updateSponsorLogo(${i},'url',this.value.trim())"/>
+          <button type="button" class="add-cat-btn" style="font-size:11px;padding:5px 10px;flex-shrink:0" onclick="uploadSponsorLogo(${i})">Upload</button>
           <input class="text-inp" style="width:100px;flex-shrink:0" value="${escH(l.alt)}"
             placeholder="Name…" onchange="updateSponsorLogo(${i},'alt',this.value)"/>
           <button class="team-del" onclick="removeSponsorLogo(${i})" title="Remove">✕</button>
         </div>`).join('')
       : `<p class="sett-empty-note">No sponsors yet — add one below.</p>`}
     </div>
+    <div id="sponsor-upload-err" class="d-drop-err" role="alert" style="display:none"></div>
     <div class="sett-add-row">
       <button class="add-cat-btn" onclick="addSponsorLogo()">+ Add Sponsor</button>
     </div>`;
@@ -2498,12 +2837,26 @@ function renderSettings() {
     <div class="sett-row" style="align-items:flex-start;padding-top:16px">
       <div class="sett-label">
         <span class="sett-name">Registration Note</span>
-        <span class="sett-desc">Shown below the registration form.</span>
+        <span class="sett-desc">Shown above the registration form.</span>
       </div>
       <div class="sett-ctrl">
         <textarea class="text-inp" style="width:240px;height:76px;resize:vertical;line-height:1.5"
           onchange="updateMeta('regNote',this.value)"
           placeholder="e.g. Payment deadline is Friday…">${escH(meta.regNote)}</textarea>
+      </div>
+    </div>
+    <div class="sett-row" style="align-items:flex-start;padding-top:16px">
+      <div class="sett-label">
+        <span class="sett-name">Tournament Info</span>
+        <span class="sett-desc">Optional. Shown at the top of Register and Schedule.</span>
+      </div>
+      <div class="sett-ctrl" style="flex-direction:column;align-items:flex-end;gap:8px">
+        <input class="text-inp" type="date" style="width:190px" value="${escH(meta.eventDate)}" aria-label="Event date"
+          onchange="updateMeta('eventDate',this.value)"/>
+        <input class="text-inp" style="width:240px" value="${escH(meta.venue)}" placeholder="Venue, e.g. Gordon Beach" aria-label="Venue"
+          onchange="updateMeta('venue',this.value.trim())"/>
+        <input class="text-inp" style="width:240px" value="${escH(meta.price)}" placeholder="Price, e.g. ₪150 per pair" aria-label="Price"
+          onchange="updateMeta('price',this.value.trim())"/>
       </div>
     </div>
     <div class="sett-row" style="align-items:flex-start;padding-top:16px">
@@ -2632,6 +2985,23 @@ function updateSponsorLogo(i, key, val) {
   renderSettings();
   pushMetaOnly();
 }
+const isDataUrl = u => /^data:image\//i.test(u || '');
+function removeLogo() {
+  updateMeta('logoUrl', '');
+  renderSettings();
+}
+async function uploadSponsorLogo(i) {
+  const errEl = () => document.getElementById('sponsor-upload-err');
+  try {
+    const url = await pickImage({ maxPx: 512, maxBytes: 80000 });
+    const e = errEl(); if (e) e.style.display = 'none';
+    updateSponsorLogo(i, 'url', url);
+  } catch (e) {
+    if (e && e.cancelled) return;
+    const el = errEl();
+    if (el) { el.textContent = (e && e.message) || 'Upload failed'; el.style.display = ''; }
+  }
+}
 function removeSponsorLogo(i) {
   if (!Array.isArray(meta.sponsorLogos)) return;
   meta.sponsorLogos.splice(i, 1);
@@ -2756,6 +3126,7 @@ function updateMeta(key, val) {
     renderRegisterPage(); renderParticipants();
   }
   if (key === 'regNote') renderRegisterPage();
+  if (['eventDate','venue','price'].includes(key)) renderInfoCards();
   if (key === 'sport') renderAll();
   pushMetaOnly();
 }
@@ -2913,7 +3284,8 @@ function renderAll() {
   renderAllInner();
   _focusRestore(_f);
 }
-function renderAllInner() {
+// Everything outside the pages: theme, logo, header, phase classes, sponsors, admin bar.
+function renderChrome() {
   applyTheme(meta.primaryColor, meta.secondaryColor);
   applyGroupColors();
   applyLogo(meta.logoUrl);
@@ -2927,8 +3299,12 @@ function renderAllInner() {
   document.body.classList.toggle('phase-tournament',   meta.phase === 'tournament');
 
   renderSponsorBar();
-  renderCatFilters();
+  renderInfoCards();
   refreshAdmin();
+}
+function renderAllInner() {
+  renderChrome();
+  renderCatFilters();
   renderRegisterPage();
   renderParticipants();
   renderStandings();
@@ -2944,7 +3320,8 @@ Object.assign(window, {
   adminClick, selectLoginRole, tryLogin, closeLogin,
   openStartModal, closeStartModal, confirmStartTournament,
   goPage, setCat, setCourt,
-  submitRegistration, setRegStatus, setRegPaid, setRegFilter, selectRegCat,
+  submitRegistration, cancelMyRegistration, registerAnother, setRegStatus, setRegPaid, setRegFilter,
+  setRegPaidFilter, setRegSearch, exportRegistrationsCSV, selectRegCat,
   openAddPair, closeAddPair, saveAddPair,
   buildTournament, shuffleBuildRoster, moveBuildItem,
   onDragStart, onDragEnd, onDragOver, onDrop, onListDragOver, onListDrop,
@@ -2953,7 +3330,7 @@ Object.assign(window, {
   setGS, setKS, filterSchedule,
   updateMeta, updateCatName, updateCatCfg, adjCatCfg,
   addCategory, deleteCategory, resetAllScores,
-  updateSponsorLogo, removeSponsorLogo, addSponsorLogo,
+  updateSponsorLogo, removeSponsorLogo, addSponsorLogo, uploadSponsorLogo, removeLogo, renderSettings,
   updateCatColor, renameGroup, moveTeam,
   updateGroupColor, updateBgColor,
   updateKORuleField,
@@ -3067,11 +3444,11 @@ async function autoAddPairToDB(name) {
 }
 
 // ============ BOOT ============
-// Prevent pinch-to-zoom (iOS ignores user-scalable=no since iOS 10)
-document.addEventListener('touchmove', e => {
-  if (e.touches.length > 1) e.preventDefault();
-}, { passive: false });
-document.addEventListener('gesturestart', e => e.preventDefault());
+// Pinch zoom is allowed on purpose (accessibility: small names / scores).
+
+// Don't lose a debounced score when the scorer locks the phone / leaves the page.
+document.addEventListener('visibilitychange', () => { if (document.hidden) flushScoreWrites(); });
+window.addEventListener('pagehide', () => flushScoreWrites());
 
 window.addEventListener('load', async () => {
   const ok = await loadTournament();
