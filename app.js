@@ -1,7 +1,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
 import {
   getFirestore, doc, getDoc, setDoc, onSnapshot, serverTimestamp,
-  collection, addDoc, getDocs, updateDoc, deleteDoc, query, orderBy
+  collection, addDoc, getDocs, updateDoc, deleteDoc, query, orderBy, FieldPath
 } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
 
 // ============ FIREBASE ============
@@ -218,6 +218,8 @@ async function loadTournament() {
     if (data.categories) categories = data.categories;
     if (data.state) {
       Object.entries(data.state).forEach(([cid, cs]) => {
+        // Unsent (debounced) score edits win over the remote copy of that category.
+        if (pendingScoreCats.has(cid)) return;
         state[cid] = catStateFromFB(cs);
       });
     }
@@ -1728,26 +1730,71 @@ function deleteTeam(catId, gi, ti) {
 }
 
 // ============ SCORES ============
-function setGS(catId, idx, k, v) {
+// Score inputs call setGS/setKS on every keystroke (commit=false) and again on
+// change/blur (commit=true). Local state updates immediately; the cloud write is
+// debounced and only touches `state.<catId>` (not the whole doc), so two scorers
+// on different categories can no longer overwrite each other.
+const SCORE_DEBOUNCE_MS = 600;
+const pendingScoreCats = new Set();
+let scoreTimer = null;
+
+function queueScoreWrite(catId, now) {
+  pendingScoreCats.add(catId);
+  clearTimeout(scoreTimer);
+  if (now) flushScoreWrites();
+  else scoreTimer = setTimeout(flushScoreWrites, SCORE_DEBOUNCE_MS);
+}
+
+async function flushScoreWrites() {
+  clearTimeout(scoreTimer); scoreTimer = null;
+  if (!pendingScoreCats.size) return;
+  const cats = [...pendingScoreCats];
+  pendingScoreCats.clear();
+  if (!firebaseReady || applyingRemote || !TREF) return;
+  // One updateDoc for all pending categories — same serialized shape as pushToCloud.
+  const args = [];
+  cats.forEach(cid => { if (state[cid]) args.push(new FieldPath('state', cid), catStateToFB(state[cid])); });
+  if (!args.length) return;
+  args.push('updatedAt', serverTimestamp());
+  skipNextSnapshot++;
+  try {
+    await updateDoc(TREF, ...args);
+    setSyncStatus(true);
+  } catch(e) {
+    skipNextSnapshot--;
+    console.error('Score push error', e);
+    setSyncStatus(false);
+    cats.forEach(cid => pendingScoreCats.add(cid));   // retry on next edit / blur
+  }
+}
+
+function showScoreErr(errId, err, commit) {
+  const errEl = document.getElementById(errId);
+  if (!errEl) return;
+  // While typing, "2" on the way to "21" is not an error — only show on commit.
+  const show = !!err && commit;
+  errEl.textContent = show ? err : '';
+  errEl.style.display = show ? 'block' : 'none';
+}
+
+function setGS(catId, idx, k, v, commit) {
   if (!admin || meta.phase !== 'tournament') return;
   state[catId].sched[idx][k] = v;
   const g = state[catId].sched[idx];
   const rule = getRuleForGame(catId, g, false);
   const err = scoreError(g.sa, g.sb, catId, rule.pts);
-  const errEl = document.getElementById(`gerr-${catId}-${idx}`);
-  if (errEl) { errEl.textContent=err||''; errEl.style.display=err?'block':'none'; }
-  if (!err) { updateKOForCat(catId); pushToCloud(); renderStandings(); }
+  showScoreErr(`gerr-${catId}-${idx}`, err, commit);
+  if (!err) { updateKOForCat(catId); queueScoreWrite(catId, commit); renderStandings(); }
 }
-function setKS(catId, ri, gi, k, v) {
+function setKS(catId, ri, gi, k, v, commit) {
   if (!admin || meta.phase !== 'tournament') return;
   state[catId].ko[ri][gi][k] = v;
   const g = state[catId].ko[ri][gi];
   g.ri = ri;
   const rule = getRuleForGame(catId, g, true);
   const err = scoreError(g.sa, g.sb, catId, rule.pts);
-  const errEl = document.getElementById(`kerr-${catId}-${ri}-${gi}`);
-  if (errEl) { errEl.textContent=err||''; errEl.style.display=err?'block':'none'; }
-  if (!err) { updateKOForCat(catId); pushToCloud(); }
+  showScoreErr(`kerr-${catId}-${ri}-${gi}`, err, commit);
+  if (!err) { updateKOForCat(catId); queueScoreWrite(catId, commit); }
 }
 
 // ============ KO UPDATE ============
@@ -1891,12 +1938,15 @@ function buildGameRow(catId, g, idx, isKO) {
   const row  = document.createElement('div');
   const koLbl = isKO ? koGameLabel(catId, g.ri, g.gi) : '';
   row.className = 'gc'+(done?' done':'')+(isKO?' ko-game':'');
+  const setter = k => isKO ? `setKS('${catId}',${g.ri},${g.gi},'${k}',this.value` : `setGS('${catId}',${idx},'${k}',this.value`;
+  // Stable ids let the focus-preserving re-render put the caret back.
+  const sid = k => isKO ? `si-${catId}-k${g.ri}-${g.gi}-${k}` : `si-${catId}-${idx}-${k}`;
   const scoreCell = (admin && meta.phase === 'tournament')
-    ? `<input class="si" type="number" min="0" inputmode="numeric" placeholder="—" value="${g.sa}"
-         oninput="${isKO?`setKS('${catId}',${g.ri},${g.gi},'sa',this.value)`:`setGS('${catId}',${idx},'sa',this.value)`}"/>
+    ? `<input class="si" id="${sid('sa')}" type="number" min="0" inputmode="numeric" placeholder="—" value="${escH(String(g.sa ?? ''))}"
+         oninput="${setter('sa')})" onchange="${setter('sa')},true)"/>
        <span class="ssep">:</span>
-       <input class="si" type="number" min="0" inputmode="numeric" placeholder="—" value="${g.sb}"
-         oninput="${isKO?`setKS('${catId}',${g.ri},${g.gi},'sb',this.value)`:`setGS('${catId}',${idx},'sb',this.value)`}"/>`
+       <input class="si" id="${sid('sb')}" type="number" min="0" inputmode="numeric" placeholder="—" value="${escH(String(g.sb ?? ''))}"
+         oninput="${setter('sb')})" onchange="${setter('sb')},true)"/>`
     : `<span class="ssep">${done?`${g.sa} : ${g.sb}`:'— : —'}</span>`;
 
   row.innerHTML = `
@@ -3095,6 +3145,10 @@ document.addEventListener('touchmove', e => {
   if (e.touches.length > 1) e.preventDefault();
 }, { passive: false });
 document.addEventListener('gesturestart', e => e.preventDefault());
+
+// Don't lose a debounced score when the scorer locks the phone / leaves the page.
+document.addEventListener('visibilitychange', () => { if (document.hidden) flushScoreWrites(); });
+window.addEventListener('pagehide', () => flushScoreWrites());
 
 window.addEventListener('load', async () => {
   const ok = await loadTournament();
