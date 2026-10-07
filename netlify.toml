@@ -3,9 +3,26 @@
   publish = "."
   command = ""
 
+# package.json only has devDependencies (eslint); don't install them on Netlify.
+[build.environment]
+  NPM_FLAGS = "--omit=dev"
+
 # One-off seed/repair tools (ops/) must never be reachable on the live site.
 [[redirects]]
   from = "/ops/*"
+  to = "/404"
+  status = 404
+  force = true
+
+# Dev-only folders that must not be served even if they end up in the publish dir.
+[[redirects]]
+  from = "/node_modules/*"
+  to = "/404"
+  status = 404
+  force = true
+
+[[redirects]]
+  from = "/tests/*"
   to = "/404"
   status = 404
   force = true
