@@ -100,20 +100,24 @@
         <div class="form-card">
           <div class="form-row">
             <label for="frm-p1" data-i18n="reg.p1Label">Player 1 Name</label>
-            <input class="form-input" id="frm-p1" dir="auto" data-i18n-ph="reg.namePh" placeholder="Name" autocomplete="name" maxlength="30" required/>
+            <input class="form-input" id="frm-p1" dir="auto" data-i18n-ph="reg.namePh" placeholder="Name" autocomplete="name" maxlength="30" required aria-describedby="frm-p1-err"/>
+            <div id="frm-p1-err" class="fld-err h"></div>
           </div>
           <div class="form-row">
             <label for="frm-p2" data-i18n="reg.p2Label">Player 2 Name</label>
-            <input class="form-input" id="frm-p2" dir="auto" data-i18n-ph="reg.namePh" placeholder="Name" autocomplete="off" maxlength="30" required/>
+            <input class="form-input" id="frm-p2" dir="auto" data-i18n-ph="reg.namePh" placeholder="Name" autocomplete="off" maxlength="30" required aria-describedby="frm-p2-err"/>
+            <div id="frm-p2-err" class="fld-err h"></div>
           </div>
           <div class="form-row">
             <label for="frm-phone" data-i18n="reg.phoneLabel">Phone</label>
-            <input class="form-input" id="frm-phone" type="tel" dir="ltr" inputmode="tel" placeholder="050-0000000" autocomplete="tel" required/>
+            <input class="form-input" id="frm-phone" type="tel" dir="ltr" inputmode="tel" placeholder="050-0000000" autocomplete="tel" required aria-describedby="frm-phone-err"/>
+            <div id="frm-phone-err" class="fld-err h"></div>
           </div>
           <div class="form-row">
             <label id="frm-cat-lbl" data-i18n="reg.catLabel">Category</label>
-            <div id="frm-cat-wrap" class="cat-pills" role="group" aria-labelledby="frm-cat-lbl"></div>
+            <div id="frm-cat-wrap" class="cat-pills" role="group" aria-labelledby="frm-cat-lbl" aria-describedby="frm-cat-wrap-err"></div>
             <div id="frm-cat-single" class="d-cat-single" style="display:none"></div>
+            <div id="frm-cat-wrap-err" class="fld-err h"></div>
           </div>
           <div id="frm-err" class="frm-err h" role="alert"></div>
           <div id="frm-ok" class="frm-ok h" data-i18n="reg.ok">Registration submitted! You will be notified upon approval.</div>

@@ -595,13 +595,12 @@ function normPhone(raw) {
   return /^\+\d{8,15}$/.test(d) ? d : '';
 }
 // Both players are required (pairs only); this is the single place that rule lives.
-function validateNames(p1, p2) {
-  for (const [who, n] of [[t('common.player1'), p1], [t('common.player2'), p2]]) {
-    if (!n) return t('errors.nameRequired', { who });
-    if (n.length > NAME_MAX) return t('errors.nameTooLong', { who, max: NAME_MAX });
-    if (n.includes('/')) return t('errors.nameSlash', { who });
-  }
-  if (normName(p1) === normName(p2)) return t('errors.sameNames');
+// Returns a message function (re-translated on language switch) or null.
+function nameError(n, whoKey) {
+  const who = () => t(whoKey);
+  if (!n) return () => t('errors.nameRequired', { who: who() });
+  if (n.length > NAME_MAX) return () => t('errors.nameTooLong', { who: who(), max: NAME_MAX });
+  if (n.includes('/')) return () => t('errors.nameSlash', { who: who() });
   return null;
 }
 const pairKey = (a, b) => [normName(a), normName(b)].sort().join('|');
@@ -697,26 +696,48 @@ function registerAnother() {
   document.getElementById('frm-p1')?.focus();
 }
 
+// Registration errors, per field: {p1, p2, phone, cat, form} → () => message.
+// Kept as functions so a language switch re-renders them in the new language.
+let regErrors = {};
+const REG_FIELDS = { p1: 'frm-p1', p2: 'frm-p2', phone: 'frm-phone', cat: 'frm-cat-wrap' };
+function renderRegErrors() {
+  Object.entries(REG_FIELDS).forEach(([k, id]) => {
+    const msg = regErrors[k] ? regErrors[k]() : '';
+    const el = document.getElementById(id + '-err');
+    if (el) { el.textContent = msg; el.classList.toggle('h', !msg); }
+    const inp = document.getElementById(id);
+    if (inp) msg ? inp.setAttribute('aria-invalid', 'true') : inp.removeAttribute('aria-invalid');
+  });
+  const err = document.getElementById('frm-err');
+  if (err) { err.textContent = regErrors.form ? regErrors.form() : ''; err.classList.toggle('h', !regErrors.form); }
+}
+
 async function submitRegistration() {
   const p1   = cleanName(document.getElementById('frm-p1').value);
   const p2   = cleanName(document.getElementById('frm-p2').value);
   const phoneRaw = document.getElementById('frm-phone').value.trim();
   const catId = document.querySelector('#frm-cat-wrap .cat-pill.on')?.dataset.value || '';
-  const err = document.getElementById('frm-err');
   const ok  = document.getElementById('frm-ok');
-  err.classList.add('h'); ok.classList.add('h');
-  const fail = msg => { err.textContent = msg; err.classList.remove('h'); };
-  const nameErr = validateNames(p1, p2);
-  if (nameErr) return fail(nameErr);
-  if (!phoneRaw) return fail(t('errors.phoneRequired'));
+  ok.classList.add('h');
   const phone = normPhone(phoneRaw);
-  if (!phone) return fail(t('errors.phoneInvalid'));
-  if (!catId) return fail(t('errors.catRequired'));
-  const dup = findDuplicateReg(p1, p2, phone, catId);
-  if (dup) return fail(t(pairKey(dup.p1, dup.p2) === pairKey(p1, p2) ? 'errors.dupPair' : 'errors.dupPhone', { status: statusTxt(dup.status) }));
+  regErrors = {
+    p1: nameError(p1, 'common.player1'),
+    p2: nameError(p2, 'common.player2'),
+    phone: !phoneRaw ? () => t('errors.phoneRequired') : !phone ? () => t('errors.phoneInvalid') : null,
+    cat: catId ? null : () => t('errors.catRequired'),
+  };
+  if (!regErrors.p1 && !regErrors.p2 && normName(p1) === normName(p2)) regErrors.p2 = () => t('errors.sameNames');
+  if (!Object.values(regErrors).some(Boolean)) {
+    const dup = findDuplicateReg(p1, p2, phone, catId);
+    if (dup) regErrors.form = () => t(pairKey(dup.p1, dup.p2) === pairKey(p1, p2) ? 'errors.dupPair' : 'errors.dupPhone', { status: statusTxt(dup.status) });
+  }
+  renderRegErrors();
+  const first = Object.keys(REG_FIELDS).find(k => regErrors[k]);
+  if (first) { (first === 'cat' ? document.querySelector('#frm-cat-wrap .cat-pill') : document.getElementById(REG_FIELDS[first]))?.focus(); return; }
+  if (regErrors.form) return;
   // meta is kept live by onSnapshot — the organizer may have closed registration
   // while this form was open.
-  if (!meta.regOpen) { renderRegisterPage(); err.textContent = t('reg.closed'); err.classList.remove('h'); return; }
+  if (!meta.regOpen) { regErrors = { form: () => t('reg.closed') }; renderRegisterPage(); return; }
   const btn = document.getElementById('frm-submit');
   if (btn?.disabled) return;           // double tap while a write is in flight
   const btnTxt = btn ? btn.textContent : '';
@@ -735,13 +756,14 @@ async function submitRegistration() {
     if (categories.length !== 1)
       document.querySelectorAll('#frm-cat-wrap .cat-pill').forEach(b => b.classList.remove('on'));
     unlock();
+    regErrors = {};
     lastReceipt = { p1, p2, catId };
     renderRegisterPage();
     document.getElementById('reg-receipt')?.scrollIntoView({ block: 'nearest' });
   } catch(e) {
     unlock();
-    err.textContent = t('errors.submitFailed');
-    err.classList.remove('h');
+    regErrors = { form: () => t('errors.submitFailed') };
+    renderRegErrors();
   }
 }
 
@@ -1035,6 +1057,7 @@ function renderRegisterPage() {
     noteEl.classList.toggle('h', !meta.regNote);
   }
   renderPayLink('reg-pay-wrap');
+  renderRegErrors();
 }
 
 // ============ BUILD PAGE ============
