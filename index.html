@@ -10,6 +10,12 @@
 <!-- Lane D temporary styles (d-*) — to be moved into styles.css by Lane E -->
 <style id="lane-d">
 .d-cat-single{font-weight:600;color:var(--text);padding:6px 0}
+.d-muted{color:var(--text3);font-size:13px}
+.d-reg-mine-row{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.d-receipt-title{margin:0 0 12px;font-size:18px}
+.d-receipt-line{display:flex;gap:10px;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)}
+.d-receipt #receipt-pay-wrap{margin:14px 0 6px}
+.d-receipt .submit-btn{margin-top:14px}
 </style>
 </head>
 <body>
@@ -90,8 +96,10 @@
         <h2 id="reg-title">Register</h2>
         <p id="reg-subtitle"></p>
       </div>
+      <div id="reg-mine" class="info-box d-reg-mine" style="display:none"></div>
       <div id="reg-closed-msg" class="info-box h">Registration is currently closed.</div>
       <div id="reg-soon-msg" class="info-box h">Registration opens soon.</div>
+      <div id="reg-receipt" style="display:none"></div>
       <div id="reg-form-wrap">
         <div class="form-card">
           <div class="form-row">

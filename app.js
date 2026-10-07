@@ -205,8 +205,8 @@ async function loadTournament() {
     if (!state[cat.id]) state[cat.id] = { roster:[], groups:[], sched:[], ko:[] };
   });
 
-  // Load registrations
-  await loadRegistrations();
+  // Registrations: live listener (Participants / my-registration status update by themselves)
+  await subscribeRegistrations();
 
   // Live listener
   onSnapshot(TREF, snap => {
@@ -237,6 +237,29 @@ async function loadTournament() {
   });
 
   return true;
+}
+
+const regTime = r => r.createdAt?.seconds ?? 9e15;   // pending server timestamp → last
+let regsLoaded = false;
+// Resolves after the first snapshot so boot renders with data. No orderBy in the
+// query: docs whose createdAt is still pending would be dropped by it; sort here.
+function subscribeRegistrations() {
+  if (!REGS_REF) return Promise.resolve();
+  return new Promise(resolve => {
+    let first = true;
+    const done = () => { if (first) { first = false; resolve(); } };
+    onSnapshot(REGS_REF, snap => {
+      registrations = snap.docs.map(d => ({ id: d.id, ...d.data({ serverTimestamps: 'estimate' }) }))
+        .sort((a, b) => regTime(a) - regTime(b));
+      regsLoaded = true;
+      if (first) return done();
+      const active = ['register','participants','registrations']
+        .find(p => document.getElementById('page-'+p)?.classList.contains('on'));
+      if (active === 'register')      renderRegisterPage();
+      if (active === 'participants')  renderParticipants();
+      if (active === 'registrations') renderRegistrations();
+    }, e => { console.error('Registrations listener', e); done(); });
+  });
 }
 
 async function loadRegistrations() {
@@ -562,6 +585,79 @@ function findDuplicateReg(p1, p2, phone, catId) {
 }
 const REG_STATUS_TXT = { pending:'pending approval', approved:'approved', rejected:'rejected' };
 
+// "My registration" — remembered per tournament in this browser only.
+const MYREG_KEY = () => 'luz.myReg.' + tId;
+function getMyReg() {
+  try { const v = JSON.parse(localStorage.getItem(MYREG_KEY()) || 'null'); return v && v.tId === tId && v.regId ? v : null; }
+  catch(_) { return null; }
+}
+function setMyReg(v) {
+  try { v ? localStorage.setItem(MYREG_KEY(), JSON.stringify(v)) : localStorage.removeItem(MYREG_KEY()); } catch(_) {}
+}
+let lastReceipt = null;   // {p1,p2,catId} — receipt card shown instead of the form
+
+function renderMyReg() {
+  const el = document.getElementById('reg-mine');
+  if (!el) return;
+  const mine = getMyReg();
+  const r = mine && registrations.find(x => x.id === mine.regId);
+  if (mine && !r && regsLoaded) setMyReg(null);   // removed by organizer (or by us)
+  if (!r) { el.style.display = 'none'; el.innerHTML = ''; return; }
+  const cat = categories.find(c => c.id === r.category);
+  el.style.display = '';
+  el.innerHTML = `
+    <div class="d-reg-mine-row">
+      <div>
+        <div><strong>Your registration:</strong> ${escH(REG_STATUS_TXT[r.status] || r.status)}</div>
+        <div class="d-muted">${escH(regPairName(r))}${cat ? ' · ' + escH(cat.name) : ''}</div>
+      </div>
+      ${r.status === 'pending'
+        ? `<button type="button" class="reg-btn reject" onclick="cancelMyRegistration()">Cancel</button>`
+        : `<span class="d-muted">To cancel, contact the organizer.</span>`}
+    </div>`;
+}
+
+async function cancelMyRegistration() {
+  const mine = getMyReg();
+  if (!mine) return;
+  if (!confirm('Cancel your registration?')) return;
+  try {
+    await deleteDoc(doc(db, 'tournaments', tId, 'registrations', mine.regId));
+    setMyReg(null);
+    lastReceipt = null;
+    registrations = registrations.filter(r => r.id !== mine.regId);
+    renderRegisterPage();
+  } catch(e) { alert('Could not cancel. Please try again.'); }
+}
+
+function renderReceipt() {
+  const el = document.getElementById('reg-receipt');
+  if (!el) return;
+  if (!lastReceipt) { el.style.display = 'none'; el.innerHTML = ''; return; }
+  const cat = categories.find(c => c.id === lastReceipt.catId);
+  el.style.display = '';
+  el.innerHTML = `
+    <div class="form-card d-receipt" role="status">
+      <h3 class="d-receipt-title">Registration received ✓</h3>
+      <div class="d-receipt-line"><span class="d-muted">Pair</span> <strong>${escH(lastReceipt.p1)} / ${escH(lastReceipt.p2)}</strong></div>
+      <div class="d-receipt-line"><span class="d-muted">Category</span> <strong>${escH(cat ? cat.name : '')}</strong></div>
+      <div class="d-receipt-line"><span class="d-muted">Status</span> <strong>Pending approval</strong></div>
+      <div id="receipt-pay-wrap"></div>
+      <p id="receipt-pay-note" class="d-muted" style="display:none">Please write your names in the payment note.</p>
+      <button type="button" class="submit-btn" onclick="registerAnother()">Register another pair</button>
+    </div>`;
+  renderPayLink('receipt-pay-wrap');
+  const hasPay = !document.getElementById('receipt-pay-wrap')?.classList.contains('h');
+  const note = document.getElementById('receipt-pay-note');
+  if (note) note.style.display = hasPay ? '' : 'none';
+}
+
+function registerAnother() {
+  lastReceipt = null;
+  renderRegisterPage();
+  document.getElementById('frm-p1')?.focus();
+}
+
 async function submitRegistration() {
   const p1   = cleanName(document.getElementById('frm-p1').value);
   const p2   = cleanName(document.getElementById('frm-p2').value);
@@ -591,18 +687,21 @@ async function submitRegistration() {
   if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
   const unlock = () => { if (btn) { btn.disabled = false; btn.textContent = btnTxt; } };
   try {
-    await addDoc(REGS_REF, {
+    const ref = await addDoc(REGS_REF, {
       p1, p2, phone, category: catId,
       status: 'pending', paid: false,
       createdAt: serverTimestamp()
     });
+    setMyReg({ regId: ref.id, tId });
     document.getElementById('frm-p1').value = '';
     document.getElementById('frm-p2').value = '';
     document.getElementById('frm-phone').value = '';
-    ok.classList.remove('h');
     if (categories.length !== 1)
       document.querySelectorAll('#frm-cat-wrap .cat-pill').forEach(b => b.classList.remove('on'));
     unlock();
+    lastReceipt = { p1, p2, catId };
+    renderRegisterPage();
+    document.getElementById('reg-receipt')?.scrollIntoView({ block: 'nearest' });
   } catch(e) {
     unlock();
     err.textContent = 'Submission failed. Please try again.';
@@ -776,7 +875,9 @@ function renderRegisterPage() {
   // Closed wins over "opens soon"; with no categories there is nothing to register for.
   closedMsg?.classList.toggle('h', !!meta.regOpen);
   soonMsg?.classList.toggle('h', !meta.regOpen || !noCats);
-  if (formWrap) formWrap.style.display = (meta.regOpen && !noCats) ? '' : 'none';
+  if (formWrap) formWrap.style.display = (meta.regOpen && !noCats && !lastReceipt) ? '' : 'none';
+  renderMyReg();
+  renderReceipt();
   if (sub) sub.textContent = meta.name ? `Register for ${meta.name}` : '';
   const catWrap = document.getElementById('frm-cat-wrap');
   if (catWrap) {
@@ -3083,7 +3184,7 @@ Object.assign(window, {
   adminClick, selectLoginRole, tryLogin, closeLogin,
   openStartModal, closeStartModal, confirmStartTournament,
   goPage, setCat, setCourt,
-  submitRegistration, setRegStatus, setRegPaid, setRegFilter, selectRegCat,
+  submitRegistration, cancelMyRegistration, registerAnother, setRegStatus, setRegPaid, setRegFilter, selectRegCat,
   openAddPair, closeAddPair, saveAddPair,
   buildTournament, shuffleBuildRoster, moveBuildItem,
   onDragStart, onDragEnd, onDragOver, onDrop, onListDragOver, onListDrop,
