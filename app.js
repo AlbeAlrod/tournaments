@@ -534,16 +534,54 @@ async function confirmStartTournament() {
 }
 
 // ============ REGISTRATION ============
+// --- pure helpers (no DOM) ---
+const NAME_MAX = 30;
+const cleanName = s => String(s||'').replace(/\s+/g, ' ').trim();
+// Israeli mobile: 05XXXXXXXX or +9725XXXXXXXX (spaces, dashes, dots, parens ignored).
+// Returns the local form "05XXXXXXXX", or '' when invalid.
+function normPhone(raw) {
+  let d = String(raw||'').replace(/[\s\-().]/g, '');
+  if (/^\+?9725\d{8}$/.test(d)) d = '0' + d.replace(/^\+?972/, '');
+  return /^05\d{8}$/.test(d) ? d : '';
+}
+function validateNames(p1, p2) {
+  for (const [label, n] of [['Player 1', p1], ['Player 2', p2]]) {
+    if (!n) return `${label} name is required.`;
+    if (n.length > NAME_MAX) return `${label} name is too long (max ${NAME_MAX} characters).`;
+    if (n.includes('/')) return `${label} name can't contain "/".`;
+  }
+  if (normName(p1) === normName(p2)) return 'Player 1 and Player 2 must be different people.';
+  return null;
+}
+const pairKey = (a, b) => [normName(a), normName(b)].sort().join('|');
+// Existing registration that clashes with this one (same pair or same phone, same category).
+function findDuplicateReg(p1, p2, phone, catId) {
+  const key = pairKey(p1, p2);
+  return registrations.find(r => r.category === catId && (
+    pairKey(r.p1, r.p2) === key || (phone && normPhone(r.phone) === phone)));
+}
+const REG_STATUS_TXT = { pending:'pending approval', approved:'approved', rejected:'rejected' };
+
 async function submitRegistration() {
-  const p1   = document.getElementById('frm-p1').value.trim();
-  const p2   = document.getElementById('frm-p2').value.trim();
-  const phone = document.getElementById('frm-phone').value.trim();
+  const p1   = cleanName(document.getElementById('frm-p1').value);
+  const p2   = cleanName(document.getElementById('frm-p2').value);
+  const phoneRaw = document.getElementById('frm-phone').value.trim();
   const catId = document.querySelector('#frm-cat-wrap .cat-pill.on')?.dataset.value || '';
   const err = document.getElementById('frm-err');
   const ok  = document.getElementById('frm-ok');
   err.classList.add('h'); ok.classList.add('h');
-  if (!p1) { err.textContent = 'Player 1 name is required.'; err.classList.remove('h'); return; }
-  if (!catId) { err.textContent = 'Please select a category.'; err.classList.remove('h'); return; }
+  const fail = msg => { err.textContent = msg; err.classList.remove('h'); };
+  const nameErr = validateNames(p1, p2);
+  if (nameErr) return fail(nameErr);
+  if (!phoneRaw) return fail('Phone number is required.');
+  const phone = normPhone(phoneRaw);
+  if (!phone) return fail('Please enter a valid mobile number (05X-XXXXXXX).');
+  if (!catId) return fail('Please select a category.');
+  const dup = findDuplicateReg(p1, p2, phone, catId);
+  if (dup) {
+    const same = pairKey(dup.p1, dup.p2) === pairKey(p1, p2) ? 'This pair is' : 'This phone number is';
+    return fail(`${same} already registered in this category (status: ${REG_STATUS_TXT[dup.status] || dup.status}).`);
+  }
   // meta is kept live by onSnapshot — the organizer may have closed registration
   // while this form was open.
   if (!meta.regOpen) { renderRegisterPage(); err.textContent = 'Registration is currently closed.'; err.classList.remove('h'); return; }
