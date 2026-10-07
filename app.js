@@ -564,10 +564,10 @@ async function confirmStartTournament() {
 // --- pure helpers (no DOM) ---
 const NAME_MAX = 30;
 const cleanName = s => String(s||'').replace(/\s+/g, ' ').trim();
-// Israeli mobile: 05XXXXXXXX or +9725XXXXXXXX (spaces, dashes, dots, parens ignored).
+// Israeli mobile: 05XXXXXXXX, +9725XXXXXXXX or 009725XXXXXXXX (anything but digits and + ignored).
 // Returns the local form "05XXXXXXXX", or '' when invalid.
 function normPhone(raw) {
-  let d = String(raw||'').replace(/[\s\-().]/g, '');
+  let d = String(raw||'').replace(/[^\d+]/g, '').replace(/^00/, '+');
   if (/^\+?9725\d{8}$/.test(d)) d = '0' + d.replace(/^\+?972/, '');
   return /^05\d{8}$/.test(d) ? d : '';
 }
