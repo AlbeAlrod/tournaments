@@ -956,3 +956,5 @@ body:lang(he) { letter-spacing: 0; }
 .gc.unsaved { border-color: var(--amber); border-style: dashed; }
 .gc.invalid { border-color: var(--red); border-style: solid; }
 .gc.invalid .si { border-color: var(--red); }
+.d-reg-mine-row{padding-top:10px;margin-top:10px;border-top:1px solid var(--border)}
+.d-reg-mine-row .status-badge{display:inline-block;margin-top:4px}

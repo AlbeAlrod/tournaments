@@ -611,47 +611,58 @@ function findDuplicateReg(p1, p2, phone, catId) {
 }
 const statusTxt = st => t('admin.status.' + st);
 
-// "My registration" — remembered per tournament in this browser only.
-const MYREG_KEY = () => 'luz.myReg.' + tId;
-function getMyReg() {
-  try { const v = JSON.parse(localStorage.getItem(MYREG_KEY()) || 'null'); return v && v.tId === tId && v.regId ? v : null; }
-  catch(_) { return null; }
+// "My registrations" — every pair registered from this browser, per tournament.
+// Older builds stored one {regId} under luz.myReg.<tId>; it is folded into the list.
+const MYREG_KEY  = () => 'luz.myReg.' + tId;
+const MYREGS_KEY = () => 'luz.myRegs.' + tId;
+function getMyRegs() {
+  try {
+    const ids = JSON.parse(localStorage.getItem(MYREGS_KEY()) || '[]');
+    const old = JSON.parse(localStorage.getItem(MYREG_KEY()) || 'null');
+    const list = Array.isArray(ids) ? ids : [];
+    if (old?.regId && !list.includes(old.regId)) list.push(old.regId);
+    return list;
+  } catch(_) { return []; }
 }
-function setMyReg(v) {
-  try { v ? localStorage.setItem(MYREG_KEY(), JSON.stringify(v)) : localStorage.removeItem(MYREG_KEY()); } catch(_) {}
+function setMyRegs(ids) {
+  try { localStorage.setItem(MYREGS_KEY(), JSON.stringify(ids)); localStorage.removeItem(MYREG_KEY()); } catch(_) {}
 }
 let lastReceipt = null;   // {p1,p2,catId} — receipt card shown instead of the form
 
 function renderMyReg() {
   const el = document.getElementById('reg-mine');
   if (!el) return;
-  const mine = getMyReg();
-  const r = mine && registrations.find(x => x.id === mine.regId);
-  if (mine && !r && regsLoaded) setMyReg(null);   // removed by organizer (or by us)
-  if (!r) { el.style.display = 'none'; el.innerHTML = ''; return; }
-  const cat = categories.find(c => c.id === r.category);
+  let ids = getMyRegs();
+  // Drop registrations the organizer (or we) removed.
+  if (regsLoaded) {
+    const kept = ids.filter(id => registrations.some(r => r.id === id));
+    if (kept.length !== ids.length) { setMyRegs(kept); ids = kept; }
+  }
+  const mine = ids.map(id => registrations.find(r => r.id === id)).filter(Boolean);
+  if (!mine.length) { el.style.display = 'none'; el.innerHTML = ''; return; }
   el.style.display = '';
-  el.innerHTML = `
-    <div class="d-reg-mine-row">
+  el.innerHTML = `<div><strong>${t('reg.mine')}</strong></div>` + mine.map(r => {
+    const cat = categories.find(c => c.id === r.category);
+    return `<div class="d-reg-mine-row">
       <div>
-        <div><strong>${t('reg.mine')}</strong> ${escH(statusTxt(r.status))}</div>
-        <div class="d-muted">${dnH(regPairName(r))}${cat ? ' · ' + escH(cat.name) : ''}</div>
+        <div>${dnH(regPairName(r))}${cat ? ' · ' + escH(cat.name) : ''}</div>
+        <span class="status-badge badge-${escH(r.status)}">${escH(statusTxt(r.status))}</span>
       </div>
       ${r.status === 'pending'
-        ? `<button type="button" class="reg-btn reject" onclick="cancelMyRegistration()">${t('common.cancel')}</button>`
+        ? `<button type="button" class="reg-btn reject" onclick="cancelMyRegistration('${escH(r.id)}')">${t('common.cancel')}</button>`
         : `<span class="d-muted">${t('reg.cancelContact')}</span>`}
     </div>`;
+  }).join('');
 }
 
-async function cancelMyRegistration() {
-  const mine = getMyReg();
-  if (!mine) return;
+async function cancelMyRegistration(id) {
+  if (!getMyRegs().includes(id)) return;
   if (!confirm(t('reg.confirmCancel'))) return;
   try {
-    await deleteDoc(doc(db, 'tournaments', tId, 'registrations', mine.regId));
-    setMyReg(null);
+    await deleteDoc(doc(db, 'tournaments', tId, 'registrations', id));
+    setMyRegs(getMyRegs().filter(x => x !== id));
     lastReceipt = null;
-    registrations = registrations.filter(r => r.id !== mine.regId);
+    registrations = registrations.filter(r => r.id !== id);
     renderRegisterPage();
   } catch(e) { alert(t('errors.cancelFailed')); }
 }
@@ -715,7 +726,7 @@ async function submitRegistration() {
       status: 'pending', paid: false,
       createdAt: serverTimestamp()
     });
-    setMyReg({ regId: ref.id, tId });
+    setMyRegs([...getMyRegs(), ref.id]);
     document.getElementById('frm-p1').value = '';
     document.getElementById('frm-p2').value = '';
     document.getElementById('frm-phone').value = '';
