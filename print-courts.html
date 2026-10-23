@@ -98,7 +98,8 @@ const esc=s=>String(s==null?'':s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','
   courts.forEach(court=>{
     let sections='';
     const rules=[];
-    (d.categories||[]).forEach(cat=>{
+    const first=id=>Math.min(...valid.filter(g=>g.catId===id).map(g=>t2m(g.time)));
+    [...(d.categories||[])].sort((a,b)=>first(a.id)-first(b.id)).forEach(cat=>{
       const gs=valid.filter(g=>g.court===court&&g.catId===cat.id).sort((a,b)=>t2m(a.time)-t2m(b.time));
       if(!gs.length) return;
       const rule=ruleOf(cat); if(rule) rules.push(rule);
