@@ -6,7 +6,7 @@
 <title>Tournaments</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700;800&display=swap" rel="stylesheet"/>
-<link rel="stylesheet" href="styles.css?v=68"/>
+<link rel="stylesheet" href="styles.css?v=69"/>
 </head>
 <body>
 
@@ -185,6 +185,10 @@
       <div class="sched-search-box">
         <input class="team-search-input" id="sched-search" type="search" dir="auto" data-i18n-ph="sched.searchPh" data-i18n-aria="sched.searchAria" placeholder="Search team…" oninput="filterSchedule()"/>
       </div>
+      <div class="master-only print-bar">
+        <button class="build-btn" onclick="open('print-courts.html'+location.search)" data-i18n="sched.printCourts">Print court sheets</button>
+        <button class="build-btn" onclick="open('bracket.html'+location.search)" data-i18n="sched.printBracket">Print bracket</button>
+      </div>
       <div id="court-filter" class="court-filter"></div>
       <div id="schedule-content"></div>
       <!-- Summary belongs after the games, not above them: on a phone the tiles
@@ -298,6 +302,6 @@
   </div>
 </div>
 
-<script type="module" src="app.js?v=68"></script>
+<script type="module" src="app.js?v=69"></script>
 </body>
 </html>

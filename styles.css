@@ -760,6 +760,7 @@ input:focus-visible + .toggle-slider { outline: 2px solid var(--primary); outlin
 body.master-mode .master-only { display: flex !important; }
 button.master-only { display: none !important; }
 body.master-mode button.master-only { display: inline-block !important; }
+.print-bar { gap: 8px; flex-wrap: wrap; margin: 0 0 12px; }
 
 /* ===== SPONSOR EDIT ROWS ===== */
 .sprow {

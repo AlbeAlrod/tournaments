@@ -8,7 +8,7 @@
 //                          an Error whose .cancelled === true (callers should ignore it).
 //   attachDropZone(...)  → calls onImage(null, message).
 
-import { t } from './i18n.js?v=68';
+import { t } from './i18n.js?v=69';
 
 const DEFAULTS = { maxPx: 512, maxBytes: 80000 };
 
