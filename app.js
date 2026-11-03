@@ -591,6 +591,7 @@ function refreshAdmin() {
   // Hide Register tab when admin is logged in (registration phase)
   const regTab = document.getElementById('tab-register');
   if (regTab) regTab.classList.toggle('h', regManager);
+  document.getElementById('tab-registrations')?.classList.toggle('h', !admin);
   // Hide Settings tab in tournament phase (even from master)
   const settingsTab = document.getElementById('tab-settings');
   if (settingsTab) settingsTab.classList.toggle('h', !superAdmin || meta.phase === 'tournament');
@@ -598,16 +599,8 @@ function refreshAdmin() {
   if (regManager && document.getElementById('page-register')?.classList.contains('on')) {
     goPage('registrations');
   }
-  if (builtManager) {
-    const onRegOnlyPage = ['register','registrations'].some(p =>
-      document.getElementById('page-'+p)?.classList.contains('on'));
-    if (onRegOnlyPage) goPage('standings');
-  }
-  if (admin && meta.phase === 'tournament') {
-    const onRegPage = ['registrations','build'].some(p =>
-      document.getElementById('page-'+p)?.classList.contains('on'));
-    if (onRegPage) goPage('standings');
-  }
+  if (builtManager && document.getElementById('page-register')?.classList.contains('on')) goPage('standings');
+  if (admin && meta.phase === 'tournament' && document.getElementById('page-build')?.classList.contains('on')) goPage('standings');
   updateNavFade();
 }
 
@@ -819,7 +812,7 @@ async function submitRegistration() {
 
 // status: 'approved' | 'pending' | 'rejected' (soft, stays listed) | 'deleted' (hard delete).
 async function setRegStatus(id, status) {
-  if (!admin) return;
+  if (!admin || meta.phase !== 'registration') return;
   try {
     if (status === 'deleted') {
       if (!await askConfirm(t('admin.confirmDelete'), t('common.delete'))) return;
@@ -992,6 +985,8 @@ function renderRegistrations() {
   const el = document.getElementById('registrations-list');
   if (!el) return;
   renderRegCounts();
+  const regPhase = meta.phase === 'registration';
+  document.getElementById('regs-built-note')?.classList.toggle('h', regPhase);
   const list = filteredRegs();
   if (!list.length) {
     el.innerHTML = `<div class="empty"><h3>${t('admin.noRegs')}</h3></div>`;
@@ -1012,12 +1007,12 @@ function renderRegistrations() {
       </div>
       <span class="status-badge badge-${escH(r.status)}">${escH(statusTxt(r.status))}</span>
       <label class="d-paid-toggle"><input type="checkbox" ${r.paid ? 'checked' : ''} aria-label="${escH(t('admin.paidFor', { pair: regPairName(r) }))}" onchange="setRegPaid('${r.id}',this.checked)"/> <span aria-hidden="true">${t('admin.paid')}</span></label>
-      <div class="reg-actions">
+      ${regPhase ? `<div class="reg-actions">
         ${r.status !== 'approved' ? `<button class="reg-btn approve" onclick="setRegStatus('${r.id}','approved')">${t('admin.approve')}</button>` : ''}
         ${r.status === 'approved'  ? `<button class="reg-btn" onclick="setRegStatus('${r.id}','pending')">${t('admin.undo')}</button>` : ''}
         ${r.status !== 'rejected'  ? `<button class="reg-btn reject" onclick="setRegStatus('${r.id}','rejected')">${t('admin.reject')}</button>` : ''}
         <button class="reg-btn reject" onclick="setRegStatus('${r.id}','deleted')" title="${t('admin.deleteTitle')}">${t('admin.delete')}</button>
-      </div>
+      </div>` : ''}
     </div>`;
   }).join('');
 }
@@ -3656,7 +3651,7 @@ async function resetAllScores() {
 
 // ============ NAV ============
 function goPage(p) {
-  if (p==='registrations' && (!admin || meta.phase !== 'registration')) return;
+  if (p==='registrations' && !admin) return;
   if (p==='build' && (!admin || (meta.phase !== 'registration' && meta.phase !== 'built'))) return;
   if (p==='settings' && (!superAdmin || meta.phase === 'tournament')) return;
   document.querySelectorAll('.pg').forEach(e=>e.classList.remove('on'));
