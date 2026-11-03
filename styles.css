@@ -759,6 +759,10 @@ body.master-mode .master-only { display: flex !important; }
 button.master-only { display: none !important; }
 body.master-mode button.master-only { display: inline-block !important; }
 .print-bar { gap: 8px; flex-wrap: wrap; margin: 0 0 12px; }
+.build-btn.print-link { display: inline-flex; align-items: center; background: transparent;
+  color: var(--primary-text); border: 1px solid var(--border2); text-decoration: none;
+  font-size: var(--fs-sm); font-weight: 500; padding: 0 16px; text-shadow: none; box-shadow: none; }
+.build-btn.print-link:hover { background: var(--bg3); opacity: 1; }
 
 /* ===== SPONSOR EDIT ROWS ===== */
 .sprow {
