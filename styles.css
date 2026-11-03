@@ -455,8 +455,9 @@ main { position: relative; z-index: 5; max-width: 980px; margin: 0 auto; padding
 .gvs { font-size: var(--fs-xs); color: var(--text3); text-align: center; }
 .gtag { font-size: var(--fs-xs); font-weight: 400; color: var(--text2); background: var(--bg3); border-radius: 4px;
   padding: 0 4px; margin-inline-start: 8px; vertical-align: 1px; }
-/* Score cell: forced LTR so "21 : 15" always reads side A : side B */
+/* Score cell follows the page, so side A's score sits next to side A as in score entry */
 .sw { display: flex; align-items: center; gap: 4px; justify-content: flex-end; direction: ltr; }
+[dir=rtl] .sw { direction: rtl; }
 .si { width: var(--tap); height: var(--tap); text-align: center; background: var(--bg3);
   border: 1px solid var(--field-border); border-radius: var(--rs); color: var(--text);
   padding: 0 2px; font-size: var(--fs-md); font-weight: 700; font-variant-numeric: tabular-nums;
