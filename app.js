@@ -269,7 +269,7 @@ async function loadTournament() {
 
   // Registrations: live listener (Participants / my-registration status update by themselves)
   // Registrations hold phone numbers: viewers only need them before the tournament starts.
-  if (meta.phase !== 'tournament') await subscribeRegistrations();
+  if (meta.phase !== 'tournament') subscribeRegistrations();
 
   // Live listener
   // Our own pending writes echo back first (hasPendingWrites): skip those; the
@@ -4452,7 +4452,7 @@ window.addEventListener('langchange', () => { applyStatic(); renderAll(); setSyn
 window.addEventListener('resize', updateNavFade);
 document.getElementById('main-nav')?.addEventListener('scroll', updateNavFade, { passive: true });
 
-window.addEventListener('load', async () => {
+document.addEventListener('DOMContentLoaded', async () => {
   initLang();
   applyStatic();
   document.querySelectorAll('.print-link').forEach(a => a.href = a.getAttribute('href').split('?')[0] + location.search);
