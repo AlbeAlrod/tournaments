@@ -2633,7 +2633,44 @@ function renderStats() {
     <div class="sc"><div class="sl">${t('sched.statEnd')}</div><div class="sv a">${addM(lastTime,lastDur)}</div></div>`;
 }
 
-function buildGameRow(catId, g, idx, isKO) {
+// Per court, across all categories: the first unscored game is on court, the one after it is next.
+// Returns { marks: Map(gameKey → 'now'|'next'), now: [{time, dur}] }.
+function liveState() {
+  const marks = new Map(), now = [];
+  if (meta.phase !== 'tournament') return { marks, now };
+  const byCourt = {};
+  categories.forEach(cat => {
+    const cs = state[cat.id];
+    if (!cs) return;
+    const add = (g, isKO, gk) => {
+      if (!g.court || !g.time || isValidScore(parseInt(g.sa), parseInt(g.sb), cat.id, getRuleForGame(cat.id, g, isKO).pts)) return;
+      (byCourt[g.court] ||= []).push({ gk, time: g.time, dur: getRuleForGame(cat.id, g, isKO).dur || cat.cfg?.gameDur || 25 });
+    };
+    cs.sched.forEach((g, i) => add(g, false, gameKey(cat.id, i)));
+    cs.ko.forEach((r, ri) => r.forEach((g, gi) => { if (!g.isBye) add({ ...g, ri }, true, gameKey(cat.id, null, ri, gi)); }));
+  });
+  Object.values(byCourt).forEach(list => {
+    list.sort((a, b) => t2m(a.time) - t2m(b.time));
+    if (list[0]) { marks.set(list[0].gk, 'now'); now.push(list[0]); }
+    if (list[1]) marks.set(list[1].gk, 'next');
+  });
+  return { marks, now };
+}
+
+// Median minutes the on-court games are past their planned end; shown only on the event day.
+function renderLateBanner() {
+  const el = document.getElementById('late-banner');
+  if (!el) return;
+  const nowM = new Date().getHours() * 60 + new Date().getMinutes();
+  const d = meta.eventDate === new Date().toLocaleDateString('sv-SE')
+    ? liveState().now.map(g => nowM - t2m(g.time) - g.dur).sort((a, b) => a - b) : [];
+  const med = d.length ? d[Math.floor((d.length - 1) / 2)] : 0;
+  el.classList.toggle('h', med <= 5);
+  el.textContent = med > 5 ? t('live.late', { n: med }) : '';
+}
+setInterval(renderLateBanner, 60000);
+
+function buildGameRow(catId, g, idx, isKO, live) {
   const rule = getRuleForGame(catId, g, isKO);
   const done = isValidScore(parseInt(g.sa), parseInt(g.sb), catId, rule.pts);
   // Color pill by group index for pool; by court→group for KO (dynamic group colors).
@@ -2648,11 +2685,12 @@ function buildGameRow(catId, g, idx, isKO) {
   const unsaved = unsavedGames.get(gk);
   const msg = unsaved ? scoreMsg(unsaved) : '';
   row.id = 'gc-' + gk;
-  row.className = 'gc'+(done?' done':'')+(isKO?' ko-game':'')+(unsaved?' unsaved':'')+(msg && !isHalf(g)?' invalid':'');
+  row.className = 'gc'+(done?' done':'')+(isKO?' ko-game':'')+(unsaved?' unsaved':'')+(msg && !isHalf(g)?' invalid':'')+(live==='now'?' is-now':'');
   const setter = k => isKO ? `setKS('${catId}',${g.ri},${g.gi},'${k}',this.value` : `setGS('${catId}',${idx},'${k}',this.value`;
   // Stable ids let the focus-preserving re-render put the caret back.
   const sid = k => isKO ? `si-${catId}-k${g.ri}-${g.gi}-${k}` : `si-${catId}-${idx}-${k}`;
-  const gtag = !isKO&&g.gn?`<span class="gtag">${escH(g.gn)}</span>`:'';
+  const gtag = (!isKO&&g.gn?`<span class="gtag">${escH(g.gn)}</span>`:'')
+    + (live ? `<span class="live-badge live-${live}">${t('live.' + live)}</span>` : '');
   const pill = `<span class="pill ${pc}">${t('sched.courtShort', { n: g.court })}</span>${koLbl?`<span class="ko-lbl">${koLbl}</span>`:''}`;
   if (admin && meta.phase === 'tournament') {
     // Each input sits next to its own team; on a phone the row stacks as "team – score".
@@ -2711,6 +2749,8 @@ function renderScheduleContent() {
     el.innerHTML=`<div class="empty"><h3>${t('sched.noMatch', { q: escH(q) })}</h3></div>`; return;
   }
 
+  const live = liveState().marks;
+  renderLateBanner();
   const byTime = {};
   filtered.forEach(g => { const k=g.time||'00:00'; if(!byTime[k])byTime[k]=[]; byTime[k].push(g); });
   el.innerHTML = '';
@@ -2756,8 +2796,10 @@ function renderScheduleContent() {
         sh.textContent = label + ruleStr;
         block.appendChild(sh);
       }
-      sg.forEach(g => block.appendChild(buildGameRow(g._catId, g, g._idx, g._isKO)));
+      sg.forEach(g => block.appendChild(buildGameRow(g._catId, g, g._idx, g._isKO,
+        live.get(g._isKO ? gameKey(g._catId, null, g.ri, g.gi) : gameKey(g._catId, g._idx)))));
     });
+    if (block.querySelector('.gc:not(.done)')) block.classList.add('has-open');
     el.appendChild(block);
   });
 }
@@ -3781,9 +3823,14 @@ function goPage(p) {
   if (p==='registrations')  renderRegistrations();
   if (p==='build')          renderBuildPage();
   if (p==='standings')      renderStandings();
-  if (p==='schedule')       { renderStats(); renderCourtFilter(); renderScheduleContent(); }
+  if (p==='schedule')       { renderStats(); renderCourtFilter(); renderScheduleContent(); scrollBelowSticky(document.querySelector('#schedule-content .tblock.has-open')); }
   if (p==='bracket')        renderBracket();
   if (p==='settings')       renderSettings();
+}
+function scrollBelowSticky(el) {
+  if (!el) return;
+  const top = el.getBoundingClientRect().top + scrollY - (document.getElementById('sticky-block')?.offsetHeight || 0) - 8;
+  if (top > scrollY + 40) scrollTo({ top });
 }
 
 // Fade the nav's end edge while more tabs are hidden past it (scroll hint).
