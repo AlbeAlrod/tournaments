@@ -61,7 +61,7 @@ body{background:#e7e7e7}
 <script type="module">
 import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
 import { getFirestore, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
-import { tRound, tSlot } from './i18n.js?v=70';
+import { tRound, tSlot } from './i18n.js?v=73';
 const cfg={apiKey:"AIzaSyA-rPlg0Oau16QcTjD20hDfkyveRSrD8I0",authDomain:"tournaments-33619.firebaseapp.com",projectId:"tournaments-33619",storageBucket:"tournaments-33619.firebasestorage.app",messagingSenderId:"409384565600",appId:"1:409384565600:web:61bd55676343d6035abc05"};
 const db=getFirestore(getApps().length?getApps()[0]:initializeApp(cfg));
 const tId=new URLSearchParams(location.search).get('t');

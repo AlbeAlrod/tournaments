@@ -3,10 +3,10 @@ import {
   getFirestore, doc, getDoc, setDoc, onSnapshot, serverTimestamp,
   collection, addDoc, getDocs, updateDoc, deleteDoc, query, orderBy, FieldPath, runTransaction, deleteField
 } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
-import { pickImage, attachDropZone } from "./uploader.js?v=70";
-import { t, initLang, setLang, getLang, applyStatic, fmtDate, tRound, tSlot } from './i18n.js?v=70';
+import { pickImage, attachDropZone } from "./uploader.js?v=73";
+import { t, initLang, setLang, getLang, applyStatic, fmtDate, tRound, tSlot } from './i18n.js?v=73';
 // Same Firebase config as below, so common.js's initializeApp returns this app (no duplicate).
-import { onColor } from './common.js?v=70';
+import { onColor } from './common.js?v=73';
 
 // ============ FIREBASE ============
 const firebaseConfig = {
@@ -1092,11 +1092,11 @@ function fmtEventDate(v) {
 }
 function renderInfoCards() {
   const items = [
-    ['📅', fmtEventDate(meta.eventDate), 'bdi'],
-    ['📍', meta.venue, 'bdi'],
-    ['💳', meta.price, 'num'],   // "₪120" / "120 ש״ח" — isolated so the digits keep their place
+    ['date', fmtEventDate(meta.eventDate), 'bdi'],
+    ['venue', meta.venue, 'bdi'],
+    ['price', meta.price, 'num'],   // "₪120" / "120 ש״ח" — isolated so the digits keep their place
   ].filter(([, v]) => v && String(v).trim());
-  const html = items.map(([ic, v, cls]) => `<span class="d-info-item"><span aria-hidden="true">${ic}</span><span class="${cls}">${escH(v)}</span></span>`).join('');
+  const html = items.map(([ic, v, cls]) => `<span class="d-info-item"><span class="ic ic-${ic}" aria-hidden="true"></span><span class="${cls}">${escH(v)}</span></span>`).join('');
   ['reg-info-card', 'sched-info-card'].forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
@@ -2796,7 +2796,7 @@ function renderScheduleContent() {
       bl.innerHTML=`<div class="thdr"><span class="tlbl">${m2t(b.at)}</span><div class="tline"></div></div>`+
         `<div style="margin:6px 0 2px;padding:11px 14px;border:1.5px dashed var(--primary,#652d92);border-radius:12px;`+
         `background:color-mix(in srgb,var(--primary,#652d92) 7%,transparent);font-weight:600;color:var(--primary,#652d92);display:flex;gap:8px;align-items:center">`+
-        `<span style="font-size:18px">🍽️</span><span>${t('sched.breakLine', { note: escH(dinnerNote), min: b.min,
+        `<span class="ic ic-meal" aria-hidden="true"></span><span>${t('sched.breakLine', { note: escH(dinnerNote), min: b.min,
           from: `<span class="num">${m2t(b.at)}</span>`, to: `<span class="num">${m2t(b.at+b.min)}</span>` })}</span></div>`;
       el.appendChild(bl);
     }});
@@ -2819,7 +2819,7 @@ function renderScheduleContent() {
     });
     const needSubHeaders = subGroups.size > 1 || [...subGroups.values()].some(s=>s.label);
     block.innerHTML=`<div class="thdr"><span class="tlbl">${time}</span><div class="tline"></div>${superAdmin && meta.phase !== 'registration'
-      ? `<button type="button" class="gact" onclick="openDelay('${time}')" aria-label="${escH(t('delay.aria', { time }))}">⏱</button>` : ''}</div>`;
+      ? `<button type="button" class="gact" onclick="openDelay('${time}')" aria-label="${escH(t('delay.aria', { time }))}"><span class="ic ic-clock"></span></button>` : ''}</div>`;
     subGroups.forEach(({label, games: sg}) => {
       if (needSubHeaders && label) {
         const sh = document.createElement('div');
