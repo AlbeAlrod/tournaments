@@ -3071,7 +3071,7 @@ function renderSettings() {
           oninput="document.getElementById('ct-bg').value=this.value;updateBgColor(this.value)"/>
         <input class="text-inp text-mono" id="ct-bg" style="width:100px" value="${meta.bgColor||'#ffffff'}"
           onchange="if(/^#[0-9A-Fa-f]{6}$/.test(this.value)){document.getElementById('cp-bg').value=this.value;updateBgColor(this.value)}"/>
-        <button class="add-cat-btn" style="padding:5px 10px" onclick="updateBgColor('')">${t('common.reset')}</button>
+        <button class="add-cat-btn" onclick="updateBgColor('')">${t('common.reset')}</button>
       </div>
     </div>`;
   container.appendChild(dsec);
@@ -3093,7 +3093,7 @@ function renderSettings() {
             : `<span class="d-drop-hint">${t('settings.logoDropHint')}</span>`}
         </div>
         <div id="logo-drop-err" class="d-drop-err" role="alert" style="display:none"></div>
-        ${meta.logoUrl ? `<button type="button" class="add-cat-btn" style="padding:5px 10px" onclick="removeLogo()">${t('settings.removeLogo')}</button>` : ''}
+        ${meta.logoUrl ? `<button type="button" class="add-cat-btn" onclick="removeLogo()">${t('settings.removeLogo')}</button>` : ''}
         <input class="text-inp" type="url" dir="ltr" style="width:260px" value="${isDataUrl(meta.logoUrl) ? '' : escH(meta.logoUrl)}"
           onchange="updateMeta('logoUrl',this.value.trim());renderSettings()"
           placeholder="${isDataUrl(meta.logoUrl) ? t('settings.uploadedPh') : 'https://…'}" aria-label="${t('settings.logoUrl')}"/>
@@ -3122,7 +3122,7 @@ function renderSettings() {
             oninput="document.getElementById('gct-${i}').value=this.value;updateGroupColor(${i},this.value)"/>
           <input class="text-inp text-mono" id="gct-${i}" style="width:100px" value="${cur}"
             onchange="if(/^#[0-9A-Fa-f]{6}$/.test(this.value)){document.getElementById('gcp-${i}').value=this.value;updateGroupColor(${i},this.value)}"/>
-          <button class="add-cat-btn" style="padding:5px 10px"
+          <button class="add-cat-btn"
             onclick="updateGroupColor(${i},'');renderSettings()">${t('common.reset')}</button>
         </div>
       </div>`;
@@ -3143,7 +3143,7 @@ function renderSettings() {
             : `<span style="color:var(--text3);font-size:20px;line-height:1">+</span>`}</div>
           <input class="text-inp" type="url" dir="ltr" style="flex:1;min-width:0" value="${isDataUrl(l.url) ? '' : escH(l.url)}"
             placeholder="${isDataUrl(l.url) ? t('settings.uploadedPh') : t('settings.sponsorUrlPh')}" onchange="updateSponsorLogo(${i},'url',this.value.trim())"/>
-          <button type="button" class="add-cat-btn" style="padding:5px 10px;flex-shrink:0" onclick="uploadSponsorLogo(${i})">${t('settings.upload')}</button>
+          <button type="button" class="add-cat-btn" style="flex-shrink:0" onclick="uploadSponsorLogo(${i})">${t('settings.upload')}</button>
           <input class="text-inp" dir="auto" style="width:100px;flex-shrink:0" value="${escH(l.alt)}"
             placeholder="${t('settings.sponsorNamePh')}" onchange="updateSponsorLogo(${i},'alt',this.value)"/>
           <button class="team-del" onclick="removeSponsorLogo(${i})" title="${t('common.remove')}" aria-label="${t('common.remove')}">✕</button>
@@ -3172,10 +3172,10 @@ function renderSettings() {
         ${cs.groups.map((grp, gi) => `
           <div class="grp-row">
             <div class="grp-row-head">
-              <span style="font-size:11px;color:var(--text3);flex-shrink:0">${t('settings.groupLabel')}</span>
-              <input class="text-inp" dir="auto" style="width:54px;font-weight:800;text-align:center;padding:5px 4px"
+              <span class="sett-desc" style="flex-shrink:0">${t('settings.groupLabel')}</span>
+              <input class="text-inp" dir="auto" style="width:54px;font-weight:700;text-align:center"
                 value="${escH(grp.name)}" onchange="renameGroup('${cat.id}',${gi},this.value)"/>
-              <span style="font-size:11px;color:var(--text3);margin-inline-start:4px">${t('settings.teamsCount', { n: grp.teams.length })}</span>
+              <span class="sett-desc" style="margin-inline-start:4px">${t('settings.teamsCount', { n: grp.teams.length })}</span>
             </div>
             <div class="grp-teams-list">
               ${grp.teams.map((team, ti) => `
@@ -3437,9 +3437,9 @@ function renderCatItem(cat, ci) {
     <div class="cat-item-head">
       <input class="text-inp" dir="auto" style="width:150px;font-weight:600" value="${escH(cat.name)}" onchange="updateCatName(${ci},this.value)"/>
       <div class="color-pick-row" style="margin-inline-start:auto;margin-inline-end:8px">
-        <input type="color" class="color-inp" id="ccp-${ci}" style="width:36px;height:32px" value="${catColor}"
+        <input type="color" class="color-inp" id="ccp-${ci}" value="${catColor}"
           oninput="document.getElementById('cct-${ci}').value=this.value;updateCatColor(${ci},this.value)"/>
-        <input class="text-inp text-mono" id="cct-${ci}" style="width:84px;padding:5px 8px;font-size:12px" value="${catColor}"
+        <input class="text-inp text-mono" id="cct-${ci}" style="width:100px" value="${catColor}"
           onchange="if(/^#[0-9A-Fa-f]{6}$/.test(this.value)){document.getElementById('ccp-${ci}').value=this.value;updateCatColor(${ci},this.value)}"/>
       </div>
       <button class="team-del" onclick="deleteCategory(${ci})" title="${t('settings.deleteCategory')}" aria-label="${t('settings.deleteCategory')}">✕</button>
@@ -3453,7 +3453,7 @@ function renderCatItem(cat, ci) {
       <div class="cat-sett-field">
         <span class="cat-sett-label">${t('settings.sets')}</span>
         <div class="cat-sett-ctrl">
-          <select class="form-input" style="width:80px;padding:4px 6px" onchange="updateCatCfg(${ci},'sets',parseInt(this.value))">
+          <select class="form-input" style="width:80px" onchange="updateCatCfg(${ci},'sets',parseInt(this.value))">
             <option value="1" ${cfg.sets===1?'selected':''}>1</option>
             <option value="3" ${cfg.sets===3?'selected':''}>3</option>
           </select>
