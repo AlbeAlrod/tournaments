@@ -57,7 +57,7 @@ const NAMES = ['koToFB','koFromFB','catStateToFB','catStateFromFB','t2m','m2t','
   'distributeGroups','snakeDistribute','cmpScore','roundName','getRuleForGame','coordCfg',
   'buildCoordinatedGroups','generateCoordinatedSchedule','getKORoundName','assignSlotTimes',
   'genPoolSched','generateScheduleForCat','buildCategory','buildQueenKO','isValidScore','scoreError',
-  'getStandings','resolvePoolSeed','getKOLoser','getKOWinner','updateKOForCat','koGameLabel'];
+  'getStandings','resolvePoolSeed','getKOLoser','getKOWinner','updateKOForCat','koGameLabel','gameIndex','carryOver'];
 
 test('legacy.js functions are token-identical to app.js', { skip: !hasApp && 'app.js not present' }, () => {
   for (const n of NAMES) {
@@ -79,4 +79,6 @@ test('legacy constants match app.js', { skip: !hasApp && 'app.js not present' },
   assert.equal(norm(L.normName.toString()), norm(nn));
   const dnSrc = /const dn = (s => \{[\s\S]*?\n\});/.exec(appSrc)[1];
   assert.equal(norm(L.dn.toString()), norm(dnSrc));
+  for (const n of ['pairKey', 'hasScore', 'koKey'])
+    assert.equal(norm(L[n].toString()), norm(new RegExp(`const ${n} = (.*);\\n`).exec(appSrc)[1]), `drift in ${n}`);
 });
