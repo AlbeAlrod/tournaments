@@ -2455,6 +2455,7 @@ function updateKOForCat(catId) {
   // r0: resolve pool seeds; byes just resolve their single seed
   if (cs.ko[0]) {
     cs.ko[0].forEach(g => {
+      if (String(g.sa ?? '') !== '' || String(g.sb ?? '') !== '') return;
       const seedA = g.seedA || (g.isBye ? g.a : '');
       const seedB = g.seedB || '';
       if (seedA) { const r=resolvePoolSeed(catId,seedA); if(r.known||/^[A-Z]\d+$/.test(seedA)) g.a=r.known?r.label:seedA; }
@@ -2468,7 +2469,7 @@ function updateKOForCat(catId) {
     // Cross pairing when 4 QF games reduce to 2 SF games (QF1×QF4, QF2×QF3)
     const isCross = prev.length === 4 && cs.ko[ri].filter(g=>!g.isThirdPlace).length === 2;
     cs.ko[ri].forEach((g, gi) => {
-      if (g.isThirdPlace) return;
+      if (g.isThirdPlace || String(g.sa ?? '') !== '' || String(g.sb ?? '') !== '') return;
       const idxA = isCross ? gi               : gi*2;
       const idxB = isCross ? prev.length-1-gi : gi*2+1;
       const seedLabel = src => {
@@ -2487,7 +2488,7 @@ function updateKOForCat(catId) {
   if (cs.ko.length >= 2) {
     const sfRound = cs.ko[cs.ko.length - 2];
     const thirdGame = cs.sched.find(g => g.isThirdPlace);
-    if (thirdGame && sfRound) {
+    if (thirdGame && sfRound && String(thirdGame.sa ?? '') === '' && String(thirdGame.sb ?? '') === '') {
       thirdGame.a = getKOLoser(sfRound[0], catId) || 'Loser of SF1';
       thirdGame.b = getKOLoser(sfRound[1], catId) || 'Loser of SF2';
     }
