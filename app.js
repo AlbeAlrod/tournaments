@@ -1500,6 +1500,8 @@ function generateCoordinatedSchedule(){
   const played=t=>teamRounds[t]||new Set();
   let guard=0;
   const poolPending=cid=>games.some(g=>g.catId===cid&&g.kind==='pool'&&rem.has(g.id));
+  const grpLeft=g=>games.filter(x=>x.kind==='pool'&&x.catId===g.catId&&x.gi===g.gi&&rem.has(x.id)).length;
+
   while(rem.size && guard++<500){
     const r=rounds.length;
     const courtsThisRound=courtsAt(r);
@@ -1523,17 +1525,23 @@ function generateCoordinatedSchedule(){
       if(phase(x)!==phase(y)) return phase(x)-phase(y);
       const kx=rankKind(x),ky=rankKind(y); if(kx!==ky) return kx-ky;
       if(kx===0) return (koOrder(x)-koOrder(y))||((x.gi||0)-(y.gi||0));
-      const wx=Math.max(...x.teams.map(t=>r-lastPlayed(t))), wy=Math.max(...y.teams.map(t=>r-lastPlayed(t)));
-      return wy-wx;
+      // The most tired pair decides; then the group with more games left.
+      const wx=Math.min(...x.teams.map(t=>r-lastPlayed(t))), wy=Math.min(...y.teams.map(t=>r-lastPlayed(t)));
+      return (wy-wx)||(grpLeft(y)-grpLeft(x));
     });
     const chosen=[], usedTeams=new Set(), seenKO=new Set();
-    for(const g of cand){
+    const rested=g=>!g.teams.some(t=>played(t).has(r-1));
+    // Back-to-back games only fill courts that no rested pool game can take.
+    for(const pass of [0,1]) for(const g of cand){
       if(chosen.length>=courtsThisRound) break;
       if(g.kind==='pool'){
-        if(g.teams.some(t=>usedTeams.has(t))) continue;
+        if(chosen.includes(g) || g.teams.some(t=>usedTeams.has(t))) continue;
         if(g.teams.some(t=>played(t).has(r-1)&&played(t).has(r-2))) continue;
+        if(!pass && !rested(g)) continue;
         g.teams.forEach(t=>usedTeams.add(t)); chosen.push(g);
-      } else if(g.kind==='ko3p'){ chosen.push(g); }
+      } else if(pass) continue;
+      else if(g.kind==='ko3p'){ chosen.push(g); }
+
       else {
         const sk=`${g.catId}:${g.ri}`; if(seenKO.has(sk)) continue; seenKO.add(sk);
         const stage=(koRoundIds[sk]||[]).map(id=>byId[id]).filter(x=>rem.has(x.id)&&ready(x,done)&&!isFinaleLast(x));
