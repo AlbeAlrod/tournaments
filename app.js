@@ -3513,7 +3513,8 @@ function updateKORuleField(ci, roundKey, field, val) {
   pushCategories();
   // Changing a stage's length shifts every slot after it — recompute the clock.
   const cid = categories[ci].id;
-  if (field === 'dur' && state[cid]?.sched.length) commitState(cid, () => assignSlotTimes(cid));
+  // Coordinated grids use one slot for every stage; re-timing one category would collide.
+  if (field === 'dur' && !coordBuild() && state[cid]?.sched.length) commitState(cid, () => assignSlotTimes(cid));
   renderSettings();
 }
 
