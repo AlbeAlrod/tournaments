@@ -591,9 +591,8 @@ function refreshAdmin() {
   // Hide Register tab when admin is logged in (registration phase)
   const regTab = document.getElementById('tab-register');
   if (regTab) regTab.classList.toggle('h', regManager);
-  // Hide Settings tab in tournament phase (even from master)
   const settingsTab = document.getElementById('tab-settings');
-  if (settingsTab) settingsTab.classList.toggle('h', !superAdmin || meta.phase === 'tournament');
+  if (settingsTab) settingsTab.classList.toggle('h', !superAdmin);
   // Auto-navigate away from pages that don't belong in current phase
   if (regManager && document.getElementById('page-register')?.classList.contains('on')) {
     goPage('registrations');
@@ -3005,6 +3004,28 @@ function renderSettings() {
   const keepY = window.scrollY;
   container.innerHTML = '';
 
+  // Tournament phase: only what is safe to change while games run.
+  if (meta.phase === 'tournament') {
+    const live = document.createElement('div');
+    live.className = 'sett-section';
+    live.innerHTML = `<div class="sett-section-title">${t('settings.title')}</div>
+      <p class="sett-desc">${t('settings.liveNote')}</p>
+      <div class="sett-row">
+        <div class="sett-label"><span class="sett-name">${t('settings.name')}</span></div>
+        <div class="sett-ctrl">
+          <input class="text-inp" style="width:220px" dir="auto" value="${escH(meta.name)}" onchange="updateMeta('name',this.value)"/>
+        </div>
+      </div>
+      ${coordBuild() && categories.length ? `<div class="sett-row" style="flex-wrap:wrap">
+        <div class="sett-label"><span class="sett-name">${t('settings.wholeTournament')}</span></div>
+        <div class="cat-settings-grid">${catNumField(t('settings.gameDur'), -1, 'gameDur', (categories[0].cfg || DEF_CAT_CFG).gameDur, 5, 120)}</div>
+      </div>` : ''}
+      ${categories.map((cat, ci) => renderCatItem(cat, ci, true)).join('')}`;
+    container.appendChild(live);
+    window.scrollTo(0, keepY);
+    return;
+  }
+
   // ── DESIGN ──────────────────────────────────────────────────────
   const pc = meta.primaryColor   || DEF_PRIMARY;
   const sc = meta.secondaryColor || pc;
@@ -3194,8 +3215,6 @@ function renderSettings() {
     gsec.innerHTML = `<div class="sett-section-title">${t('settings.groups')}</div>${gHtml}`;
     container.appendChild(gsec);
   }
-
-  if (meta.phase === 'tournament') { window.scrollTo(0, keepY); return; }
 
   // ── SPORT ───────────────────────────────────────────────────────
   const sportSection = document.createElement('div');
@@ -3429,22 +3448,22 @@ function addSponsorLogo() {
   renderSettings();
 }
 
-function renderCatItem(cat, ci) {
+function renderCatItem(cat, ci, live) {
   const cfg=cat.cfg||DEF_CAT_CFG;
   const coord=coordBuild();
   const catColor = cat.color || meta.primaryColor || DEF_PRIMARY;
   return `<div class="cat-item">
     <div class="cat-item-head">
       <input class="text-inp" dir="auto" style="width:150px;font-weight:600" value="${escH(cat.name)}" onchange="updateCatName(${ci},this.value)"/>
-      <div class="color-pick-row" style="margin-inline-start:auto;margin-inline-end:8px">
+      ${live ? '' : `<div class="color-pick-row" style="margin-inline-start:auto;margin-inline-end:8px">
         <input type="color" class="color-inp" id="ccp-${ci}" value="${catColor}"
           oninput="document.getElementById('cct-${ci}').value=this.value;updateCatColor(${ci},this.value)"/>
         <input class="text-inp text-mono" id="cct-${ci}" style="width:100px" value="${catColor}"
           onchange="if(/^#[0-9A-Fa-f]{6}$/.test(this.value)){document.getElementById('ccp-${ci}').value=this.value;updateCatColor(${ci},this.value)}"/>
       </div>
-      <button class="team-del" onclick="deleteCategory(${ci})" title="${t('settings.deleteCategory')}" aria-label="${t('settings.deleteCategory')}">✕</button>
+      <button class="team-del" onclick="deleteCategory(${ci})" title="${t('settings.deleteCategory')}" aria-label="${t('settings.deleteCategory')}">✕</button>`}
     </div>
-    <div class="cat-settings-grid">
+    ${live ? (coord ? '' : `<div class="cat-settings-grid">${catNumField(t('settings.gameDur'), ci, 'gameDur', cfg.gameDur, 5, 120)}</div>`) : `<div class="cat-settings-grid">
       ${coord ? '' : catNumField(t('settings.courts'), ci, 'courts', cfg.courts, 1, 8)}
       ${catNumField(t('settings.numGroups'), ci, 'numGroups', cfg.numGroups, 2, 16)}
       ${catNumField(t('settings.advPerGroup'), ci, 'advPerGroup', cfg.advPerGroup, 1, 8)}
@@ -3466,7 +3485,7 @@ function renderCatItem(cat, ci) {
           <input type="time" class="time-inp" value="${cfg.startTime||'08:00'}" onchange="updateCatCfg(${ci},'startTime',this.value)"/>
         </div>
       </div>`}
-    </div>
+    </div>`}
     <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
       <div class="cat-sett-label" style="margin-bottom:8px">${t('settings.scoringRules')}</div>
       <div class="srt-wrap"><table class="scoring-rules-tbl">
@@ -3656,7 +3675,7 @@ async function resetAllScores() {
 function goPage(p) {
   if (p==='registrations' && (!admin || meta.phase !== 'registration')) return;
   if (p==='build' && (!admin || (meta.phase !== 'registration' && meta.phase !== 'built'))) return;
-  if (p==='settings' && (!superAdmin || meta.phase === 'tournament')) return;
+  if (p==='settings' && !superAdmin) return;
   document.querySelectorAll('.pg').forEach(e=>e.classList.remove('on'));
   document.querySelectorAll('.tab').forEach(e=>{ e.classList.remove('on'); e.removeAttribute('aria-current'); });
   const pageEl=document.getElementById('page-'+p);
