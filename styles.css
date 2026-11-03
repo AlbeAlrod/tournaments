@@ -954,33 +954,38 @@ input[type="password"] { direction: ltr; }
 body:lang(he) { letter-spacing: 0; }
 
 /* Register extras, registrations tools, image drop zone */
-.d-cat-single{font-weight:600;color:var(--text);padding:6px 0}
-.d-muted{color:var(--text3);font-size:13px}
-.d-reg-mine-row{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap}
-.d-receipt-title{margin:0 0 12px;font-size:18px}
-.d-receipt-line{display:flex;gap:10px;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)}
-.d-receipt #receipt-pay-wrap{margin:14px 0 6px}
-.d-receipt .submit-btn{margin-top:14px}
-.d-info-card{display:flex;flex-wrap:wrap;gap:8px 18px;margin:0 0 14px;padding:12px 14px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r,12px);font-size:14px;color:var(--text)}
-.d-info-item{display:flex;gap:6px;align-items:baseline}
-#reg-note{margin:0 0 14px}
-.d-reg-tools{display:flex;gap:8px;align-items:center;margin-top:10px}
-.d-reg-tools input{flex:1;min-width:0}
-.d-reg-counts{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:10px;font-size:12px;color:var(--text2)}
-.d-reg-count strong{color:var(--text)}
-.d-drop{display:flex;align-items:center;justify-content:center;min-width:200px;min-height:72px;padding:10px;border:2px dashed var(--border2);border-radius:var(--rs,8px);cursor:pointer;text-align:center}
-.d-drop:focus-visible,.d-drop.d-drop-over{border-color:var(--primary);background:var(--surface)}
-.d-drop[aria-busy="true"]{opacity:.6;cursor:progress}
-.d-drop-hint{font-size:12px;color:var(--text3)}
-.d-drop-err{font-size:12px;color:var(--red)}
-.d-paid-toggle{display:inline-flex;gap:4px;align-items:center;font-size:12px;color:var(--text2);white-space:nowrap;cursor:pointer}
+.d-cat-single { font-weight: 500; color: var(--text); padding: 8px 0; }
+.d-muted { color: var(--text3); font-size: var(--fs-sm); }
+.d-reg-mine-row { display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap;
+  padding-top: 12px; margin-top: 12px; border-top: 1px solid var(--border); }
+.d-reg-mine-row .status-badge { display: inline-block; margin-top: 4px; }
+.d-receipt-title { margin: 0 0 12px; font-size: var(--fs-lg); }
+.d-receipt-line { display: flex; gap: 12px; justify-content: space-between; padding: 8px 0;
+  border-bottom: 1px solid var(--border); }
+.d-receipt #receipt-pay-wrap { margin: 16px 0 8px; }
+.d-receipt .submit-btn { margin-top: 16px; }
+.d-info-card { display: flex; flex-wrap: wrap; gap: 8px 20px; margin: 0 0 16px; padding: 12px 16px;
+  background: var(--bg2); border: 1px solid var(--border); border-radius: var(--r);
+  font-size: var(--fs-sm); color: var(--text); }
+.d-info-item { display: flex; gap: 8px; align-items: baseline; }
+#reg-note { margin: 0 0 16px; }
+.d-reg-tools { display: flex; gap: 8px; align-items: center; margin-top: 12px; }
+.d-reg-tools input { flex: 1; min-width: 0; }
+.d-reg-counts { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 12px; font-size: var(--fs-xs); color: var(--text2); }
+.d-reg-count strong { color: var(--text); }
+.d-drop { display: flex; align-items: center; justify-content: center; min-width: 200px; min-height: 72px; padding: 12px;
+  border: 2px dashed var(--field-border); border-radius: var(--rs); cursor: pointer; text-align: center; }
+.d-drop:focus-visible, .d-drop.d-drop-over { border-color: var(--primary); background: var(--surface); }
+.d-drop[aria-busy="true"] { opacity: .6; cursor: progress; }
+.d-drop-hint { font-size: var(--fs-xs); color: var(--text3); }
+.d-drop-err { font-size: var(--fs-xs); color: var(--red); }
+.d-paid-toggle { display: inline-flex; gap: 4px; align-items: center; min-height: var(--tap);
+  font-size: var(--fs-xs); color: var(--text2); white-space: nowrap; cursor: pointer; }
 
 /* Score rows not saved yet (in flight / incomplete) and rows with an invalid score */
 .gc.unsaved { border-color: var(--amber); border-style: dashed; }
 .gc.invalid { border-color: var(--red); border-style: solid; }
 .gc.invalid .si { border-color: var(--red); }
-.d-reg-mine-row{padding-top:10px;margin-top:10px;border-top:1px solid var(--border)}
-.d-reg-mine-row .status-badge{display:inline-block;margin-top:4px}
 
 /* App confirm dialog + toast */
 .confirm-msg { font-size: var(--fs-md); line-height: 1.6; color: var(--text); white-space: pre-line; unicode-bidi: plaintext; }
