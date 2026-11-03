@@ -331,16 +331,15 @@ describe('generateScheduleForCat: 16 pairs, 4 groups, 4 courts, adv 2', () => {
 });
 
 describe('KNOWN BUGS in the standard bracket', () => {
-  test('KNOWN BUG: non-power-of-2 qualifiers (3 groups × 2) leave "TBD" opponents that never resolve', () => {
+  test('non-power-of-2 qualifiers (3 groups × 2): padding slots are byes that advance their seed', () => {
     const { api, cs } = setup({ ...OLD_CFG, numGroups: 3, advPerGroup: 2 }, 12);
     api.buildCategory('c');
-    assert.deepEqual(cs.ko[0].map(g => `${g.a}-${g.b}`), ['A1-TBD', 'B1-TBD', 'C1-C2', 'A2-B2']);
+    assert.deepEqual(cs.ko[0].map(g => g.isBye ? `bye ${g.a}` : `${g.a}-${g.b}`), ['bye A1', 'bye B1', 'C1-C2', 'A2-B2']);
+    assert.equal(cs.ko[0][0].time, undefined, 'byes get no court/time');
     playPools(api, cs);
-    assert.equal(cs.ko[0][0].b, 'TBD');
-    // A1 should get a bye, but nothing ever advances it:
-    assert.equal(api.getKOWinner(cs.ko[0][0], 'c'), null);
-    assert.equal(cs.ko[1][0].a, 'A1/TBD');
-    // Also: two teams from the same group (C1, C2) meet in the first KO round.
+    assert.equal(api.getKOWinner(cs.ko[0][0], 'c'), 'T1');
+    assert.equal(cs.ko[1][0].a, 'T1');
+    // Still: two teams from the same group (C1, C2) meet in the first KO round.
     assert.deepEqual([cs.ko[0][2].a, cs.ko[0][2].b], ['T9', 'T10']);
   });
   test('KNOWN BUG: with 16 qualifiers, seeds 1 and 2 (A1, B1) meet already in the QF', () => {
@@ -399,7 +398,8 @@ describe('QUEEN preset (admin.html createTournament)', () => {
   test('queen falls back to the standard bracket when groups !== 4', () => {
     const t = setup({ ...QUEEN_CFG, numGroups: 2 }, 8);
     t.api.buildCategory('c');
-    assert.equal(t.cs.ko[0].some(g => g.isBye), false);
+    // Standard bracket: 6 qualifiers padded to 8 → A1 and B1 get byes (not queen's R16 cross).
+    assert.deepEqual(t.cs.ko[0].map(g => g.isBye ? `bye ${g.seedA}` : `${g.seedA}-${g.seedB}`), ['bye A1', 'bye B1', 'A2-B3', 'B2-A3']);
   });
 });
 
