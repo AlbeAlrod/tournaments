@@ -1097,6 +1097,43 @@ function renderInfoCards() {
   });
 }
 
+// regNote (small markdown subset) → HTML. Escapes first; the first heading becomes the <summary>.
+function mdNote(src, fallback) {
+  const inl = s => s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/(^|\s)\*(\S(?:.*?\S)?)\*(?![^\s.,;:!?)])/g, '$1<strong>$2</strong>')
+    .replace(/https?:\/\/[^\s<]+?(?=[.,;:!?)]*(?:\s|<|$))/g, u => `<a href="${u}" target="_blank" rel="noopener">${u}</a>`);
+  let summary = '', out = '', list = '', para = [];
+  const flush = () => {
+    if (para.length) out += `<p dir="auto">${para.join('<br>')}</p>`;
+    if (list) out += `</${list}>`;
+    para = []; list = '';
+  };
+  escH(src).split(/\r?\n/).forEach(line => {
+    const h = line.match(/^\s*(#{1,3})\s+(.*)$/), li = line.match(/^\s*(?:([-•*])|\d+[.)])\s+(.*)$/);
+    if (h) {
+      flush();
+      if (!summary) summary = inl(h[2]);
+      else out += `<h${h[1].length + 2} dir="auto">${inl(h[2])}</h${h[1].length + 2}>`;
+    } else if (li) {
+      const tag = li[1] ? 'ul' : 'ol';
+      if (para.length || list !== tag) { flush(); out += `<${tag} dir="auto">`; list = tag; }
+      out += `<li>${inl(li[2])}</li>`;
+    } else if (line.trim()) {
+      if (list) flush();
+      para.push(inl(line.trim()));
+    } else flush();
+  });
+  flush();
+  return `<details dir="auto"><summary>${summary || escH(fallback)}</summary>${out}</details>`;
+}
+function previewRegNote(ta) {
+  const prev = ta?.nextElementSibling;
+  if (!prev) return;
+  prev.classList.toggle('h', !ta.value.trim());
+  prev.innerHTML = mdNote(ta.value, t('reg.rulesSummary')).replace('<details', '<details open');
+}
+window.previewRegNote = previewRegNote;
+
 function renderRegisterPage() {
   renderInfoCards();
   const closedMsg = document.getElementById('reg-closed-msg');
@@ -1132,8 +1169,10 @@ function renderRegisterPage() {
   }
   const noteEl = document.getElementById('reg-note');
   if (noteEl) {
-    noteEl.textContent = meta.regNote || '';
-    noteEl.classList.toggle('h', !meta.regNote);
+    const has = !!String(meta.regNote || '').trim(), open = noteEl.querySelector('details')?.open;
+    noteEl.className = 'reg-note md' + (has ? '' : ' h');
+    noteEl.innerHTML = has ? mdNote(meta.regNote, t('reg.rulesSummary')) : '';
+    if (open && has) noteEl.querySelector('details').open = true;
   }
   renderPayLink('reg-pay-wrap');
   renderRegErrors();
@@ -3225,16 +3264,15 @@ function renderSettings() {
       <span class="toggle-label">${t('settings.showList')}</span>
       <label class="toggle-switch"><input type="checkbox" ${meta.showRegistered?'checked':''} onchange="updateMeta('showRegistered',this.checked)"/><span class="toggle-slider"></span></label>
     </div>
-    <div class="sett-row" style="align-items:flex-start;padding-top:16px">
+    <div class="sett-row" style="flex-direction:column;align-items:stretch;padding-top:16px">
       <div class="sett-label">
         <span class="sett-name">${t('settings.regNote')}</span>
-        <span class="sett-desc">${t('settings.regNoteDesc')}</span>
+        <span class="sett-desc">${t('settings.regNoteDesc')} ${t('settings.regNoteHelp')}</span>
       </div>
-      <div class="sett-ctrl">
-        <textarea class="text-inp" dir="auto" style="width:240px;height:76px;resize:vertical;line-height:1.5"
-          onchange="updateMeta('regNote',this.value)"
-          placeholder="${t('settings.regNotePh')}">${escH(meta.regNote)}</textarea>
-      </div>
+      <textarea class="text-inp reg-note-editor" dir="auto" aria-label="${t('settings.regNote')}"
+        oninput="previewRegNote(this)" onchange="updateMeta('regNote',this.value)"
+        placeholder="${t('settings.regNotePh')}">${escH(meta.regNote)}</textarea>
+      <div class="reg-note md reg-note-preview"></div>
     </div>
     <div class="sett-row" style="align-items:flex-start;padding-top:16px">
       <div class="sett-label">
@@ -3271,6 +3309,7 @@ function renderSettings() {
       </div>
     </div>`;
   container.appendChild(regSection);
+  previewRegNote(regSection.querySelector('.reg-note-editor'));
 
   // ── CATEGORIES ──────────────────────────────────────────────────
   // One shared grid: courts / minutes / break / start apply to the whole tournament.
