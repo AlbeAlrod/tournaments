@@ -3308,9 +3308,16 @@ function renderSettings() {
         </div>
       </div>
     </div>` : '';
+  const toggles = categories.length >= 2 ? ['coordinated', 'parallelCategories', 'allPoolsBeforeKO'].map(k => `<div class="toggle-row">
+      <div class="sett-label toggle-label">
+        <span class="sett-name">${t('settings.' + k)}</span>
+        <span class="sett-desc">${t('settings.' + k + 'Desc')} ${t('settings.nextBuild')}</span>
+      </div>
+      <label class="toggle-switch"><input type="checkbox" ${meta[k]?'checked':''} onchange="updateMeta('${k}',this.checked)"/><span class="toggle-slider"></span></label>
+    </div>`).join('') : '';
   const catSection = document.createElement('div');
   catSection.className = 'sett-section';
-  catSection.innerHTML = `<div class="sett-section-title">${t('settings.categories')}</div>${coordHtml}
+  catSection.innerHTML = `<div class="sett-section-title">${t('settings.categories')}</div>${toggles}${coordHtml}
     <div id="cat-list">${categories.map((cat,ci)=>renderCatItem(cat,ci)).join('')}</div>
     <div class="sett-row" style="border-top:1px solid var(--border);margin-top:8px;padding-top:14px;border-bottom:none;padding-bottom:0">
       <div class="sett-label">
