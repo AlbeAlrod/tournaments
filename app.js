@@ -1418,11 +1418,13 @@ async function saveAddPair() {
   renderBuildPage();
 }
 
-// ===== COORDINATED MULTI-CATEGORY SCHEDULER (opt-in via meta.coordinated) =====
+// ===== COORDINATED MULTI-CATEGORY SCHEDULER (meta.coordinated, or >1 category) =====
 // Schedules ALL categories on ONE shared court grid: no cross-category court/time
-// collisions, the finale (last category) finishes last, pools before KO, no pair
-// plays >3 games in a row, compact blocks (low waiting). Runs on Build and re-runs
-// on withdrawal so the board updates itself. Reads state[cat].groups; writes sched/ko.
+// collisions, the finale (last category) finishes last unless parallelCategories,
+// pools before KO, no player in two games of a round, at most 2 games in a row and
+// back-to-back only when nothing else fits. One slot length for every stage: courts =
+// the most of any category, minutes/break/start from the first category. Runs on
+// Build only. Reads state[cat].groups; writes sched/ko.
 function coordCfg(){
   const courts = Math.max(2, ...categories.map(c=>(c.cfg||DEF_CAT_CFG).courts||2));
   const c0 = (categories[0] && categories[0].cfg) || DEF_CAT_CFG;
@@ -3266,9 +3268,25 @@ function renderSettings() {
   container.appendChild(regSection);
 
   // ── CATEGORIES ──────────────────────────────────────────────────
+  // One shared grid: courts / minutes / break / start apply to the whole tournament.
+  const c0 = categories[0]?.cfg || DEF_CAT_CFG;
+  const coordHtml = coordBuild() && categories.length ? `<div class="sett-row" style="flex-wrap:wrap">
+      <div class="sett-label"><span class="sett-name">${t('settings.wholeTournament')}</span></div>
+      <div class="cat-settings-grid">
+        ${catNumField(t('settings.courts'), -1, 'courts', coordCfg().COURTS, 1, 8)}
+        ${catNumField(t('settings.gameDur'), -1, 'gameDur', c0.gameDur, 5, 120)}
+        ${catNumField(t('settings.breakDur'), -1, 'breakDur', c0.breakDur, 0, 60)}
+        <div class="cat-sett-field">
+          <span class="cat-sett-label">${t('settings.startTime')}</span>
+          <div class="cat-sett-ctrl">
+            <input type="time" class="time-inp" value="${meta.startTime || c0.startTime || '08:00'}" onchange="updateCatCfg(-1,'startTime',this.value)"/>
+          </div>
+        </div>
+      </div>
+    </div>` : '';
   const catSection = document.createElement('div');
   catSection.className = 'sett-section';
-  catSection.innerHTML = `<div class="sett-section-title">${t('settings.categories')}</div>
+  catSection.innerHTML = `<div class="sett-section-title">${t('settings.categories')}</div>${coordHtml}
     <div id="cat-list">${categories.map((cat,ci)=>renderCatItem(cat,ci)).join('')}</div>
     <div class="sett-row" style="border-top:1px solid var(--border);margin-top:8px;padding-top:14px;border-bottom:none;padding-bottom:0">
       <div class="sett-label">
@@ -3408,6 +3426,7 @@ function addSponsorLogo() {
 
 function renderCatItem(cat, ci) {
   const cfg=cat.cfg||DEF_CAT_CFG;
+  const coord=coordBuild();
   const catColor = cat.color || meta.primaryColor || DEF_PRIMARY;
   return `<div class="cat-item">
     <div class="cat-item-head">
@@ -3421,11 +3440,11 @@ function renderCatItem(cat, ci) {
       <button class="team-del" onclick="deleteCategory(${ci})" title="${t('settings.deleteCategory')}" aria-label="${t('settings.deleteCategory')}">✕</button>
     </div>
     <div class="cat-settings-grid">
-      ${catNumField(t('settings.courts'), ci, 'courts', cfg.courts, 1, 8)}
+      ${coord ? '' : catNumField(t('settings.courts'), ci, 'courts', cfg.courts, 1, 8)}
       ${catNumField(t('settings.numGroups'), ci, 'numGroups', cfg.numGroups, 2, 16)}
       ${catNumField(t('settings.advPerGroup'), ci, 'advPerGroup', cfg.advPerGroup, 1, 8)}
-      ${catNumField(t('settings.gameDur'), ci, 'gameDur', cfg.gameDur, 5, 120)}
-      ${catNumField(t('settings.breakDur'), ci, 'breakDur', cfg.breakDur, 0, 60)}
+      ${coord ? '' : catNumField(t('settings.gameDur'), ci, 'gameDur', cfg.gameDur, 5, 120)}
+      ${coord ? '' : catNumField(t('settings.breakDur'), ci, 'breakDur', cfg.breakDur, 0, 60)}
       <div class="cat-sett-field">
         <span class="cat-sett-label">${t('settings.sets')}</span>
         <div class="cat-sett-ctrl">
@@ -3436,17 +3455,17 @@ function renderCatItem(cat, ci) {
         </div>
       </div>
       ${cfg.sets===3?catNumField(t('settings.thirdSetPts'), ci, 'pointsThirdSet', cfg.pointsThirdSet||15, 11, 30):''}
-      <div class="cat-sett-field">
+      ${coord ? '' : `<div class="cat-sett-field">
         <span class="cat-sett-label">${t('settings.startTime')}</span>
         <div class="cat-sett-ctrl">
           <input type="time" class="time-inp" value="${cfg.startTime||'08:00'}" onchange="updateCatCfg(${ci},'startTime',this.value)"/>
         </div>
-      </div>
+      </div>`}
     </div>
     <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
       <div class="cat-sett-label" style="margin-bottom:8px">${t('settings.scoringRules')}</div>
       <div class="srt-wrap"><table class="scoring-rules-tbl">
-        <thead><tr><th>${t('settings.rules.stage')}</th><th>${t('settings.rules.pts')}</th><th>${t('settings.rules.switch')}</th><th>${t('settings.rules.min')}</th></tr></thead>
+        <thead><tr><th>${t('settings.rules.stage')}</th><th>${t('settings.rules.pts')}</th><th>${t('settings.rules.switch')}</th>${coord ? '' : `<th>${t('settings.rules.min')}</th>`}</tr></thead>
         <tbody>
           ${['pool', 'r16', 'qf', 'sf', 'third', 'final'].map(key => {
             const label = t('settings.stage.' + key);
@@ -3463,11 +3482,11 @@ function renderCatItem(cat, ci) {
                 <span class="s-num-val">${r.change||'—'}</span>
                 <button class="s-num-btn" onclick="updateKORuleField(${ci},'${key}','change',${r.change?r.change+1:5})">+</button>
               </div></td>
-              <td><div class="cat-sett-ctrl">
+              ${coord ? '' : `<td><div class="cat-sett-ctrl">
                 <button class="s-num-btn" onclick="updateKORuleField(${ci},'${key}','dur',Math.max(5,(${r.dur||cfg.gameDur||15})-5))">−</button>
                 <span class="s-num-val">${r.dur||cfg.gameDur||15}</span>
                 <button class="s-num-btn" onclick="updateKORuleField(${ci},'${key}','dur',Math.min(60,(${r.dur||cfg.gameDur||15})+5))">+</button>
-              </div></td>
+              </div></td>`}
             </tr>`;
           }).join('')}
         </tbody>
@@ -3550,19 +3569,21 @@ function updateCatName(ci, val) {
   categories[ci].name=val;
   pushCategories();
 }
+// ci = -1: a whole-tournament value (shared grid) — written to every category.
 function updateCatCfg(ci, key, val) {
-  if (!categories[ci]) return;
-  if (!categories[ci].cfg) categories[ci].cfg=structuredClone(DEF_CAT_CFG);
-  categories[ci].cfg[key]=val;
-  pushCategories(); retimeAfter(ci, key); renderSettings();
+  const cats = ci < 0 ? categories : [categories[ci]].filter(Boolean);
+  if (!cats.length) return;
+  cats.forEach(c => { if (!c.cfg) c.cfg=structuredClone(DEF_CAT_CFG); c.cfg[key]=val; });
+  if (ci < 0 && key === 'startTime' && meta.startTime) { meta.startTime = val; pushMeta('startTime'); }
+  pushCategories(); retimeAfter(Math.max(ci, 0), key); renderSettings();
 }
 function adjCatCfg(ci, key, delta, min, max) {
-  if (!categories[ci]) return;
-  if (!categories[ci].cfg) categories[ci].cfg=structuredClone(DEF_CAT_CFG);
-  const cur=categories[ci].cfg[key]||min;
-  categories[ci].cfg[key]=Math.min(max,Math.max(min,cur+delta));
-  pushCategories(); retimeAfter(ci, key); renderSettings();
+  const c = categories[Math.max(ci, 0)];
+  if (!c) return;
+  const cur = ci < 0 && key === 'courts' ? coordCfg().COURTS : (c.cfg||DEF_CAT_CFG)[key]||min;
+  updateCatCfg(ci, key, Math.min(max,Math.max(min,cur+delta)));
 }
+
 
 // New game minutes / break / start time re-time the built schedule: same rounds and
 // courts, new clock; manually moved games keep their time.
