@@ -585,7 +585,7 @@ function refreshAdmin() {
   if (syncDot) syncDot.classList.toggle('h', !admin);
   if (bar) bar.className = 'mode-bar ' + (admin ? 'mode-admin' : 'mode-view');
   const adminBar = document.getElementById('admin-bar');
-  if (adminBar) adminBar.classList.toggle('mode-admin', admin);
+  if (adminBar) { adminBar.classList.toggle('mode-admin', admin); adminBar.style.padding = admin ? '' : '2px 16px'; }
   if (mtxt) {
     if (!admin) mtxt.textContent = t('admin.modeView');
     else if (meta.phase==='registration') mtxt.textContent = t(adminLevel===2 ? 'admin.modeMasterReg' : 'admin.modeAdminReg');
@@ -2141,6 +2141,7 @@ function makeStandingsCard(catId, grp, gi, catIdx) {
     return `<tr class="${isWinner?'winner':''}${isMine(row.name)?' is-mine':''}">
       <td><span class="rnk num">#${i+1}</span>${dnH(row.name)}</td>
       <td>${row.w}</td><td>${row.l}</td>
+      <td><span class="num">${row.w+row.l}/${grp.teams.length-1}</span></td>
       <td class="${diffClass}"><span class="num">${diff!==0||row.w>0||row.l>0?diffStr:'—'}</span></td>
       <td><span class="pts-val">${row.pts}</span></td>
       ${adminCtrls}
@@ -2148,7 +2149,7 @@ function makeStandingsCard(catId, grp, gi, catIdx) {
   }).join('');
   const adminTh = superAdmin ? '<th></th>' : '';
   card.innerHTML = `<div class="scard-head"><span class="scard-name">${t('stand.group', { name: escH(grp.name) })}</span></div>
-    <table class="stbl"><thead><tr><th>${t('stand.col.team')}</th><th>${t('stand.col.w')}</th><th>${t('stand.col.l')}</th><th>${t('stand.col.diff')}</th><th>${t('stand.col.pts')}</th>${adminTh}</tr></thead>
+    <table class="stbl"><thead><tr><th>${t('stand.col.team')}</th><th>${t('stand.col.w')}</th><th>${t('stand.col.l')}</th><th>${t('stand.col.played')}</th><th>${t('stand.col.diff')}</th><th>${t('stand.col.pts')}</th>${adminTh}</tr></thead>
     <tbody>${rows}</tbody></table>`;
   return card;
 }
@@ -2929,8 +2930,8 @@ function renderBracketForCat(catId, container) {
 
   if (isHybrid) {
     // Render r0+r1 as paired horizontal lanes in one column
-    const col=document.createElement('div'); col.className='bround';
-    col.innerHTML=`<div class="brnd-title">${tRound(cs.ko.length-1)} <span class="brnd-arrow">→</span> ${tRound(cs.ko.length-2)}</div>`;
+    const col=document.createElement('div'); col.className='bround'; col.dataset.ri=1;
+    col.innerHTML=`<div class="brnd-title">${tRound(cs.ko.length-1)}<span class="brnd-arrow">→</span> ${tRound(cs.ko.length-2)}</div>`;
     const lanesEl=document.createElement('div'); lanesEl.className='brnd-matches hybrid-lanes';
     cs.ko[0].forEach((g0,gi) => {
       const g1 = cs.ko[1][gi];
@@ -2951,7 +2952,7 @@ function renderBracketForCat(catId, container) {
   // Standard columns (all rounds if not hybrid; r2+ if hybrid)
   cs.ko.forEach((round, ri) => {
     if (ri < startRi) return;
-    const col=document.createElement('div'); col.className='bround';
+    const col=document.createElement('div'); col.className='bround'; col.dataset.ri=ri;
     col.innerHTML=`<div class="brnd-title">${tRound(cs.ko.length-1-ri)}</div>`;
     const matchesEl=document.createElement('div'); matchesEl.className='brnd-matches';
     let halvings=0;
@@ -3126,6 +3127,10 @@ window.addEventListener('orientationchange', redrawBracketLinesSoon);
 function renderBracket() {
   const container=document.getElementById('bracket-container');
   if (!container) return;
+  // Live updates keep each bracket's horizontal scroll; a fresh view opens on the current round.
+  const prev = {};
+  if (document.getElementById('page-bracket')?.classList.contains('on'))
+    container.querySelectorAll('.bscroll[data-cat]').forEach(sc => { prev[sc.dataset.cat] = sc.scrollLeft; });
   container.innerHTML='';
   const cats=activeCat?categories.filter(c=>c.id===activeCat):categories;
   cats.forEach(cat => {
@@ -3135,6 +3140,14 @@ function renderBracket() {
       container.appendChild(hdr);
     }
     renderBracketForCat(cat.id, container);
+    const sc = [...container.querySelectorAll('.bscroll[data-cat]')].find(x => x.dataset.cat === cat.id);
+    if (!sc) return;
+    if (cat.id in prev) { sc.scrollLeft = prev[cat.id]; return; }
+    const ri = state[cat.id].ko.findIndex(r => r.some(g => !g.isBye && !isValidScore(parseInt(g.sa), parseInt(g.sb), cat.id, getRuleForGame(cat.id, g, true).pts)));
+    const col = [...sc.querySelectorAll('.bround[data-ri]')].find(c => +c.dataset.ri >= ri);
+    if (ri <= 0 || !col) return;
+    const c = col.getBoundingClientRect(), r = sc.getBoundingClientRect();
+    sc.scrollLeft += getComputedStyle(sc).direction === 'rtl' ? c.right - r.right : c.left - r.left;
   });
 }
 
@@ -3853,6 +3866,7 @@ function updateNavFade() {
 }
 
 function rerender() {
+  const y = scrollY;
   renderCatFilters();
   const pages=['register','participants','registrations','build','standings','schedule','bracket','settings'];
   const active=pages.find(p=>{
@@ -3868,6 +3882,7 @@ function rerender() {
   if (active==='build')         renderBuildPage();
   if (active==='participants')  renderParticipants();
   if (active==='register')      renderRegisterPage();
+  if (scrollY !== y) scrollTo(0, y);
 }
 
 function renderSponsorBar() {
