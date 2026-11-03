@@ -1058,12 +1058,15 @@ function renderParticipants() {
   }).join('');
 }
 
+// "pay.me/x" → "https://pay.me/x"; anything with its own scheme is left as is (and filtered below).
+const payUrl = s => (s = String(s || '').trim()) && !/^[a-z][\w+.-]*:(?!\d)/i.test(s) ? 'https://' + s : s;
+window.payUrl = payUrl;
 function renderPayLink(wrapId) {
   const wrap = document.getElementById(wrapId);
   if (!wrap) return;
   const links = [
-    { url: meta.paymentLink,  label: meta.paymentLinkLabel  || t('reg.payLink')  },
-    { url: meta.paymentLink2, label: meta.paymentLink2Label || t('reg.payLink2') },
+    { url: payUrl(meta.paymentLink),  label: meta.paymentLinkLabel  || t('reg.payLink')  },
+    { url: payUrl(meta.paymentLink2), label: meta.paymentLink2Label || t('reg.payLink2') },
   ].filter(l => /^https?:\/\//i.test(l.url || ''));   // only real http(s) links (blocks javascript: etc.)
 
   if (!links.length) { wrap.className = 'pay-section h'; wrap.innerHTML = ''; return; }
@@ -3295,16 +3298,16 @@ function renderSettings() {
       </div>
       <div class="sett-ctrl" style="flex-direction:column;align-items:flex-end;gap:8px">
         <div style="display:flex;gap:6px;align-items:center">
-          <input class="text-inp" dir="auto" value="${escH(meta.paymentLinkLabel)}" style="width:100px" placeholder="${t('settings.labelPh')}"
+          <input class="text-inp" dir="auto" value="${escH(meta.paymentLinkLabel)}" style="width:160px" placeholder="${t('settings.labelPh')}"
             onchange="updateMeta('paymentLinkLabel',this.value)"/>
           <input class="text-inp" type="url" dir="ltr" value="${escH(meta.paymentLink)}" style="width:190px" placeholder="https://…"
-            onchange="updateMeta('paymentLink',this.value)"/>
+            onchange="this.value=payUrl(this.value);updateMeta('paymentLink',this.value)"/>
         </div>
         <div style="display:flex;gap:6px;align-items:center">
-          <input class="text-inp" dir="auto" value="${escH(meta.paymentLink2Label)}" style="width:100px" placeholder="${t('settings.labelPh')}"
+          <input class="text-inp" dir="auto" value="${escH(meta.paymentLink2Label)}" style="width:160px" placeholder="${t('settings.labelPh')}"
             onchange="updateMeta('paymentLink2Label',this.value)"/>
           <input class="text-inp" type="url" dir="ltr" value="${escH(meta.paymentLink2)}" style="width:190px" placeholder="${t('settings.urlOptionalPh')}"
-            onchange="updateMeta('paymentLink2',this.value)"/>
+            onchange="this.value=payUrl(this.value);updateMeta('paymentLink2',this.value)"/>
         </div>
       </div>
     </div>`;
