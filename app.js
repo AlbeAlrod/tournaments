@@ -2166,13 +2166,7 @@ function openEditTeam(catId, gi, ti) {
   document.getElementById('edit-p1').value = p1||'';
   document.getElementById('edit-p2').value = p2||'';
   document.getElementById('edit-modal-title').textContent = t('stand.editTitle', { name: state[catId].groups[gi].name });
-  // Show category selector in tournament phase too
-  const catRow = document.getElementById('edit-cat-row');
-  const catSel = document.getElementById('edit-cat');
-  if (catRow && catSel) {
-    catSel.innerHTML = categories.map(c => `<option value="${escH(c.id)}"${c.id===catId?' selected':''}>${escH(c.name)}</option>`).join('');
-    catRow.classList.remove('h');
-  }
+  document.getElementById('edit-cat-row')?.classList.add('h');
   document.getElementById('edit-modal').classList.remove('h');
   document.getElementById('edit-p1').focus();
 }
@@ -2233,6 +2227,11 @@ async function saveEdit() {
   if (name === old) { closeEdit(); return; }
   if (pairTaken(catId, name, old)) { toast(t('errors.dupName', { name: fsi(name) })); return; }
   if (!await commitState(catId, cs => renamePair(cs, old, name))) return;
+  const reg = registrations.find(r => r.category === catId && normName(regPairName(r)) === normName(old));
+  if (reg) {
+    updateDoc(doc(db,'tournaments',tId,'registrations',reg.id), { p1, p2 }).catch(e => console.error(e));
+    reg.p1 = p1; reg.p2 = p2;
+  }
   closeEdit(); renderStandings(); renderScheduleContent(); renderBracket();
 }
 // Before the start: the pair leaves its group; only its unplayed games are dropped.
@@ -3684,15 +3683,20 @@ async function moveTeam(catId, fromGi, teamIdx, toGi) {
   if (fromGi === toGi) return;
   const team = state[catId]?.groups[fromGi]?.teams[teamIdx];
   if (!team || !state[catId].groups[toGi]) return;
+  const scored = cs => cs.sched.some(g => (g.gi === fromGi || g.gi === toGi) && hasScore(g));
+  if (scored(state[catId])) { toast(t('move.scored')); renderSettings(); return; }
   await commitState(catId, cs => {
     const from = cs.groups[fromGi], to = cs.groups[toGi];
     const i = from?.teams.indexOf(team) ?? -1;
-    if (i < 0 || !to) return false;
+    if (i < 0 || !to || scored(cs)) return false;
     from.teams.splice(i, 1);
+    cs.sched = cs.sched.filter(g => !(g.gi === fromGi && (g.a === team || g.b === team)));
+    if (cs.sched.length) {
+      const games = to.teams.map(b => ({ catId, gi: toGi, gn: to.name, a: team, b, sa: '', sb: '', court: '', time: '' }));
+      cs.sched.push(...games);
+      placeLateGames(catId, games);
+    }
     to.teams.push(team);
-    cs.sched.forEach(g => {
-      if ((g.a === team || g.b === team) && g.gi === fromGi) { g.gi = toGi; g.gn = to.name; }
-    });
   });
   renderStandings();
   renderSettings();
