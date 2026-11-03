@@ -218,7 +218,7 @@ async function loadTournament() {
     console.error('Load error', e);
     const p = document.querySelector('#view-loading p');
     if (p) {
-      p.textContent = t('sync.noConnection');
+      p.textContent = t('sync.loadFailed');
       const b = document.createElement('button');
       b.className = 'add-cat-btn'; b.textContent = t('sync.retry');
       b.onclick = () => location.reload();
@@ -1645,7 +1645,9 @@ async function buildTournament(catId) {
   const rebuild = meta.phase === 'built';
   if (rebuild) {
     const games = cids.flatMap(id => state[id] ? allGamesOf(state[id]) : []);
-    const msg = t('build.confirmRebuild') + ' ' + t('build.rebuildCounts', { games: games.length, scored: games.filter(hasScore).length });
+    const msg = t('build.confirmRebuild') + '\n' + t('build.confirmCounts', { cats: cids.length,
+      pairs: cids.reduce((n, id) => n + (state[id]?.roster.length || 0), 0),
+      scores: games.filter(hasScore).length, manual: games.filter(g => g.manual).length });
     if (!await askConfirm(msg, t(coord ? 'build.rebuildAll' : 'build.rebuild'))) return;
   }
   const prev = { phase: meta.phase, breaks: meta.breaks ?? null };
@@ -1673,7 +1675,7 @@ async function undoLastBuild() {
   const lb = lastBuild;
   if (!superAdmin || !lb?.state || meta.phase === 'tournament') return;
   const at = lb.at?.seconds ? new Date(lb.at.seconds * 1000).toTimeString().slice(0, 5) : '';
-  if (!await askConfirm(t('build.confirmUndo', { time: at }), t('build.undoLast'))) return;
+  if (!await askConfirm(t('build.confirmUndo', { at }), t('build.undoLast'))) return;
   const cids = Object.keys(lb.state).filter(id => categories.some(c => c.id === id));
   const ok = await commitState(cids, () => {
     cids.forEach(id => { state[id] = catStateFromFB(structuredClone(lb.state[id])); });
@@ -2281,7 +2283,7 @@ function applyUnsaved() {
     const idx = e.ri == null ? state[e.cid].sched.indexOf(g) : e.idx;
     if (idx !== e.idx) { unsavedGames.delete(gk); e.idx = idx; unsavedGames.set(gameKey(e.cid, idx), e); }
   });
-  if (lost) { mirrorUnsaved(); toast(t('score.dropped', { n: lost })); }
+  if (lost) { mirrorUnsaved(); toast(t('sync.unsavedDropped')); }
 }
 // A score with only one side filled is never saved.
 const isHalf = g => !String(g.sa ?? '') !== !String(g.sb ?? '');
@@ -2348,7 +2350,7 @@ async function flushScoreWrites() {
       markGameRow(gk);
     });
     skipped.forEach(({ e, g }) => { const mine = gameRef(e); if (mine && g) Object.assign(mine, { sa: g.sa, sb: g.sb }); });
-    if (skipped.length) { toast(t('score.conflict', { n: skipped.length })); rerender(); }
+    if (skipped.length) { toast(t('sync.conflict')); rerender(); }
     setSyncStatus(true);
     mirrorUnsaved();
   } catch(e) {

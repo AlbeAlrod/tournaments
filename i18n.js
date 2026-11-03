@@ -439,6 +439,7 @@ const DICT = {
     'errors.catRequired':  'יש לבחור קטגוריה.',
     'errors.submitFailed': 'השליחה נכשלה. נסו שוב.',
     'errors.statusUpdate': 'עדכון הסטטוס נכשל. נסו שוב.',
+    'errors.saveFailed':   'השמירה נכשלה. בדקו את החיבור ונסו שוב.',
     'errors.noApproved':   'אין זוגות מאושרים בקטגוריה הזאת.',
     'errors.groupMin':     'בבית צריך להישאר לפחות זוג אחד.',
 
@@ -510,7 +511,7 @@ const DICT = {
     'score.bothSides':         'יש למלא את התוצאה של שני הצדדים',
 
     // ── wave 3: rebuild, live ops, sync, move, late pairs, print ──
-    'build.confirmRebuild':           'בנייה מחדש תחלק מחדש את הבתים ותבנה את לוח המשחקים מאפס. כל שינוי ידני בשעות ובמגרשים יימחק. להמשיך?',
+    'build.confirmRebuild':           'בנייה מחדש תחלק מחדש את הבתים ותבנה את לוח המשחקים מחדש. שינויים ידניים בשעות ובמגרשים יימחקו; תוצאות של משחקים שנשארים זהים יישמרו. להמשיך?',
     'build.confirmCounts':            '{cats} קטגוריות · {pairs} זוגות · {scores} תוצאות · {manual} שינויים ידניים',
     'build.rebuildAll':               '↺ בנייה מחדש של כל הקטגוריות',
     'build.undoLast':                 'ביטול בנייה אחרונה',
@@ -887,6 +888,7 @@ const DICT = {
     'errors.catRequired':  'Please choose a category.',
     'errors.submitFailed': 'Sending failed. Please try again.',
     'errors.statusUpdate': 'Could not update the status. Please try again.',
+    'errors.saveFailed':   'Saving failed. Check the connection and try again.',
     'errors.noApproved':   'No approved pairs in this category.',
     'errors.groupMin':     'A group needs at least one pair.',
 
@@ -958,7 +960,7 @@ const DICT = {
     'score.bothSides':         'Enter both scores',
 
     // ── wave 3: rebuild, live ops, sync, move, late pairs, print ──
-    'build.confirmRebuild':           'Rebuilding re-draws the groups and the whole schedule. Manual time/court changes will be lost. Continue?',
+    'build.confirmRebuild':           'Rebuilding re-draws the groups and the whole schedule. Manual time/court changes will be lost; scores of games that stay the same are kept. Continue?',
     'build.confirmCounts':            '{cats} categories · {pairs} pairs · {scores} scores · {manual} manual changes',
     'build.rebuildAll':               '↺ Rebuild all categories',
     'build.undoLast':                 'Undo last build',
