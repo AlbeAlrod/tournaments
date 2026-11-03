@@ -116,13 +116,17 @@ const DEF_CAT_CFG = {
 };
 
 // ============ SYNC ============
-let syncOk = true;
+let syncOk = true, lastSync = null;
 function setSyncStatus(ok = syncOk) {
   syncOk = ok;
-  const el = document.getElementById('sync-indicator');
+  const el = document.getElementById('sync-indicator'), st = document.getElementById('sync-status');
   if (!el) return;
-  el.className = 'sync-dot ' + (ok && navigator.onLine ? 'sync-ok' : 'sync-err');
-  el.title = unsavedGames.size ? t('sync.unsaved', { n: unsavedGames.size }) : '';
+  const off = !ok || !navigator.onLine, n = unsavedGames.size;
+  el.className = 'sync-dot ' + (off ? 'sync-offline' : n ? 'sync-pending' : 'sync-ok');
+  if (!st) return;
+  st.textContent = n ? t('sync.unsaved', { n }) : off && admin ? t('sync.offline')
+    : lastSync ? t('sync.updated', { time: lastSync.toTimeString().slice(0, 5) }) : '';
+  st.classList.toggle('offline', off);
 }
 
 // ============ FIRESTORE HELPERS ============
@@ -227,6 +231,7 @@ async function loadTournament() {
     window.addEventListener('online', () => location.reload(), { once: true });
     return false;
   }
+  lastSync = new Date();
   if (!snap.exists()) {
     // Unknown id (typo / deleted): never create a doc from a public link —
     // tournaments are created in admin.html. Show a friendly not-found view.
@@ -283,6 +288,7 @@ async function loadTournament() {
       if (!state[cat.id]) state[cat.id] = { roster:[], groups:[], sched:[], ko:[] };
     });
     applyingRemote = false;
+    if (!snap.metadata.fromCache) lastSync = new Date();
     // Remote update: refresh header/theme/phase, then only the page on screen
     // (renderAll rebuilt every page on every score from every phone).
     const _f = _focusSnapshot();
@@ -577,8 +583,6 @@ function refreshAdmin() {
   const mtxt = document.getElementById('mode-text');
   if (txt) txt.textContent = t(adminLevel===2 ? 'admin.btnMasterOn' : adminLevel===1 ? 'admin.btnAdminOn' : 'admin.btn');
   if (btn) btn.classList.toggle('on', admin);
-  const syncDot = document.getElementById('sync-indicator');
-  if (syncDot) syncDot.classList.toggle('h', !admin);
   if (bar) bar.className = 'mode-bar ' + (admin ? 'mode-admin' : 'mode-view');
   const adminBar = document.getElementById('admin-bar');
   if (adminBar) adminBar.classList.toggle('mode-admin', admin);
