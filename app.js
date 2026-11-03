@@ -268,7 +268,8 @@ async function loadTournament() {
   });
 
   // Registrations: live listener (Participants / my-registration status update by themselves)
-  await subscribeRegistrations();
+  // Registrations hold phone numbers: viewers only need them before the tournament starts.
+  if (meta.phase !== 'tournament') await subscribeRegistrations();
 
   // Live listener
   // Our own pending writes echo back first (hasPendingWrites): skip those; the
@@ -302,11 +303,12 @@ async function loadTournament() {
 }
 
 const regTime = r => r.createdAt?.seconds ?? 9e15;   // pending server timestamp → last
-let regsLoaded = false;
+let regsLoaded = false, regsSub = false;
 // Resolves after the first snapshot so boot renders with data. No orderBy in the
 // query: docs whose createdAt is still pending would be dropped by it; sort here.
 function subscribeRegistrations() {
-  if (!REGS_REF) return Promise.resolve();
+  if (!REGS_REF || regsSub) return Promise.resolve();
+  regsSub = true;
   return new Promise(resolve => {
     let first = true;
     const done = () => { if (first) { first = false; resolve(); } };
@@ -314,7 +316,7 @@ function subscribeRegistrations() {
       registrations = snap.docs.map(d => ({ id: d.id, ...d.data({ serverTimestamps: 'estimate' }) }))
         .sort((a, b) => regTime(a) - regTime(b));
       regsLoaded = true;
-      if (first) return done();
+      done();
       const active = ['register','participants','registrations']
         .find(p => document.getElementById('page-'+p)?.classList.contains('on'));
       if (active === 'register')      renderRegisterPage();
@@ -540,6 +542,7 @@ async function tryLogin() {
     setRole(loginRole);
     try { sessionStorage.setItem(AUTH_KEY(), JSON.stringify({ role: loginRole, h: hashed })); } catch(_) {}
     closeLogin(); refreshAdmin(); rerender();
+    if (meta.phase === 'registration' && document.getElementById('page-register')?.classList.contains('on')) goPage('registrations');
   } else {
     document.getElementById('pw-err').classList.remove('h');
     document.getElementById('pw-inp').value = '';
@@ -551,6 +554,7 @@ function setRole(role) {
   adminLevel = role === 'master' ? 2 : 1;
   admin      = true;
   superAdmin = adminLevel === 2;
+  subscribeRegistrations();
 }
 
 // Login survives reloads for this browser tab (sessionStorage, per tournament).
@@ -587,24 +591,20 @@ function refreshAdmin() {
   if (btn) btn.classList.toggle('on', admin);
   if (bar) bar.className = 'mode-bar ' + (admin ? 'mode-admin' : 'mode-view');
   const adminBar = document.getElementById('admin-bar');
-  if (adminBar) adminBar.classList.toggle('mode-admin', admin);
+  if (adminBar) { adminBar.classList.toggle('mode-admin', admin); adminBar.style.padding = admin ? '' : '2px 16px'; }
   if (mtxt) {
     if (!admin) mtxt.textContent = t('admin.modeView');
     else if (meta.phase==='registration') mtxt.textContent = t(adminLevel===2 ? 'admin.modeMasterReg' : 'admin.modeAdminReg');
     else if (meta.phase==='built') mtxt.textContent = t(adminLevel===2 ? 'admin.modeMasterBuilt' : 'admin.modeAdminBuilt');
     else mtxt.textContent = t(adminLevel===2 ? 'admin.modeMasterScores' : 'admin.modeScores');
   }
-  // Hide Register tab when admin is logged in (registration phase)
+  // Register tab stays visible to admins too (preview of the public form)
   const regTab = document.getElementById('tab-register');
-  if (regTab) regTab.classList.toggle('h', regManager);
+  if (regTab) regTab.classList.remove('h');
   document.getElementById('tab-registrations')?.classList.toggle('h', !admin);
   const settingsTab = document.getElementById('tab-settings');
   if (settingsTab) settingsTab.classList.toggle('h', !superAdmin);
   // Auto-navigate away from pages that don't belong in current phase
-  if (regManager && document.getElementById('page-register')?.classList.contains('on')) {
-    goPage('registrations');
-  }
-  if (builtManager && document.getElementById('page-register')?.classList.contains('on')) goPage('standings');
   if (admin && meta.phase === 'tournament' && document.getElementById('page-build')?.classList.contains('on')) goPage('standings');
   updateNavFade();
 }
@@ -625,7 +625,7 @@ async function confirmStartTournament() {
   document.body.classList.add('phase-tournament');
   refreshAdmin();
   renderAll();
-  goPage('standings');
+  goPage('schedule');
 }
 
 // ============ REGISTRATION ============
@@ -696,12 +696,16 @@ function renderMyReg() {
       <div>
         <div>${dnH(regPairName(r))}${cat ? ` · <bdi>${escH(cat.name)}</bdi>` : ''}</div>
         <span class="status-badge badge-${escH(r.status)}">${escH(statusTxt(r.status))}</span>
+        ${r.status !== 'rejected' ? `<span class="paid-badge${r.paid ? '' : ' no'}">${t(r.paid ? 'reg.paidBadge' : 'reg.unpaidBadge')}</span>` : ''}
       </div>
       ${r.status === 'pending'
         ? `<button type="button" class="reg-btn reject" onclick="cancelMyRegistration('${escH(r.id)}')">${t('common.cancel')}</button>`
         : `<span class="d-muted">${t('reg.cancelContact')}</span>`}
     </div>`;
-  }).join('');
+  }).join('') + '<div id="mine-pay-wrap"></div>';
+  // The form and the receipt carry their own pay buttons.
+  const formShown = document.getElementById('reg-form-wrap')?.style.display !== 'none';
+  if (!formShown && !lastReceipt && mine.some(r => !r.paid && r.status !== 'rejected')) renderPayLink('mine-pay-wrap');
 }
 
 async function cancelMyRegistration(id) {
@@ -777,8 +781,8 @@ async function submitRegistration() {
   };
   if (!regErrors.p1 && !regErrors.p2 && normName(p1) === normName(p2)) regErrors.p2 = () => t('errors.sameNames');
   if (!Object.values(regErrors).some(Boolean)) {
-    const dup = findDuplicateReg(p1, p2, phone, catId);
-    if (dup) regErrors.form = () => t(pairKey(dup.p1, dup.p2) === pairKey(p1, p2) ? 'errors.dupPair' : 'errors.dupPhone', { status: statusTxt(dup.status) });
+    const dup = findDuplicateReg(p1, p2, '', catId);
+    if (dup) regErrors.form = () => t('errors.dupPair', { status: statusTxt(dup.status) });
   }
   renderRegErrors();
   const first = Object.keys(REG_FIELDS).find(k => regErrors[k]);
@@ -799,6 +803,7 @@ async function submitRegistration() {
       createdAt: serverTimestamp()
     });
     setMyRegs([...getMyRegs(), ref.id]);
+    if (registrations.some(r => r.id !== ref.id && r.category === catId && r.status !== 'rejected' && normPhone(r.phone) === phone)) toast(t('errors.dupPhoneWarn'));
     document.getElementById('frm-p1').value = '';
     document.getElementById('frm-p2').value = '';
     document.getElementById('frm-phone').value = '';
@@ -940,7 +945,7 @@ function renderRegCounts() {
     const appr = rs.filter(r => r.status === 'approved').length;
     const pend = rs.filter(r => r.status === 'pending').length;
     const paid = rs.filter(r => r.paid).length;
-    return `<span class="d-reg-count"><strong>${escH(c.name)}</strong> ${rs.length} · ✓${appr} · ⏳${pend} · ₪${paid}</span>`;
+    return `<span class="d-reg-count"><strong><bdi>${escH(c.name)}</bdi></strong> ${t('admin.counts', { total: rs.length, appr, pend, paid })}</span>`;
   });
   el.innerHTML = rows.join('');
 }
@@ -968,7 +973,7 @@ function exportRegistrationsCSV() {
   const blob = new Blob(['\ufeff' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = `registrations-${tId}.csv`;
+  a.download = `registrations-${(meta.name || tId).replace(/[\\/:*?"<>|]+/g, '-').trim()}.csv`;
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
@@ -998,7 +1003,9 @@ function renderRegistrations() {
     el.innerHTML = `<div class="empty"><h3>${t('admin.noRegs')}</h3></div>`;
     return;
   }
-  el.innerHTML = list.map(r => {
+  const toApprove = meta.phase === 'registration' ? list.filter(r => r.status !== 'approved').length : 0;
+  el.innerHTML = (toApprove > 1 ? `<button type="button" class="filter-btn" style="margin-bottom:12px" onclick="approveAllShown()">${t('admin.approveAllShown', { n: toApprove })}</button>` : '')
+    + list.map(r => {
     const cat = categories.find(c => c.id === r.category);
     const catName = cat ? cat.name : r.category;
     const wa = waLink(r.phone);
@@ -1013,12 +1020,13 @@ function renderRegistrations() {
       </div>
       <span class="status-badge badge-${escH(r.status)}">${escH(statusTxt(r.status))}</span>
       <label class="d-paid-toggle"><input type="checkbox" ${r.paid ? 'checked' : ''} aria-label="${escH(t('admin.paidFor', { pair: regPairName(r) }))}" onchange="setRegPaid('${r.id}',this.checked)"/> <span aria-hidden="true">${t('admin.paid')}</span></label>
-      ${regPhase ? `<div class="reg-actions">
-        ${r.status !== 'approved' ? `<button class="reg-btn approve" onclick="setRegStatus('${r.id}','approved')">${t('admin.approve')}</button>` : ''}
+      <div class="reg-actions">
+        <button class="reg-btn" onclick="openEditReg('${r.id}')" title="${t('admin.editReg')}" aria-label="${t('admin.editReg')}">✎</button>
+        ${regPhase ? `${r.status !== 'approved' ? `<button class="reg-btn approve" onclick="setRegStatus('${r.id}','approved')">${t('admin.approve')}</button>` : ''}
         ${r.status === 'approved'  ? `<button class="reg-btn" onclick="setRegStatus('${r.id}','pending')">${t('admin.undo')}</button>` : ''}
         ${r.status !== 'rejected'  ? `<button class="reg-btn reject" onclick="setRegStatus('${r.id}','rejected')">${t('admin.reject')}</button>` : ''}
-        <button class="reg-btn reject" onclick="setRegStatus('${r.id}','deleted')" title="${t('admin.deleteTitle')}">${t('admin.delete')}</button>
-      </div>` : ''}
+        <button class="reg-btn reject" onclick="setRegStatus('${r.id}','deleted')" title="${t('admin.deleteTitle')}">${t('admin.delete')}</button>` : ''}
+      </div>
     </div>`;
   }).join('');
 }
@@ -1033,38 +1041,37 @@ function renderParticipants() {
     return;
   }
   hiddenMsg?.classList.add('h');
-  const approved = registrations.filter(r => r.status === 'approved');
-  if (!approved.length) {
+  // Once a roster exists it is the truth (direct adds, renames); registrations only seed it.
+  const pairsOf = cat => state[cat.id]?.roster?.length ? state[cat.id].roster
+    : registrations.filter(r => r.status === 'approved' && r.category === cat.id).map(regPairName);
+  if (!categories.some(c => pairsOf(c).length)) {
     el.innerHTML = `<div class="empty"><h3>${t('parts.empty')}</h3></div>`;
     return;
   }
-  const byCat = {};
-  categories.forEach(c => { byCat[c.id] = []; });
-  approved.forEach(r => {
-    if (!byCat[r.category]) byCat[r.category] = [];
-    byCat[r.category].push(r);
-  });
   el.innerHTML = categories.map(cat => {
-    const list = byCat[cat.id] || [];
+    const list = pairsOf(cat);
     if (!list.length) return '';
     return `<div class="part-cat">
       <div class="part-cat-title">${escH(cat.name)}</div>
-      <div class="part-grid">${list.map((r,i) => `
+      <div class="part-grid">${list.map((n,i) => `
         <div class="part-card">
           <span class="part-num num">${i+1}</span>
-          <span class="part-name">${dnH(r.p1)}${r.p2 ? ' / '+dnH(r.p2) : ''}</span>
+          <span class="part-name">${n.split('/').map(x => dnH(x.trim())).join(' / ')}</span>
         </div>`).join('')}
       </div>
     </div>`;
   }).join('');
 }
 
+// "pay.me/x" → "https://pay.me/x"; anything with its own scheme is left as is (and filtered below).
+const payUrl = s => (s = String(s || '').trim()) && !/^[a-z][\w+.-]*:(?!\d)/i.test(s) ? 'https://' + s : s;
+window.payUrl = payUrl;
 function renderPayLink(wrapId) {
   const wrap = document.getElementById(wrapId);
   if (!wrap) return;
   const links = [
-    { url: meta.paymentLink,  label: meta.paymentLinkLabel  || t('reg.payLink')  },
-    { url: meta.paymentLink2, label: meta.paymentLink2Label || t('reg.payLink2') },
+    { url: payUrl(meta.paymentLink),  label: meta.paymentLinkLabel  || t('reg.payLink')  },
+    { url: payUrl(meta.paymentLink2), label: meta.paymentLink2Label || t('reg.payLink2') },
   ].filter(l => /^https?:\/\//i.test(l.url || ''));   // only real http(s) links (blocks javascript: etc.)
 
   if (!links.length) { wrap.className = 'pay-section h'; wrap.innerHTML = ''; return; }
@@ -1097,6 +1104,43 @@ function renderInfoCards() {
     el.style.display = items.length ? '' : 'none';
   });
 }
+
+// regNote (small markdown subset) → HTML. Escapes first; the first heading becomes the <summary>.
+function mdNote(src, fallback) {
+  const inl = s => s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/(^|\s)\*(\S(?:.*?\S)?)\*(?![^\s.,;:!?)])/g, '$1<strong>$2</strong>')
+    .replace(/https?:\/\/[^\s<]+?(?=[.,;:!?)]*(?:\s|<|$))/g, u => `<a href="${u}" target="_blank" rel="noopener">${u}</a>`);
+  let summary = '', out = '', list = '', para = [];
+  const flush = () => {
+    if (para.length) out += `<p dir="auto">${para.join('<br>')}</p>`;
+    if (list) out += `</${list}>`;
+    para = []; list = '';
+  };
+  escH(src).split(/\r?\n/).forEach(line => {
+    const h = line.match(/^\s*(#{1,3})\s+(.*)$/), li = line.match(/^\s*(?:([-•*])|\d+[.)])\s+(.*)$/);
+    if (h) {
+      flush();
+      if (!summary) summary = inl(h[2]);
+      else out += `<h${h[1].length + 2} dir="auto">${inl(h[2])}</h${h[1].length + 2}>`;
+    } else if (li) {
+      const tag = li[1] ? 'ul' : 'ol';
+      if (para.length || list !== tag) { flush(); out += `<${tag} dir="auto">`; list = tag; }
+      out += `<li>${inl(li[2])}</li>`;
+    } else if (line.trim()) {
+      if (list) flush();
+      para.push(inl(line.trim()));
+    } else flush();
+  });
+  flush();
+  return `<details dir="auto"><summary>${summary || escH(fallback)}</summary>${out}</details>`;
+}
+function previewRegNote(ta) {
+  const prev = ta?.nextElementSibling;
+  if (!prev) return;
+  prev.classList.toggle('h', !ta.value.trim());
+  prev.innerHTML = mdNote(ta.value, t('reg.rulesSummary')).replace('<details', '<details open');
+}
+window.previewRegNote = previewRegNote;
 
 function renderRegisterPage() {
   renderInfoCards();
@@ -1134,8 +1178,10 @@ function renderRegisterPage() {
   }
   const noteEl = document.getElementById('reg-note');
   if (noteEl) {
-    noteEl.textContent = meta.regNote || '';
-    noteEl.classList.toggle('h', !meta.regNote);
+    const has = !!String(meta.regNote || '').trim(), open = noteEl.querySelector('details')?.open;
+    noteEl.className = 'reg-note md' + (has ? '' : ' h');
+    noteEl.innerHTML = has ? mdNote(meta.regNote, t('reg.rulesSummary')) : '';
+    if (open && has) noteEl.querySelector('details').open = true;
   }
   renderPayLink('reg-pay-wrap');
   renderRegErrors();
@@ -2102,9 +2148,10 @@ function makeStandingsCard(catId, grp, gi, catIdx) {
       ? `<td><button class="gedit-btn" onclick="openEditTeam('${catId}',${gi},${ti})" title="${t('stand.editAria')}" aria-label="${t('stand.editAria')}">✎</button>${
           canDelete?`<button class="team-del" onclick="deleteTeam('${catId}',${gi},${ti})" title="${t('stand.removeAria')}" aria-label="${t('stand.removeAria')}">✕</button>`:''}${
           meta.phase === 'tournament'?`<button class="gedit-btn" onclick="withdrawTeam('${catId}',${gi},${ti})">${t('stand.withdraw')}</button>`:''}</td>` : '';
-    return `<tr class="${isWinner?'winner':''}">
+    return `<tr class="${isWinner?'winner':''}${isMine(row.name)?' is-mine':''}">
       <td><span class="rnk num">#${i+1}</span>${dnH(row.name)}</td>
       <td>${row.w}</td><td>${row.l}</td>
+      <td><span class="num">${row.w+row.l}/${grp.teams.length-1}</span></td>
       <td class="${diffClass}"><span class="num">${diff!==0||row.w>0||row.l>0?diffStr:'—'}</span></td>
       <td><span class="pts-val">${row.pts}</span></td>
       ${adminCtrls}
@@ -2112,7 +2159,7 @@ function makeStandingsCard(catId, grp, gi, catIdx) {
   }).join('');
   const adminTh = superAdmin ? '<th></th>' : '';
   card.innerHTML = `<div class="scard-head"><span class="scard-name">${t('stand.group', { name: escH(grp.name) })}</span></div>
-    <table class="stbl"><thead><tr><th>${t('stand.col.team')}</th><th>${t('stand.col.w')}</th><th>${t('stand.col.l')}</th><th>${t('stand.col.diff')}</th><th>${t('stand.col.pts')}</th>${adminTh}</tr></thead>
+    <table class="stbl"><thead><tr><th>${t('stand.col.team')}</th><th>${t('stand.col.w')}</th><th>${t('stand.col.l')}</th><th>${t('stand.col.played')}</th><th>${t('stand.col.diff')}</th><th>${t('stand.col.pts')}</th>${adminTh}</tr></thead>
     <tbody>${rows}</tbody></table>`;
   return card;
 }
@@ -2173,6 +2220,7 @@ function openEditTeam(catId, gi, ti) {
 }
 function closeEdit() {
   document.getElementById('edit-modal').classList.add('h');
+  document.getElementById('edit-phone-row')?.classList.add('h');
   editTarget = null;
 }
 const pairTaken = (catId, name, except) => [...(state[catId]?.roster || []), ...approvedNames(catId)]
@@ -2188,10 +2236,73 @@ function renamePair(cs, old, name) {
   if (JSON.stringify(cs) === before) return false;
 }
 
+function openEditReg(id) {
+  const r = registrations.find(x => x.id === id);
+  if (!admin || !r) return;
+  editTarget = { regId: id };
+  document.getElementById('edit-p1').value = r.p1 || '';
+  document.getElementById('edit-p2').value = r.p2 || '';
+  document.getElementById('edit-phone').value = r.phone || '';
+  document.getElementById('edit-phone-row').classList.remove('h');
+  document.getElementById('edit-modal-title').textContent = t('admin.editReg');
+  const catSel = document.getElementById('edit-cat');
+  catSel.innerHTML = categories.map(c => `<option value="${escH(c.id)}"${c.id===r.category?' selected':''}>${escH(c.name)}</option>`).join('');
+  document.getElementById('edit-cat-row').classList.toggle('h', r.status === 'approved' && meta.phase !== 'registration');
+  document.getElementById('edit-modal').classList.remove('h');
+  document.getElementById('edit-p1').focus();
+}
+
+async function saveEditReg(p1, p2) {
+  const r = registrations.find(x => x.id === editTarget.regId);
+  if (!r) return closeEdit();
+  const phoneRaw = document.getElementById('edit-phone').value.trim();
+  const phone = phoneRaw ? normPhone(phoneRaw) : '';
+  const err = nameError(p1, 'common.player1') || nameError(p2, 'common.player2')
+    || (phoneRaw && !phone ? () => t('errors.phoneInvalid') : null);
+  if (err) { toast(err()); return; }
+  const catId = document.getElementById('edit-cat-row').classList.contains('h') ? r.category : document.getElementById('edit-cat').value || r.category;
+  const oldName = regPairName(r), name = `${p1} / ${p2}`;
+  if (pairKey(p1, p2) !== pairKey(r.p1, r.p2) || catId !== r.category) {
+    if (registrations.some(x => x.id !== r.id && x.status !== 'rejected' && x.category === catId && pairKey(x.p1, x.p2) === pairKey(p1, p2))) {
+      toast(t('errors.dupName', { name: fsi(name) })); return;
+    }
+  }
+  if (r.status === 'approved' && (name !== oldName || catId !== r.category)) {
+    const moved = catId !== r.category;
+    const ok = await commitState(moved ? [r.category, catId] : r.category, () => {
+      seedRoster(state[r.category], r.category);
+      if (!moved) { renamePair(state[r.category], oldName, name); return; }
+      withdrawPair(r.category, state[r.category], oldName);
+      seedRoster(state[catId], catId);
+      if (!state[catId].roster.some(n => normName(n) === normName(name))) state[catId].roster.push(name);
+    });
+    if (!ok) return;
+  }
+  try {
+    await updateDoc(doc(db, 'tournaments', tId, 'registrations', r.id), { p1, p2, phone, category: catId });
+    Object.assign(r, { p1, p2, phone, category: catId });
+  } catch(e) { alert(t('errors.statusUpdate')); return; }
+  closeEdit(); renderRegistrations(); renderBuildPage();
+}
+
+async function approveAllShown() {
+  if (!admin || meta.phase !== 'registration') return;
+  const list = filteredRegs().filter(r => r.status !== 'approved');
+  if (!list.length || !await askConfirm(t('admin.confirmApproveAll', { n: list.length }), t('admin.approve'))) return;
+  try {
+    await Promise.all(list.map(r => updateDoc(doc(db, 'tournaments', tId, 'registrations', r.id), { status: 'approved' })));
+  } catch(e) { alert(t('errors.statusUpdate')); return; }
+  list.forEach(r => { r.status = 'approved'; });
+  await commitState([...new Set(list.map(r => r.category))].filter(id => categories.some(c => c.id === id)),
+    () => list.forEach(addRegToRoster));
+  renderRegistrations(); renderParticipants(); renderBuildPage();
+}
+
 async function saveEdit() {
   if (!admin || !editTarget) return;
   const p1 = cleanName(document.getElementById('edit-p1').value);
   const p2 = cleanName(document.getElementById('edit-p2').value);
+  if (editTarget.regId) return saveEditReg(p1, p2);
   const name = p2?`${p1} / ${p2}`:p1;
   if (!name) return;
 
@@ -2541,7 +2652,44 @@ function renderStats() {
     <div class="sc"><div class="sl">${t('sched.statEnd')}</div><div class="sv a">${addM(lastTime,lastDur)}</div></div>`;
 }
 
-function buildGameRow(catId, g, idx, isKO) {
+// Per court, across all categories: the first unscored game is on court, the one after it is next.
+// Returns { marks: Map(gameKey → 'now'|'next'), now: [{time, dur}] }.
+function liveState() {
+  const marks = new Map(), now = [];
+  if (meta.phase !== 'tournament') return { marks, now };
+  const byCourt = {};
+  categories.forEach(cat => {
+    const cs = state[cat.id];
+    if (!cs) return;
+    const add = (g, isKO, gk) => {
+      if (!g.court || !g.time || isValidScore(parseInt(g.sa), parseInt(g.sb), cat.id, getRuleForGame(cat.id, g, isKO).pts)) return;
+      (byCourt[g.court] ||= []).push({ gk, time: g.time, dur: getRuleForGame(cat.id, g, isKO).dur || cat.cfg?.gameDur || 25 });
+    };
+    cs.sched.forEach((g, i) => add(g, false, gameKey(cat.id, i)));
+    cs.ko.forEach((r, ri) => r.forEach((g, gi) => { if (!g.isBye) add({ ...g, ri }, true, gameKey(cat.id, null, ri, gi)); }));
+  });
+  Object.values(byCourt).forEach(list => {
+    list.sort((a, b) => t2m(a.time) - t2m(b.time));
+    if (list[0]) { marks.set(list[0].gk, 'now'); now.push(list[0]); }
+    if (list[1]) marks.set(list[1].gk, 'next');
+  });
+  return { marks, now };
+}
+
+// Median minutes the on-court games are past their planned end; shown only on the event day.
+function renderLateBanner() {
+  const el = document.getElementById('late-banner');
+  if (!el) return;
+  const nowM = new Date().getHours() * 60 + new Date().getMinutes();
+  const d = meta.eventDate === new Date().toLocaleDateString('sv-SE')
+    ? liveState().now.map(g => nowM - t2m(g.time) - g.dur).sort((a, b) => a - b) : [];
+  const med = d.length ? d[Math.floor((d.length - 1) / 2)] : 0;
+  el.classList.toggle('h', med <= 5);
+  el.textContent = med > 5 ? t('live.late', { n: med }) : '';
+}
+setInterval(renderLateBanner, 60000);
+
+function buildGameRow(catId, g, idx, isKO, live) {
   const rule = getRuleForGame(catId, g, isKO);
   const done = isValidScore(parseInt(g.sa), parseInt(g.sb), catId, rule, g);
   // Color pill by group index for pool; by court→group for KO (dynamic group colors).
@@ -2556,13 +2704,14 @@ function buildGameRow(catId, g, idx, isKO) {
   const unsaved = unsavedGames.get(gk);
   const msg = unsaved ? scoreMsg(unsaved) : '';
   row.id = 'gc-' + gk;
-  row.className = 'gc'+(done?' done':'')+(isKO?' ko-game':'')+(unsaved?' unsaved':'')+(msg && !isHalf(g)?' invalid':'');
+  row.className = 'gc'+(done?' done':'')+(isKO?' ko-game':'')+(unsaved?' unsaved':'')+(msg && !isHalf(g)?' invalid':'')+(live==='now'?' is-now':'');
   const setter = k => isKO ? `setKS('${catId}',${g.ri},${g.gi},'${k}',this.value` : `setGS('${catId}',${idx},'${k}',this.value`;
   // Stable ids let the focus-preserving re-render put the caret back.
   const sid = k => isKO ? `si-${catId}-k${g.ri}-${g.gi}-${k}` : `si-${catId}-${idx}-${k}`;
   const gtag = (!isKO&&g.gn?`<span class="gtag">${escH(g.gn)}</span>`:'')
     + (superAdmin && g.manual ? `<span class="tag-manual" title="${t('game.tagManualTitle')}">${t('game.tagManual')}</span>` : '')
-    + (g.wo ? `<span class="tag-wo">${t('game.tagWo')}</span>` : g.forced ? `<span class="tag-forced">${t('game.tagForced')}</span>` : '');
+    + (g.wo ? `<span class="tag-wo">${t('game.tagWo')}</span>` : g.forced ? `<span class="tag-forced">${t('game.tagForced')}</span>` : '')
+    + (live ? `<span class="live-badge live-${live}">${t('live.' + live)}</span>` : '');
   const court = t('sched.courtShort', { n: g.court || '—' });
   const pill = (superAdmin && meta.phase !== 'registration'
     ? `<button type="button" class="pill ${pc}" onclick="openGameSheet('${catId}',${isKO ? `null,${g.ri},${g.gi}` : idx})" aria-label="${t('move.aria')}">${court} ⇄</button>`
@@ -2625,6 +2774,8 @@ function renderScheduleContent() {
     el.innerHTML=`<div class="empty"><h3>${t('sched.noMatch', { q: escH(q) })}</h3></div>`; return;
   }
 
+  const live = liveState().marks;
+  renderLateBanner();
   const byTime = {};
   filtered.filter(g => g.time).forEach(g => { const k=g.time; if(!byTime[k])byTime[k]=[]; byTime[k].push(g); });
   el.innerHTML = '';
@@ -2679,13 +2830,24 @@ function renderScheduleContent() {
         sh.textContent = label + ruleStr;
         block.appendChild(sh);
       }
-      sg.forEach(g => block.appendChild(buildGameRow(g._catId, g, g._idx, g._isKO)));
+      sg.forEach(g => block.appendChild(buildGameRow(g._catId, g, g._idx, g._isKO,
+        live.get(g._isKO ? gameKey(g._catId, null, g.ri, g.gi) : gameKey(g._catId, g._idx)))));
     });
+    if (block.querySelector('.gc:not(.done)')) block.classList.add('has-open');
     el.appendChild(block);
   });
 }
 
-function filterSchedule() { renderScheduleContent(); }
+// "My pair": the schedule search, remembered per tournament and highlighted in standings and bracket.
+const ME_KEY = () => 'luz.me.' + tId;
+let myPairQ = '';
+try { myPairQ = localStorage.getItem(ME_KEY()) || ''; } catch(_) {}
+const isMine = name => myPairQ.trim().length >= 2 && String(name || '').toLowerCase().includes(myPairQ.trim().toLowerCase());
+function filterSchedule() {
+  myPairQ = document.getElementById('sched-search')?.value || '';
+  try { localStorage.setItem(ME_KEY(), myPairQ); } catch(_) {}
+  renderScheduleContent();
+}
 
 // ============ LIVE OPS (master) ============
 const isSlot = s => !s || /^(TBD$|BYE$|Winner of |Loser of |[A-Z]\d+(\/[A-Z]\d+)?$)/.test(s);
@@ -2992,6 +3154,7 @@ function renderCourtFilter() {
 function setCourt(c) { activeCourt=c; renderCourtFilter(); renderScheduleContent(); }
 
 // ============ BRACKET ============
+const bmWhen = g => g.time && g.court ? `<div class="bm-when">${t('bracket.when', { time: g.time, n: g.court })}</div>` : '';
 function renderBracketForCat(catId, container) {
   const cs  = state[catId];
   const cat = categories.find(c=>c.id===catId);
@@ -3042,29 +3205,31 @@ function renderBracketForCat(catId, container) {
     const sa=parseInt(g.sa), sb=parseInt(g.sb);
     const hs=isValidScore(sa,sb,catId,getRuleForGame(catId,g,true),g);
     const wa=hs&&sa>sb, wb=hs&&sb>sa;
-    let labelA=g.a||'TBD', labelB=g.b||'TBD', codeA='', codeB='', knownA=false, knownB=false;
+    let labelA=g.a||'TBD', labelB=g.b||'TBD', codeA='', codeB='', knownA=false, knownB=false, nameA='', nameB='';
     if (ri===0) {
       const sAk=g.seedA||seedPairs[gi]?.[0]||'TBD', sBk=g.seedB||seedPairs[gi]?.[1]||'TBD';
       const sA=resolvePoolSeed(catId,sAk), sB=resolvePoolSeed(catId,sBk);
       labelA=dnH(tSlot(sA.known?sA.label:sAk)); labelB=dnH(tSlot(sB.known?sB.label:sBk));
       codeA=sA.known?sAk:''; codeB=sB.known?sBk:'';
       knownA=sA.known; knownB=sB.known;
+      nameA=sA.known?sA.label:''; nameB=sB.known?sB.label:'';
     } else {
       const isSeed = s => !s || s.startsWith('Winner') || /^[A-Z]\d+(\/[A-Z]\d+)?$/.test(s);
       knownA=!isSeed(g.a);
       knownB=!isSeed(g.b);
+      nameA=knownA?g.a:''; nameB=knownB?g.b:'';
       if (g.directSeedA&&knownA) codeA=g.directSeedA;
       if (g.directSeedB&&knownB) codeB=g.directSeedB;
       labelA=dnH(tSlot(labelA)); labelB=dnH(tSlot(labelB));
     }
     const box=document.createElement('div'); box.className='bmatch-box';
     const glbl=tGameLbl(koGameLabel(catId,ri,gi));
-    box.innerHTML=(glbl?`<div class="bm-label">${glbl}</div>`:'')+`<div class="bmatch">
-      <div class="bteam ${wa?'win':''} ${knownA?'':'tbd'}${g.directSeedA?' bdirect':''}">
-        <span class="bname">${labelA}</span>${codeA?`<span class="bsc seed-tag">${codeA}</span>`:''}${hs?`<span class="bsc num">${g.sa}</span>`:''}
+    box.innerHTML=(glbl?`<div class="bm-label">${glbl}</div>`:'')+bmWhen(g)+`<div class="bmatch">
+      <div class="bteam ${wa?'win':''} ${knownA?'':'tbd'}${g.directSeedA?' bdirect':''}${isMine(nameA)?' is-mine':''}">
+        <span class="bname">${labelA}</span>${codeA?`<span class="bsc seed-tag" title="${escH(tSlot(codeA))}">${codeA}</span>`:''}${hs?`<span class="bsc num">${g.sa}</span>`:''}
       </div>
-      <div class="bteam ${wb?'win':''} ${knownB?'':'tbd'}${g.directSeedB?' bdirect':''}">
-        <span class="bname">${labelB}</span>${codeB?`<span class="bsc seed-tag">${codeB}</span>`:''}${hs?`<span class="bsc num">${g.sb}</span>`:''}
+      <div class="bteam ${wb?'win':''} ${knownB?'':'tbd'}${g.directSeedB?' bdirect':''}${isMine(nameB)?' is-mine':''}">
+        <span class="bname">${labelB}</span>${codeB?`<span class="bsc seed-tag" title="${escH(tSlot(codeB))}">${codeB}</span>`:''}${hs?`<span class="bsc num">${g.sb}</span>`:''}
       </div>
     </div>`;
     return box;
@@ -3079,8 +3244,8 @@ function renderBracketForCat(catId, container) {
 
   if (isHybrid) {
     // Render r0+r1 as paired horizontal lanes in one column
-    const col=document.createElement('div'); col.className='bround';
-    col.innerHTML=`<div class="brnd-title">${tRound(cs.ko.length-1)} <span class="brnd-arrow">→</span> ${tRound(cs.ko.length-2)}</div>`;
+    const col=document.createElement('div'); col.className='bround'; col.dataset.ri=1;
+    col.innerHTML=`<div class="brnd-title">${tRound(cs.ko.length-1)}<span class="brnd-arrow">→</span> ${tRound(cs.ko.length-2)}</div>`;
     const lanesEl=document.createElement('div'); lanesEl.className='brnd-matches hybrid-lanes';
     cs.ko[0].forEach((g0,gi) => {
       const g1 = cs.ko[1][gi];
@@ -3101,7 +3266,7 @@ function renderBracketForCat(catId, container) {
   // Standard columns (all rounds if not hybrid; r2+ if hybrid)
   cs.ko.forEach((round, ri) => {
     if (ri < startRi) return;
-    const col=document.createElement('div'); col.className='bround';
+    const col=document.createElement('div'); col.className='bround'; col.dataset.ri=ri;
     col.innerHTML=`<div class="brnd-title">${tRound(cs.ko.length-1-ri)}</div>`;
     const matchesEl=document.createElement('div'); matchesEl.className='brnd-matches';
     let halvings=0;
@@ -3149,7 +3314,7 @@ function renderBracketForCat(catId, container) {
       const div3=document.createElement('div');
       div3.style.cssText='border-top:1px solid var(--border2);margin-top:16px;padding-top:10px;';
       const box3=document.createElement('div'); box3.className='bmatch-box';
-      box3.innerHTML=`<div class="bm-label">${t('bracket.third')}</div><div class="bmatch">
+      box3.innerHTML=`<div class="bm-label">${t('bracket.third')}</div>${bmWhen(thirdGame)}<div class="bmatch">
         <div class="bteam ${wa3?'win':''} ${knownA3?'':'tbd'}"><span class="bname">${lA3}</span>${hs3?`<span class="bsc num">${thirdGame.sa}</span>`:''}</div>
         <div class="bteam ${wb3?'win':''} ${knownB3?'':'tbd'}"><span class="bname">${lB3}</span>${hs3?`<span class="bsc num">${thirdGame.sb}</span>`:''}</div>
       </div>`;
@@ -3276,6 +3441,10 @@ window.addEventListener('orientationchange', redrawBracketLinesSoon);
 function renderBracket() {
   const container=document.getElementById('bracket-container');
   if (!container) return;
+  // Live updates keep each bracket's horizontal scroll; a fresh view opens on the current round.
+  const prev = {};
+  if (document.getElementById('page-bracket')?.classList.contains('on'))
+    container.querySelectorAll('.bscroll[data-cat]').forEach(sc => { prev[sc.dataset.cat] = sc.scrollLeft; });
   container.innerHTML='';
   const cats=activeCat?categories.filter(c=>c.id===activeCat):categories;
   cats.forEach(cat => {
@@ -3285,6 +3454,14 @@ function renderBracket() {
       container.appendChild(hdr);
     }
     renderBracketForCat(cat.id, container);
+    const sc = [...container.querySelectorAll('.bscroll[data-cat]')].find(x => x.dataset.cat === cat.id);
+    if (!sc) return;
+    if (cat.id in prev) { sc.scrollLeft = prev[cat.id]; return; }
+    const ri = state[cat.id].ko.findIndex(r => r.some(g => !g.isBye && !isValidScore(parseInt(g.sa), parseInt(g.sb), cat.id, getRuleForGame(cat.id, g, true).pts)));
+    const col = [...sc.querySelectorAll('.bround[data-ri]')].find(c => +c.dataset.ri >= ri);
+    if (ri <= 0 || !col) return;
+    const c = col.getBoundingClientRect(), r = sc.getBoundingClientRect();
+    sc.scrollLeft += getComputedStyle(sc).direction === 'rtl' ? c.right - r.right : c.left - r.left;
   });
 }
 
@@ -3560,16 +3737,15 @@ function renderSettings() {
       <span class="toggle-label">${t('settings.showList')}</span>
       <label class="toggle-switch"><input type="checkbox" ${meta.showRegistered?'checked':''} onchange="updateMeta('showRegistered',this.checked)"/><span class="toggle-slider"></span></label>
     </div>
-    <div class="sett-row" style="align-items:flex-start;padding-top:16px">
+    <div class="sett-row" style="flex-direction:column;align-items:stretch;padding-top:16px">
       <div class="sett-label">
         <span class="sett-name">${t('settings.regNote')}</span>
-        <span class="sett-desc">${t('settings.regNoteDesc')}</span>
+        <span class="sett-desc">${t('settings.regNoteDesc')} ${t('settings.regNoteHelp')}</span>
       </div>
-      <div class="sett-ctrl">
-        <textarea class="text-inp" dir="auto" style="width:240px;height:76px;resize:vertical;line-height:1.5"
-          onchange="updateMeta('regNote',this.value)"
-          placeholder="${t('settings.regNotePh')}">${escH(meta.regNote)}</textarea>
-      </div>
+      <textarea class="text-inp reg-note-editor" dir="auto" aria-label="${t('settings.regNote')}"
+        oninput="previewRegNote(this)" onchange="updateMeta('regNote',this.value)"
+        placeholder="${t('settings.regNotePh')}">${escH(meta.regNote)}</textarea>
+      <div class="reg-note md reg-note-preview"></div>
     </div>
     <div class="sett-row" style="align-items:flex-start;padding-top:16px">
       <div class="sett-label">
@@ -3592,20 +3768,21 @@ function renderSettings() {
       </div>
       <div class="sett-ctrl" style="flex-direction:column;align-items:flex-end;gap:8px">
         <div style="display:flex;gap:6px;align-items:center">
-          <input class="text-inp" dir="auto" value="${escH(meta.paymentLinkLabel)}" style="width:100px" placeholder="${t('settings.labelPh')}"
+          <input class="text-inp" dir="auto" value="${escH(meta.paymentLinkLabel)}" style="width:160px" placeholder="${t('settings.labelPh')}"
             onchange="updateMeta('paymentLinkLabel',this.value)"/>
           <input class="text-inp" type="url" dir="ltr" value="${escH(meta.paymentLink)}" style="width:190px" placeholder="https://…"
-            onchange="updateMeta('paymentLink',this.value)"/>
+            onchange="this.value=payUrl(this.value);updateMeta('paymentLink',this.value)"/>
         </div>
         <div style="display:flex;gap:6px;align-items:center">
-          <input class="text-inp" dir="auto" value="${escH(meta.paymentLink2Label)}" style="width:100px" placeholder="${t('settings.labelPh')}"
+          <input class="text-inp" dir="auto" value="${escH(meta.paymentLink2Label)}" style="width:160px" placeholder="${t('settings.labelPh')}"
             onchange="updateMeta('paymentLink2Label',this.value)"/>
           <input class="text-inp" type="url" dir="ltr" value="${escH(meta.paymentLink2)}" style="width:190px" placeholder="${t('settings.urlOptionalPh')}"
-            onchange="updateMeta('paymentLink2',this.value)"/>
+            onchange="this.value=payUrl(this.value);updateMeta('paymentLink2',this.value)"/>
         </div>
       </div>
     </div>`;
   container.appendChild(regSection);
+  previewRegNote(regSection.querySelector('.reg-note-editor'));
 
   // ── CATEGORIES ──────────────────────────────────────────────────
   // One shared grid: courts / minutes / break / start apply to the whole tournament.
@@ -4010,6 +4187,7 @@ function goPage(p) {
   const pageEl=document.getElementById('page-'+p);
   if (!pageEl) return;
   pageEl.classList.add('on');
+  history.replaceState(null, '', '#' + p);
   const tab=document.getElementById('tab-'+p);
   if (tab) { tab.classList.add('on'); tab.setAttribute('aria-current', 'page'); }
   renderCatFilters();
@@ -4018,9 +4196,14 @@ function goPage(p) {
   if (p==='registrations')  renderRegistrations();
   if (p==='build')          renderBuildPage();
   if (p==='standings')      renderStandings();
-  if (p==='schedule')       { renderStats(); renderCourtFilter(); renderScheduleContent(); }
+  if (p==='schedule')       { renderStats(); renderCourtFilter(); renderScheduleContent(); scrollBelowSticky(document.querySelector('#schedule-content .tblock.has-open')); }
   if (p==='bracket')        renderBracket();
   if (p==='settings')       renderSettings();
+}
+function scrollBelowSticky(el) {
+  if (!el) return;
+  const top = el.getBoundingClientRect().top + scrollY - (document.getElementById('sticky-block')?.offsetHeight || 0) - 8;
+  if (top > scrollY + 40) scrollTo({ top });
 }
 
 // Fade the nav's end edge while more tabs are hidden past it (scroll hint).
@@ -4030,6 +4213,7 @@ function updateNavFade() {
 }
 
 function rerender() {
+  const y = scrollY;
   renderCatFilters();
   const pages=['register','participants','registrations','build','standings','schedule','bracket','settings'];
   const active=pages.find(p=>{
@@ -4045,6 +4229,7 @@ function rerender() {
   if (active==='build')         renderBuildPage();
   if (active==='participants')  renderParticipants();
   if (active==='register')      renderRegisterPage();
+  if (scrollY !== y) scrollTo(0, y);
 }
 
 function renderSponsorBar() {
@@ -4121,7 +4306,7 @@ function renderAllInner() {
   renderCourtFilter();
   renderScheduleContent();
   renderBracket();
-  if (superAdmin) renderSettings();
+  if (superAdmin && !document.getElementById('page-settings')?.contains(document.activeElement)) renderSettings();
 }
 
 // ============ EXPOSE GLOBALS ============
@@ -4134,7 +4319,7 @@ Object.assign(window, {
   openAddPair, closeAddPair, saveAddPair,
   buildTournament, undoLastBuild, shuffleBuildRoster, moveBuildItem,
   onDragStart, onDragEnd, onDragOver, onDrop, onListDragOver, onListDrop,
-  openEditTeam, closeEdit, saveEdit, deleteTeam,
+  openEditTeam, closeEdit, saveEdit, deleteTeam, openEditReg, approveAllShown,
   editBuildItem, deleteBuildItem,
   setGS, setKS, filterSchedule,
   openGameSheet, closeSheet, saveMove, editPairFromSheet, techLoss, forceSave, withdrawTeam, saveLatePair,
@@ -4244,7 +4429,7 @@ async function autoAddPairToDB(name) {
   if (!name) return;
   const parts = name.includes('/') ? name.split('/').map(s=>s.trim()) : [name];
   for (const p of parts) {
-    if (p && !playerDB.find(x => x.name.toLowerCase() === p.toLowerCase())) {
+    if (p && !playerDB.find(x => normName(x.name) === normName(p))) {
       playerDB.push({ name: p, phone: '' });
     }
   }
@@ -4282,7 +4467,11 @@ window.addEventListener('load', async () => {
   document.getElementById('view-loading').classList.add('h');
   document.getElementById('view-app').classList.remove('h');
 
+  const si = document.getElementById('sched-search');
+  if (si) si.value = myPairQ;
   renderAll();
 
-  goPage(meta.phase !== 'registration' ? 'standings' : admin ? 'registrations' : 'register');
+  const h = location.hash.slice(1);
+  goPage(/^\w+$/.test(h) && document.getElementById('tab-' + h)?.offsetParent ? h
+    : meta.phase === 'tournament' ? 'schedule' : meta.phase === 'built' ? 'standings' : admin ? 'registrations' : 'register');
 });

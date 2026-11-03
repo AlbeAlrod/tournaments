@@ -146,7 +146,10 @@ export function tSlot(s) {
   const str = String(s);
   if (str === 'TBD') return t('bracket.tbd');
   if (str === 'BYE') return t('bracket.bye');
-  let m = str.match(/^Loser of SF(\d+)$/);
+  const seed = c => c.replace(/^([A-Z])(\d+)$/, (_, g, r) => t('bracket.seed', { g, r }));
+  let m = str.match(/^([A-Z]\d+)(?:\/([A-Z]\d+))?$/);
+  if (m) return m[2] ? t('bracket.winnerOfSeeds', { a: seed(m[1]), b: seed(m[2]) }) : seed(m[1]);
+  m = str.match(/^Loser of SF(\d+)$/);
   if (m) return t('bracket.loserSf', { n: m[1] });
   m = str.match(/^Winner of (.+) (\d+)$/);
   if (m) {

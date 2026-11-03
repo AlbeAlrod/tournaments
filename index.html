@@ -53,7 +53,7 @@
     <button class="admin-toggle" id="abtn" onclick="adminClick()"><span id="adm-txt" data-i18n="admin.btn">ניהול</span></button>
   </div>
 
-  <div id="sticky-block" class="sticky-block">
+  <div class="sticky-block" style="position:static;box-shadow:none">
     <header>
       <div class="logo">
         <div class="lmark" id="logo-mark">
@@ -67,6 +67,9 @@
         <button type="button" class="langsw__b" data-lang="en" onclick="setLang('en')" lang="en">EN</button>
       </div>
     </header>
+  </div>
+
+  <div id="sticky-block" class="sticky-block">
     <nav id="main-nav" data-i18n-aria="common.nav.aria">
       <!-- Registration phase tabs -->
       <button class="tab phase-reg" id="tab-register" onclick="goPage('register')" data-i18n="common.nav.register">הרשמה</button>
@@ -184,6 +187,7 @@
     <div class="pg" id="page-schedule">
       <h2 class="sr-only" data-i18n="common.nav.schedule">לוח משחקים</h2>
       <div id="sched-info-card" class="d-info-card" style="display:none"></div>
+      <div id="late-banner" class="late-banner h" role="status"></div>
       <div class="sched-search-box">
         <input class="team-search-input" id="sched-search" type="search" dir="auto" data-i18n-ph="sched.searchPh" data-i18n-aria="sched.searchAria" placeholder="Search team…" oninput="filterSchedule()"/>
       </div>
@@ -255,6 +259,9 @@
     </div>
     <div class="modal-row">
       <input class="modal-input" id="edit-p2" dir="auto" data-i18n-ph="common.player2" placeholder="שחקן/ית 2"/>
+    </div>
+    <div class="modal-row h" id="edit-phone-row">
+      <input class="modal-input" id="edit-phone" type="tel" dir="ltr" inputmode="tel" data-i18n-aria="reg.phoneLabel" placeholder="050-0000000"/>
     </div>
     <div class="modal-row h" id="edit-cat-row">
       <select class="modal-input" id="edit-cat"></select>
