@@ -739,15 +739,12 @@ input:focus-visible + .toggle-slider { outline: 2px solid var(--primary); outlin
 }
 .pay-section.h { display: none; }
 .pay-label { display: block; font-size: 13px; font-weight: 500; color: var(--text2); margin-bottom: 8px; }
-.pay-links { display: flex; flex-direction: column; gap: 10px; }
-.pay-link-btn { display: flex; align-items: center; gap: 12px; min-height: 54px; padding: 12px 18px;
+.pay-links { display: flex; gap: 10px; }
+.pay-link-btn { flex: 1 1 0; display: flex; align-items: center; justify-content: center; min-height: 54px; padding: 10px 12px;
   color: var(--on-primary); background: var(--primary); border: none; border-radius: var(--r);
   box-shadow: 0 1px 2px rgba(0,0,0,.08), 0 4px 12px color-mix(in srgb, var(--primary) 22%, transparent);
-  font-family: inherit; font-size: var(--fs-md); font-weight: 700; line-height: 1.3; text-align: start;
+  font-family: inherit; font-size: 15px; font-weight: 700; line-height: 1.3; text-align: center;
   text-decoration: none; transition: transform .12s, filter .18s; }
-.pay-link-btn::after { content: ''; width: 18px; height: 18px; flex: none; margin-inline-start: auto;
-  background: currentColor; -webkit-mask: var(--ic-ext) center/contain no-repeat; mask: var(--ic-ext) center/contain no-repeat; }
-[dir=rtl] .pay-link-btn::after { transform: scaleX(-1); }
 .pay-link-btn:hover { filter: brightness(1.08); }
 .pay-link-btn:active { transform: translateY(1px); filter: brightness(.95); }
 
@@ -951,6 +948,7 @@ input, textarea, select { max-width: 100%; }
 input[type="tel"], input[type="url"], input[type="time"], input[type="number"],
 input[type="password"] { direction: ltr; }
 [dir=rtl] .reg-phone, [dir=rtl] .player-db-phone { text-align: end; unicode-bidi: isolate; }
+[dir=rtl] :is(input, textarea):not([type=time], [type=number], [type=color], [type=checkbox], [type=radio]) { text-align: right; }
 
 /* Hebrew: letter-spacing breaks glyph shaping and uppercase is a no-op.
    :where() keeps this at class specificity so league.css (loaded later)
@@ -1120,8 +1118,8 @@ body:lang(he) { letter-spacing: 0; }
 .reg-note.md details > summary { cursor: pointer; font-weight: 700; font-size: var(--fs-md); color: var(--primary-text); min-height: 52px;
   display: flex; align-items: center; gap: 8px; list-style: none; margin: -8px -12px; padding: 8px 12px;
   background: color-mix(in srgb, var(--primary) 10%, #fff); border: 1.5px solid var(--primary); border-radius: var(--r); }
-.reg-note.md details > summary::before { content: ''; width: 20px; height: 20px; flex: none; background: currentColor; -webkit-mask: var(--ic-doc) center/contain no-repeat; mask: var(--ic-doc) center/contain no-repeat; }
 .reg-note.md details[open] > summary { margin-bottom: 12px; }
+.reg-note.md details > summary > span { flex: 1; }
 .reg-note.md details > summary::-webkit-details-marker { display: none; }
 .reg-note.md details > summary::after { content: ''; width: 20px; height: 20px; flex: none; margin-inline-start: auto; background: currentColor; -webkit-mask: var(--ic-chev) center/contain no-repeat; mask: var(--ic-chev) center/contain no-repeat; transition: transform .2s; }
 .reg-note.md details[open] > summary::after { transform: rotate(180deg); }

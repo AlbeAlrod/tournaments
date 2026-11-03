@@ -1116,12 +1116,14 @@ function mdNote(src, fallback) {
     if (list) out += `</${list}>`;
     para = []; list = '';
   };
-  escH(src).split(/\r?\n/).forEach(line => {
+  const lines = escH(src).split(/\r?\n/);
+  const first = lines.findIndex(l => l.trim());
+  if (first >= 0) summary = inl(lines.splice(first, 1)[0].replace(/^\s*(?:#{1,3}|[-•*]|\d+[.)])\s+/, '').trim());
+  lines.forEach(line => {
     const h = line.match(/^\s*(#{1,3})\s+(.*)$/), li = line.match(/^\s*(?:([-•*])|\d+[.)])\s+(.*)$/);
     if (h) {
       flush();
-      if (!summary) summary = inl(h[2]);
-      else out += `<h${h[1].length + 2} dir="auto">${inl(h[2])}</h${h[1].length + 2}>`;
+      out += `<h${h[1].length + 2} dir="auto">${inl(h[2])}</h${h[1].length + 2}>`;
     } else if (li) {
       const tag = li[1] ? 'ul' : 'ol';
       if (para.length || list !== tag) { flush(); out += `<${tag} dir="auto">`; list = tag; }
@@ -1132,7 +1134,7 @@ function mdNote(src, fallback) {
     } else flush();
   });
   flush();
-  return `<details dir="auto"><summary>${summary || escH(fallback)}</summary>${out}</details>`;
+  return `<details dir="auto"><summary><span>${summary || escH(fallback)}</span></summary>${out}</details>`;
 }
 function previewRegNote(ta) {
   const prev = ta?.nextElementSibling;
