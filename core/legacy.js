@@ -35,8 +35,13 @@ export const DEF_KO_RULES = {
 
 // from app.js:95
 export const DEF_CAT_CFG = {
-  courts: 2, gameDur: 30, breakDur: 0, numGroups: 2, advPerGroup: 2,
-  pointsToWin: 21, sets: 1, pointsThirdSet: 15, startTime: '08:00'
+  courts: 4, gameDur: 25, breakDur: 0, numGroups: 4, advPerGroup: 2,
+  pointsToWin: 21, sets: 1, pointsThirdSet: 15, startTime: '07:00',
+  koRules: {
+    pool: { pts: 21, change: 7, dur: 25 }, r16: { pts: 21, change: 7, dur: 25 },
+    qf: { pts: 21, change: 7, dur: 25 }, sf: { pts: 21, change: 7, dur: 25 },
+    third: { pts: 21, change: 7, dur: 25 }, final: { pts: 21, change: 7, dur: 25 },
+  }
 };
 
 // from app.js:108

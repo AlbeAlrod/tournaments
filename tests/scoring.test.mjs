@@ -3,6 +3,9 @@ import assert from 'node:assert/strict';
 import { validateResult } from '../core/scoring.js';
 import { PRESETS, PRESET_IDS, getPreset, legacyMatchFormat, legacyStage } from '../core/presets.js';
 import * as L from '../core/legacy.js';
+// Pre-wave-3 DEF_CAT_CFG: what categories created before 24.10 defaults still carry.
+const OLD_CFG = { courts: 2, gameDur: 30, breakDur: 0, numGroups: 2, advPerGroup: 2,
+  pointsToWin: 21, sets: 1, pointsThirdSet: 15, startTime: '08:00' };
 
 const V = (r, f) => validateResult(r, f);
 const ok = (r, f) => V(r, f).ok;
@@ -168,7 +171,7 @@ describe('presets', () => {
   test('legacy-beach stageFormats equal legacyMatchFormat for default cfg', () => {
     const p = getPreset('legacy-beach');
     for (const s of ['pool', 'r16', 'qf', 'sf', 'final', 'third'])
-      assert.deepEqual({ ...p.stageFormats[s] }, legacyMatchFormat(L.DEF_CAT_CFG, s));
+      assert.deepEqual({ ...p.stageFormats[s] }, legacyMatchFormat(OLD_CFG, s));
   });
 });
 
@@ -176,10 +179,10 @@ describe('presets', () => {
 // legacy-beach validateResult must agree with legacy isValidScore everywhere.
 describe('legacy-beach agrees with legacy isValidScore', () => {
   const cfgs = [
-    ['default', { ...L.DEF_CAT_CFG }],
-    ['sets3', { ...L.DEF_CAT_CFG, sets: 3 }],
-    ['koRules', { ...L.DEF_CAT_CFG, koRules: { pool: { pts: 11, change: 4 }, final: { pts: 25, change: 8 } } }],
-    ['queen', { ...L.DEF_CAT_CFG, pointsToWin: 21, koRules: { pool: { pts: 15 }, r16: { pts: 18 }, qf: { pts: 18 }, sf: { pts: 18 }, third: { pts: 15 }, final: { pts: 21 } } }],
+    ['default', { ...OLD_CFG }],
+    ['sets3', { ...OLD_CFG, sets: 3 }],
+    ['koRules', { ...OLD_CFG, koRules: { pool: { pts: 11, change: 4 }, final: { pts: 25, change: 8 } } }],
+    ['queen', { ...OLD_CFG, pointsToWin: 21, koRules: { pool: { pts: 15 }, r16: { pts: 18 }, qf: { pts: 18 }, sf: { pts: 18 }, third: { pts: 15 }, final: { pts: 21 } } }],
   ];
   const stages = [
     ['pool', { gi: 0 }, false], ['third', { gi: -1 }, false],

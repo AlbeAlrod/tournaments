@@ -24,11 +24,12 @@ const db    = getFirestore(fbApp);
 const tId = new URLSearchParams(location.search).get('t');
 
 // ============ STATE ============
-let meta = { name:'', logoUrl:'', primaryColor:'#6B21A8', secondaryColor:'#7C3AED',
+const DEF_PRIMARY = '#652d92';
+let meta = { name:'', logoUrl:'', primaryColor:DEF_PRIMARY, secondaryColor:'#7a3fb0',
   paymentLink:'', paymentLinkLabel:'', paymentLink2:'', paymentLink2Label:'',
   regNote:'', sponsorLogos: [],
   eventDate:'', venue:'', price:'',   // optional tournament info card (Register + Schedule)
-  groupColors: [],   // [gi0,gi1,gi2,gi3] — empty = use defaults
+  groupColors: [],   // [gi0,gi1,gi2,gi3] — empty = primary
   bgColor: '',       // override body background — empty = auto from primary
   lang: 'he',
   phase:'registration', regOpen:true, showRegistered:true };
@@ -104,8 +105,13 @@ function getRuleForGame(catId, g, isKO) {
 
 // ============ DEFAULT CATEGORY CONFIG ============
 const DEF_CAT_CFG = {
-  courts: 2, gameDur: 30, breakDur: 0, numGroups: 2, advPerGroup: 2,
-  pointsToWin: 21, sets: 1, pointsThirdSet: 15, startTime: '08:00'
+  courts: 4, gameDur: 25, breakDur: 0, numGroups: 4, advPerGroup: 2,
+  pointsToWin: 21, sets: 1, pointsThirdSet: 15, startTime: '07:00',
+  koRules: {
+    pool: { pts: 21, change: 7, dur: 25 }, r16: { pts: 21, change: 7, dur: 25 },
+    qf: { pts: 21, change: 7, dur: 25 }, sf: { pts: 21, change: 7, dur: 25 },
+    third: { pts: 21, change: 7, dur: 25 }, final: { pts: 21, change: 7, dur: 25 },
+  }
 };
 
 // ============ SYNC ============
@@ -353,7 +359,7 @@ function readable(candidate, bg, minRatio=4.5) {
 }
 
 function applyTheme(primary, secondary) {
-  primary   = primary   || '#6B21A8';
+  primary   = primary   || DEF_PRIMARY;
   secondary = secondary || primary;
 
   const [r1,g1,b1] = hexToRgb(primary);
@@ -1138,8 +1144,7 @@ function renderBuildPage() {
     div.className = 'build-cat';
     const _bci = categories.indexOf(cat);
     div.dataset.ci = _bci;
-    const _bDefColors = ['','#D97706','#0891B2','#EA580C'];
-    const _bColor = cat.color || _bDefColors[_bci] || '';
+    const _bColor = cat.color || '';
     const _bOn = /^#[0-9a-f]{6}$/i.test(_bColor) ? onColor(_bColor) : '';
     if (_bColor) { div.style.setProperty('--cat-color', _bColor); }
     if (_bOn)    { div.style.setProperty('--cat-on-color', _bOn); }
@@ -1918,12 +1923,8 @@ function makeStandingsCard(catId, grp, gi, catIdx) {
   const card = document.createElement('div');
   card.className = 'scard';
   card.dataset.ci = catIdx ?? 0;
-  // Group colors: custom meta.groupColors overrides defaults
-  const _grpDefaults = ['#E91E8C','#111111','#FFD600','#111111']; // B=black now
-  const _grpColors  = _grpDefaults.map((d,i) => (meta.groupColors||[])[i] || d);
-  const _grpOnColors= _grpColors.map(c => /^#[0-9a-f]{6}$/i.test(c) ? onColor(c) : '#fff');
-  const _grpColor   = _grpColors[gi % 4];
-  const _grpOn      = _grpOnColors[gi % 4];
+  const _grpColor   = grpColors()[gi % 4];
+  const _grpOn      = /^#[0-9a-f]{6}$/i.test(_grpColor) ? onColor(_grpColor) : '#fff';
   card.style.setProperty('--cat-color',    _grpColor);
   card.style.setProperty('--cat-on-color', _grpOn);
   const rows = st.map((row,i) => {
@@ -2800,7 +2801,7 @@ function renderSettings() {
   container.innerHTML = '';
 
   // ── DESIGN ──────────────────────────────────────────────────────
-  const pc = meta.primaryColor   || '#6B21A8';
+  const pc = meta.primaryColor   || DEF_PRIMARY;
   const sc = meta.secondaryColor || pc;
   const dsec = document.createElement('div');
   dsec.className = 'sett-section';
@@ -2903,12 +2904,12 @@ function renderSettings() {
 
   // ── GROUP COLORS ─────────────────────────────────────────────────
   const grpNames = ['A','B','C','D'];
-  const grpDefaults = ['#E91E8C','#111111','#FFD600','#111111'];
+  const grpCur = grpColors();
   const gcsec = document.createElement('div');
   gcsec.className = 'sett-section';
   gcsec.innerHTML = `<div class="sett-section-title">${t('settings.groupColors')}</div>` +
     grpNames.map((n,i) => {
-      const cur = (meta.groupColors||[])[i] || grpDefaults[i];
+      const cur = grpCur[i];
       return `<div class="sett-row${i===grpNames.length-1?' last-row':''}">
         <div class="sett-label"><span class="sett-name">${t('stand.group', { name: n })}</span></div>
         <div class="sett-ctrl color-pick-row">
@@ -2917,7 +2918,7 @@ function renderSettings() {
           <input class="text-inp text-mono" id="gct-${i}" style="width:100px" value="${cur}"
             onchange="if(/^#[0-9A-Fa-f]{6}$/.test(this.value)){document.getElementById('gcp-${i}').value=this.value;updateGroupColor(${i},this.value)}"/>
           <button class="add-cat-btn" style="padding:5px 10px"
-            onclick="updateGroupColor(${i},'${grpDefaults[i]}');renderSettings()">${t('common.reset')}</button>
+            onclick="updateGroupColor(${i},'');renderSettings()">${t('common.reset')}</button>
         </div>
       </div>`;
     }).join('');
@@ -3093,9 +3094,10 @@ function renderSettings() {
 }
 
 // ── Dynamic group color CSS ──────────────────────────────────────
-const GRP_DEFAULTS = ['#E91E8C','#111111','#FFD600','#111111'];
+// Empty group colour = the tournament's primary colour.
+const grpColors = () => [0,1,2,3].map(i => (meta.groupColors||[])[i] || meta.primaryColor || DEF_PRIMARY);
 function applyGroupColors() {
-  const colors = GRP_DEFAULTS.map((d,i) => (meta.groupColors||[])[i] || d);
+  const colors = grpColors();
   const style = document.getElementById('grp-color-style') || (() => {
     const s=document.createElement('style'); s.id='grp-color-style'; document.head.appendChild(s); return s;
   })();
@@ -3113,7 +3115,7 @@ function updateBgColor(color) {
 }
 function updateGroupColor(gi, color) {
   // Ensure full 4-element array (avoids sparse array issues in Firestore)
-  const cur = [...GRP_DEFAULTS.map((d,i) => (meta.groupColors||[])[i] || d)];
+  const cur = [0,1,2,3].map(i => (meta.groupColors||[])[i] || '');
   cur[gi] = color;
   meta.groupColors = cur;
   applyGroupColors();
@@ -3205,8 +3207,7 @@ function addSponsorLogo() {
 
 function renderCatItem(cat, ci) {
   const cfg=cat.cfg||DEF_CAT_CFG;
-  const defaultColors=['','#D97706','#0891B2','#EA580C'];
-  const catColor = cat.color || defaultColors[ci] || '#6B21A8';
+  const catColor = cat.color || meta.primaryColor || DEF_PRIMARY;
   return `<div class="cat-item">
     <div class="cat-item-head">
       <input class="text-inp" dir="auto" style="width:150px;font-weight:600" value="${escH(cat.name)}" onchange="updateCatName(${ci},this.value)"/>
@@ -3289,6 +3290,7 @@ function updateMeta(key, val) {
   meta[key] = val;
   if (key==='primaryColor' || key==='secondaryColor') {
     applyTheme(meta.primaryColor, meta.secondaryColor);
+    applyGroupColors();
   }
   if (key==='name') {
     document.getElementById('header-name').textContent=val;
@@ -3330,7 +3332,7 @@ function applyLogo(url) {
 
 function updateKORuleField(ci, roundKey, field, val) {
   if (!categories[ci]) return;
-  if (!categories[ci].cfg) categories[ci].cfg = {...DEF_CAT_CFG};
+  if (!categories[ci].cfg) categories[ci].cfg = structuredClone(DEF_CAT_CFG);
   if (!categories[ci].cfg.koRules) categories[ci].cfg.koRules = {};
   if (!categories[ci].cfg.koRules[roundKey]) categories[ci].cfg.koRules[roundKey] = {...DEF_KO_RULES[roundKey]};
   categories[ci].cfg.koRules[roundKey][field] = val === '' || val === null ? null : Number(val);
@@ -3347,13 +3349,13 @@ function updateCatName(ci, val) {
 }
 function updateCatCfg(ci, key, val) {
   if (!categories[ci]) return;
-  if (!categories[ci].cfg) categories[ci].cfg={...DEF_CAT_CFG};
+  if (!categories[ci].cfg) categories[ci].cfg=structuredClone(DEF_CAT_CFG);
   categories[ci].cfg[key]=val;
   pushToCloud(); renderSettings();
 }
 function adjCatCfg(ci, key, delta, min, max) {
   if (!categories[ci]) return;
-  if (!categories[ci].cfg) categories[ci].cfg={...DEF_CAT_CFG};
+  if (!categories[ci].cfg) categories[ci].cfg=structuredClone(DEF_CAT_CFG);
   const cur=categories[ci].cfg[key]||min;
   categories[ci].cfg[key]=Math.min(max,Math.max(min,cur+delta));
   pushToCloud(); renderSettings();
@@ -3361,7 +3363,7 @@ function adjCatCfg(ci, key, delta, min, max) {
 
 function addCategory() {
   const id='cat_'+Date.now();
-  categories.push({ id, name:t('settings.newCategory'), cfg:{...DEF_CAT_CFG} });
+  categories.push({ id, name:t('settings.newCategory'), cfg:structuredClone(DEF_CAT_CFG) });
   state[id]={ roster:[], groups:[], sched:[], ko:[] };
   pushToCloud(); renderSettings();
 }
