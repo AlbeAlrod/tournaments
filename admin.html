@@ -6,7 +6,7 @@
 <title>ניהול טורנירים</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700;800;900&display=swap" rel="stylesheet"/>
-<link rel="stylesheet" href="styles.css?v=61"/>
+<link rel="stylesheet" href="styles.css?v=69"/>
 <style>
 /* ── Shared overrides ── */
 .h { display: none !important; }
@@ -37,10 +37,8 @@
 .login-title h1 {
   font-family: 'Rubik', sans-serif;
   font-size: 24px;
-  font-weight: 900;
+  font-weight: 800;
   color: var(--text);
-  text-transform: uppercase;
-  letter-spacing: .5px;
 }
 .login-sub {
   font-size: 13px;
@@ -89,9 +87,9 @@
   font-size: 20px;
   font-weight: 800;
   color: var(--text);
-  letter-spacing: 1px;
 }
 .logout-btn {
+  min-height: var(--tap);
   padding: 8px 16px;
   background: transparent;
   color: var(--text3);
@@ -100,7 +98,6 @@
   font-family: 'Rubik', sans-serif;
   font-size: 14px;
   font-weight: 700;
-  letter-spacing: .5px;
   cursor: pointer;
   transition: all .2s;
 }
@@ -124,11 +121,10 @@
   font-family: 'Rubik', sans-serif;
   font-size: 26px;
   font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: .5px;
   color: var(--text);
 }
 .new-btn {
+  min-height: var(--tap);
   padding: 11px 22px;
   background: var(--primary);
   color: var(--on-primary);
@@ -137,8 +133,6 @@
   font-family: 'Rubik', sans-serif;
   font-size: 16px;
   font-weight: 800;
-  letter-spacing: 1px;
-  text-transform: uppercase;
   cursor: pointer;
   transition: opacity .18s;
   box-shadow: inset 0 0 0 1px rgba(0,0,0,0.10);
@@ -158,7 +152,7 @@
 }
 .t-table th {
   font-family: 'Rubik', sans-serif;
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 700;
   color: var(--text3);
   padding: 12px 14px;
@@ -202,19 +196,18 @@
 .status-pill {
   display: inline-block;
   font-family: 'Rubik', sans-serif;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
-  letter-spacing: .5px;
-  text-transform: uppercase;
   padding: 3px 10px;
   border-radius: 999px;
   white-space: nowrap;
 }
-.status-active  { background: rgba(5,150,105,.12); color: #059669; }
+.status-active  { background: rgba(5,150,105,.12); color: #047857; }
 .status-expired { background: rgba(220,38,38,.12);  color: #DC2626; }
 .status-expiring { background: rgba(180,83,9,.12); color: var(--amber); }
 .status-archived { background: var(--bg3); color: var(--text3); }
 .del-btn {
+  min-height: var(--tap);
   padding: 5px 12px;
   background: transparent;
   color: #DC2626;
@@ -228,6 +221,9 @@
 }
 .del-btn:hover { background: rgba(220,38,38,.08); }
 .refresh-btn {
+  min-height: var(--tap);
+  display: inline-flex;
+  align-items: center;
   padding: 5px 12px;
   background: transparent;
   color: var(--primary-text);
@@ -252,16 +248,15 @@
 .form-group { margin-bottom: 14px; }
 .form-label {
   display: block;
-  font-size: 10px;
-  font-weight: 700;
-  color: var(--text3);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text2);
   margin-bottom: 6px;
-  text-transform: uppercase;
-  letter-spacing: 1px;
 }
 .id-wrap { display: flex; gap: 8px; }
 .id-wrap .modal-input { flex: 1; font-family: monospace; font-size: 13px; }
 .regen-btn {
+  min-height: var(--tap);
   padding: 0 12px;
   background: var(--bg3);
   border: 1px solid var(--border2);
@@ -300,7 +295,7 @@
 }
 .adm-lmark span {
   font-family: 'Rubik', sans-serif;
-  font-weight: 900;
+  font-weight: 800;
   font-size: 18px;
   color: var(--on-primary);
 }
@@ -315,7 +310,7 @@
       <div class="adm-lmark"><span>T</span></div>
       <h1>ניהול טורנירים</h1>
     </div>
-    <p class="login-sub">הזינו את סיסמת מנהל העל כדי לנהל טורנירים.</p>
+    <p class="login-sub">הזינו את סיסמת מנהל המערכת כדי לנהל טורנירים.</p>
     <div class="form-row">
       <input class="form-input" type="password" autocomplete="current-password" id="adm-pw" placeholder="סיסמה"/>
     </div>
@@ -428,7 +423,7 @@
 
     <div class="actions" style="margin-bottom:6px">
       <a class="refresh-btn" id="ed-open" target="_blank" rel="noopener" style="text-decoration:none">פתיחת הטורניר ↗</a>
-      <button class="del-btn" id="ed-revert" onclick="revertPhase()">חזרה לשלב ההגדרה</button>
+      <button class="del-btn" id="ed-revert" onclick="revertPhase()">החזרה לשלב "נבנה" (פתיחת עריכה)</button>
     </div>
 
     <div id="ed-err" class="cr-err h"></div>
@@ -445,7 +440,7 @@
   <div class="modal modal-wide">
     <h3>שכפול: <span id="dup-src-name"></span></h3>
     <p style="font-size:12px;color:var(--text3);margin-bottom:14px;line-height:1.5">
-      מועתקים העיצוב, ההגדרות והקטגוריות. הנרשמים, התוצאות והתוקף לא מועתקים.
+      מועתקים העיצוב, ההגדרות והקטגוריות. הנרשמים, התוצאות, ההפסקות והתוקף לא מועתקים.
     </p>
 
     <div class="form-group">
@@ -472,7 +467,18 @@
       </div>
     </div>
 
-    <label class="form-group" style="display:block;font-size:14px"><input type="checkbox" id="dup-rosters"/> העתקת רשימות המשתתפים</label>
+    <div class="pw-grid">
+      <div class="form-group">
+        <label class="form-label">תאריך האירוע</label>
+        <input class="modal-input" id="dup-date" type="date" style="width:100%"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">תוקף — לא חובה</label>
+        <input class="modal-input" id="dup-expiry" type="datetime-local" style="width:100%"/>
+      </div>
+    </div>
+
+    <label class="form-group" style="display:block;font-size:14px"><input type="checkbox" id="dup-rosters"/> העתקת הזוגות כנרשמים מאושרים</label>
 
     <div id="dup-err" class="cr-err h"></div>
 
@@ -495,7 +501,7 @@
     </div>
 
     <div class="form-group">
-      <label class="form-label">מזהה <span style="font-weight:400;letter-spacing:0;text-transform:none;color:var(--text3)">— מופיע בכתובת (‎?t=…)</span></label>
+      <label class="form-label">מזהה <span style="font-weight:400;color:var(--text3)">— מופיע בכתובת (‎?t=…)</span></label>
       <div class="id-wrap">
         <input class="modal-input" id="cr-id" placeholder="נוצר אוטומטית"/>
         <button class="regen-btn" onclick="regenId('cr')" title="מזהה חדש">&#8635;</button>
@@ -536,13 +542,13 @@
     </div>
 
     <div class="form-group">
-      <label class="form-label">תוקף <span style="font-weight:400;letter-spacing:0;text-transform:none;color:var(--text3)">— לא חובה</span></label>
+      <label class="form-label">תוקף <span style="font-weight:400;color:var(--text3)">— לא חובה</span></label>
       <input class="modal-input" id="cr-expiry" type="datetime-local" style="width:100%"/>
     </div>
 
     <div class="form-group">
-      <label class="form-label">העתקה מ־ <span style="font-weight:400;letter-spacing:0;text-transform:none;color:var(--text3)">— מעתיק עיצוב (צבעים, לוגו, ספונסרים) והגדרות קטגוריות</span></label>
-      <select class="modal-input" id="cr-template" style="width:100%"></select>
+      <label class="form-label">העתקה מ־ <span style="font-weight:400;color:var(--text3)">— מעתיק עיצוב (צבעים, לוגו, ספונסרים) והגדרות קטגוריות</span></label>
+      <select class="modal-input" id="cr-template" style="width:100%" onchange="pickTemplate(this.value)"></select>
     </div>
 
     <div id="cr-err" class="cr-err h"></div>
@@ -558,12 +564,12 @@
 import { db, sha256, escH as esc, doc, getDoc, setDoc, updateDoc, serverTimestamp } from './common.js';
 import { pickImage } from './uploader.js';
 import {
-  collection, getDocs, getCountFromServer, deleteField, Timestamp
+  collection, getDocs, addDoc, getCountFromServer, deleteField, Timestamp
 } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
 
 const BASE_URL = new URL('./', location.href).href;
 const DAY = 864e5;
-const PHASES = { registration: 'הרשמה', built: 'בנוי', tournament: 'בטורניר' };
+const PHASES = { registration: 'הרשמה', built: 'נבנה, לפני התחלה', tournament: 'בעיצומו' };
 const STATUS = { active: 'פעיל', expiring: 'פג בקרוב', expired: 'פג תוקף' };
 
 let tournaments = [];
@@ -715,7 +721,7 @@ function openCreateModal() {
   for (const f of ['name', 'id', 'admin-pw', 'master-pw', 'expiry', 'date', 'venue', 'price']) $('cr-' + f).value = '';
   $('cr-lang').value = 'he';
   $('cr-err').classList.add('h');
-  $('cr-template').innerHTML = '<option value="">ברירת מחדל (ערכת צבעים סגולה)</option>' +
+  $('cr-template').innerHTML = '<option value="">ברירת מחדל — וולילאב (כמו 24.10)</option>' +
     '<option value="__queen__">פורמט Queen (4 בתים, 3 עולים מכל בית)</option>' +
     [...tournaments]
       .sort((a, b) => (a.meta?.name || a.id).localeCompare(b.meta?.name || b.id))
@@ -723,6 +729,28 @@ function openCreateModal() {
       .join('');
   $('create-modal').classList.remove('h');
   setTimeout(() => $('cr-name').focus(), 80);
+}
+
+const KO_STAGES = ['pool', 'r16', 'qf', 'sf', 'third', 'final'];
+const DEF_CAT_CFG = {
+  courts: 4, numGroups: 4, advPerGroup: 2, gameDur: 25, breakDur: 0, startTime: '07:00',
+  pointsToWin: 21, sets: 1, pointsThirdSet: 15,
+  koRules: Object.fromEntries(KO_STAGES.map(k => [k, { pts: 21, change: 7, dur: 25 }]))
+};
+const COPY_META = ['sport', 'lang', 'regNote', 'paymentLink', 'paymentLinkLabel', 'paymentLink2', 'paymentLink2Label',
+  'showRegistered', 'coordinated', 'parallelCategories', 'allPoolsBeforeKO', 'breakBeforeKO', 'dinnerBreakNote',
+  'logoUrl', 'primaryColor', 'secondaryColor', 'bgColor', 'sponsorLogos', 'groupColors'];
+const defaultMeta = () => ({
+  sport: 'volleyball', lang: 'he', coordinated: true, parallelCategories: true, allPoolsBeforeKO: true,
+  showRegistered: true, primaryColor: '#652d92', secondaryColor: '#7a3fb0', logoUrl: 'assets/volleylab-logo.png',
+  bgColor: '', groupColors: [], sponsorLogos: [],
+  paymentLink: '', paymentLinkLabel: '', paymentLink2: '', paymentLink2Label: '', regNote: ''
+});
+const copyMeta = m => ({ ...defaultMeta(), logoUrl: '', sport: 'footvolley',
+  ...structuredClone(Object.fromEntries(COPY_META.filter(k => m?.[k] !== undefined).map(k => [k, m[k]]))) });
+
+function pickTemplate(id) {
+  $('cr-lang').value = tournaments.find(t => t.id === id)?.meta?.lang || 'he';
 }
 
 async function createTournament() {
@@ -734,6 +762,9 @@ async function createTournament() {
   const tpl = (templateId && !isQueen) ? tournaments.find(t => t.id === templateId) : null;
 
   const metaObj = {
+    ...(tpl ? copyMeta(tpl.meta) : defaultMeta()),
+    ...(isQueen && { sport: 'footvolley', coordinated: false, parallelCategories: false, allPoolsBeforeKO: false, logoUrl: '', primaryColor: '#EC0F8C', secondaryColor: '#F84FB0', bgColor: '#0B0B16',
+      groupColors: ['#EC0F8C','#17A6E0','#C8DA1E','#33B24A'] }),
     name: f.name,
     adminPassword:  f.adminPassword,
     masterPassword: f.masterPassword,
@@ -741,18 +772,8 @@ async function createTournament() {
     eventDate:      $('cr-date').value,
     venue:          $('cr-venue').value.trim(),
     price:          $('cr-price').value.trim(),
-    logoUrl:        tpl?.meta?.logoUrl        || '',
-    primaryColor:   isQueen ? '#EC0F8C' : (tpl?.meta?.primaryColor   || '#652d92'),
-    secondaryColor: isQueen ? '#F84FB0' : (tpl?.meta?.secondaryColor || '#7a3fb0'),
-    sponsorLogos:   tpl?.meta?.sponsorLogos   || [],
-    bgColor:        isQueen ? '#0B0B16' : (tpl?.meta?.bgColor        || ''),
-    groupColors:    isQueen ? ['#EC0F8C','#17A6E0','#C8DA1E','#33B24A'] : (tpl?.meta?.groupColors || []),
-    paymentLink:    '', paymentLinkLabel:  '',
-    paymentLink2:   '', paymentLink2Label: '',
-    regNote:        '',
     phase:          'registration',
     regOpen:        true,
-    showRegistered: true,
   };
   if (expiryVal) metaObj.expiresAt = Timestamp.fromDate(new Date(expiryVal));
 
@@ -765,11 +786,12 @@ async function createTournament() {
           koRules:{ pool:{pts:15,change:5}, r16:{pts:18,change:6}, qf:{pts:18,change:6},
                     sf:{pts:18,change:6}, third:{pts:15,change:5}, final:{pts:21,change:7} } }
   }];
+  const defCats = [['women', 'נשים'], ['men', 'גברים']].map(([id, name]) => ({ id, name, cfg: structuredClone(DEF_CAT_CFG) }));
 
   try {
     await setDoc(doc(db, 'tournaments', f.tId), {
       meta:       metaObj,
-      categories: isQueen ? queenCats : (tpl?.categories || []),
+      categories: isQueen ? queenCats : tpl ? structuredClone(tpl.categories || []) : defCats,
       state:      {},
       updatedAt:  serverTimestamp()
     });
@@ -789,6 +811,7 @@ function openDupModal(tId) {
   $('dup-src-name').textContent = t?.meta?.name || tId;
   $('dup-name').value = (t?.meta?.name || tId) + ' (עותק)';
   $('dup-admin-pw').value = $('dup-master-pw').value = '';
+  $('dup-date').value = $('dup-expiry').value = '';
   $('dup-rosters').checked = false;
   $('dup-err').classList.add('h');
   regenId('dup');
@@ -799,21 +822,24 @@ async function duplicateTournament() {
   const f = await readNewForm('dup');
   if (!f) return;
   const src = tournaments.find(x => x.id === dupSrcId);
-  const meta = { ...src.meta };
-  delete meta.expiresAt;
-  delete meta.archived;
-  const state = {};
-  if ($('dup-rosters').checked) {
-    for (const [cid, cs] of Object.entries(src.state || {}))
-      state[cid] = { roster: cs.roster || [], groups: [], sched: [], ko: {} };
-  }
+  const meta = { ...copyMeta(src.meta), venue: src.meta?.venue || '', price: src.meta?.price || '',
+    name: f.name, adminPassword: f.adminPassword, masterPassword: f.masterPassword,
+    eventDate: $('dup-date').value, phase: 'registration', regOpen: true };
+  if ($('dup-expiry').value) meta.expiresAt = Timestamp.fromDate(new Date($('dup-expiry').value));
   try {
     await setDoc(doc(db, 'tournaments', f.tId), {
-      meta: { ...meta, name: f.name, adminPassword: f.adminPassword, masterPassword: f.masterPassword, phase: 'registration' },
-      categories: src.categories || [],
-      state,
+      meta,
+      categories: structuredClone(src.categories || []),
+      state: {},
       updatedAt: serverTimestamp()
     });
+    if ($('dup-rosters').checked) {
+      const regs = collection(db, 'tournaments', f.tId, 'registrations');
+      await Promise.all((src.categories || []).flatMap(cat => (src.state?.[cat.id]?.roster || []).map(name => {
+        const [p1, ...rest] = name.split(' / ');
+        return addDoc(regs, { p1, p2: rest.join(' / '), phone: '', category: cat.id, status: 'approved', paid: false, createdAt: serverTimestamp() });
+      })));
+    }
     closeModal('dup-modal');
     await loadTournaments();
   } catch(e) {
@@ -948,7 +974,7 @@ async function saveSponsors() {
 
 Object.assign(window, {
   checkAdminPw, adminLogout, loadTournaments, renderTable, closeModal,
-  openCreateModal, createTournament, refreshId, regenId,
+  openCreateModal, pickTemplate, createTournament, refreshId, regenId,
   openDupModal, duplicateTournament, setArchived,
   openEditModal, extendExpiry, saveEdit, revertPhase,
   openSponsorsModal, closeSponsorsModal, addSponsorRow, saveSponsors
