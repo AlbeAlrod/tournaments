@@ -405,8 +405,8 @@ main { position: relative; z-index: 5; max-width: 980px; margin: 0 auto; padding
 .court-filter { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
 .tblock { margin-bottom: 20px; }
 .thdr { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
-.tsub-hdr { font-size: 13px; font-weight: 500; line-height: 1.25;
-  letter-spacing: 0; color: var(--text2);
+.tsub-hdr { font-size: var(--fs-sm); font-weight: 700; line-height: 1.25;
+  letter-spacing: 0; color: var(--text); unicode-bidi: plaintext; text-align: start;
   padding: 4px 0; margin: 8px 0 4px; }
 .tlbl { font-size: var(--fs-lg); font-weight: 700; line-height: 1.25; color: var(--primary-text);
   font-variant-numeric: tabular-nums; direction: ltr; unicode-bidi: isolate; }
@@ -436,17 +436,12 @@ main { position: relative; z-index: 5; max-width: 980px; margin: 0 auto; padding
   color: var(--primary-text); white-space: nowrap; }
 .pill { font-size: var(--fs-xs); font-weight: 700; line-height: 1.25;
   padding: 4px 8px; border-radius: 999px; white-space: nowrap; }
-/* Court pills for KO games */
-.p1 { background: rgba(124,58,237,.13); color: #652d92; }
-.p2 { background: rgba(168,85,247,.13); color: #7E22CE; }
-.p3 { background: rgba(99,102,241,.13); color: #4338CA; }
-.p4 { background: rgba(139,92,246,.13); color: #5B21B6; }
-/* Group pills — dynamic colours applied via applyGroupColors() in app.js.
-   Fallback static values (overridden at runtime): */
-.gi0 { background: #E91E8C; color: #fff; }
-.gi1 { background: #111111; color: #fff; }
-.gi2 { background: #FFD600; color: #111; }
-.gi3 { background: #111111; color: #fff; }
+/* Court pill on a game row: a tint of the group colour (--gc), so it never
+   looks like the solid "done" score pill. applyGroupColors() sets --gc per .giN. */
+.gc > .pill { font-size: var(--fs-sm);
+  background: color-mix(in srgb, var(--gc, var(--primary)) 14%, #fff);
+  color: color-mix(in srgb, var(--gc, var(--primary)) 50%, #000);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--gc, var(--primary)) 30%, transparent); }
 .gt { font-size: 15px; line-height: 1.35; color: var(--text); font-weight: 500; overflow: hidden;
   text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 /* Side B hugs the score column: the page's END edge, whatever the script of
