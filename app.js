@@ -2004,7 +2004,7 @@ function isValidScore(sa, sb, catId, rule, g) {
   const cat = categories.find(c=>c.id===catId);
   const cfg = cat?.cfg || DEF_CAT_CFG;
   const r = rule && typeof rule === 'object' ? rule : { pts: rule };
-  if ((r.sets || cfg.sets) === 3) {
+  if ((r.sets ?? cfg.sets) === 3) {
     const hi = Math.max(sa,sb), lo = Math.min(sa,sb);
     return (hi===2 && lo>=0 && lo<=1);
   }
@@ -2025,7 +2025,7 @@ function scoreError(sa, sb, catId, rule, g) {
   const cat = categories.find(c=>c.id===catId);
   const cfg = cat?.cfg || DEF_CAT_CFG;
   const r = rule && typeof rule === 'object' ? rule : { pts: rule };
-  if ((r.sets || cfg.sets)===3) {
+  if ((r.sets ?? cfg.sets)===3) {
     const hi=Math.max(a,b), lo=Math.min(a,b);
     if (hi>2||lo<0) return { key:'score.setsFormat' };
     if (hi!==2) return { key:'score.setsWinner' };
