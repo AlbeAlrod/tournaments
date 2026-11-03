@@ -2099,7 +2099,8 @@ function makeStandingsCard(catId, grp, gi, catIdx) {
     const canDelete = superAdmin && (meta.phase === 'registration' || meta.phase === 'built');
     const adminCtrls = canEdit
       ? `<td><button class="gedit-btn" onclick="openEditTeam('${catId}',${gi},${ti})" title="${t('stand.editAria')}" aria-label="${t('stand.editAria')}">✎</button>${
-          canDelete?`<button class="team-del" onclick="deleteTeam('${catId}',${gi},${ti})" title="${t('stand.removeAria')}" aria-label="${t('stand.removeAria')}">✕</button>`:''}</td>` : '';
+          canDelete?`<button class="team-del" onclick="deleteTeam('${catId}',${gi},${ti})" title="${t('stand.removeAria')}" aria-label="${t('stand.removeAria')}">✕</button>`:''}${
+          meta.phase === 'tournament'?`<button class="gedit-btn" onclick="withdrawTeam('${catId}',${gi},${ti})">${t('stand.withdraw')}</button>`:''}</td>` : '';
     return `<tr class="${isWinner?'winner':''}">
       <td><span class="rnk num">#${i+1}</span>${dnH(row.name)}</td>
       <td>${row.w}</td><td>${row.l}</td>
@@ -2340,6 +2341,7 @@ async function flushScoreWrites() {
         // Someone else saved a different score for this game since we started typing.
         if (!g || (e.base && !sameScore(g, e.base) && !sameScore(g, { sa, sb }))) { skipped.push({ e, g }); return; }
         Object.assign(g, { sa, sb });
+        delete g.wo; delete g.forced;
       });
       const args = [];
       Object.entries(cats).forEach(([cid, cs]) => {
@@ -2384,6 +2386,7 @@ function setGS(catId, idx, k, v, commit) {
   const gk = gameKey(catId, idx);
   const ref = { cid: catId, idx, id: gameId(g, false), base: unsavedGames.has(gk) ? null : { sa: g.sa ?? '', sb: g.sb ?? '' } };
   g[k] = v;
+  delete g.wo; delete g.forced;
   scoreChanged(gk, ref, g, commit);
   renderStandings();
 }
@@ -2393,6 +2396,7 @@ function setKS(catId, ri, gi, k, v, commit) {
   const gk = gameKey(catId, null, ri, gi);
   const ref = { cid: catId, ri, gi, id: gameId(g, true), base: unsavedGames.has(gk) ? null : { sa: g.sa ?? '', sb: g.sb ?? '' } };
   g[k] = v;
+  delete g.wo; delete g.forced;
   g.ri = ri;
   scoreChanged(gk, ref, g, commit);
 }
@@ -2551,7 +2555,8 @@ function buildGameRow(catId, g, idx, isKO) {
   // Stable ids let the focus-preserving re-render put the caret back.
   const sid = k => isKO ? `si-${catId}-k${g.ri}-${g.gi}-${k}` : `si-${catId}-${idx}-${k}`;
   const gtag = (!isKO&&g.gn?`<span class="gtag">${escH(g.gn)}</span>`:'')
-    + (superAdmin && g.manual ? `<span class="tag-manual" title="${t('game.tagManualTitle')}">${t('game.tagManual')}</span>` : '');
+    + (superAdmin && g.manual ? `<span class="tag-manual" title="${t('game.tagManualTitle')}">${t('game.tagManual')}</span>` : '')
+    + (g.wo ? `<span class="tag-wo">${t('game.tagWo')}</span>` : g.forced ? `<span class="tag-forced">${t('game.tagForced')}</span>` : '');
   const court = t('sched.courtShort', { n: g.court || '—' });
   const pill = (superAdmin && meta.phase !== 'registration'
     ? `<button type="button" class="pill ${pc}" onclick="openGameSheet('${catId}',${isKO ? `null,${g.ri},${g.gi}` : idx})" aria-label="${t('move.aria')}">${court} ⇄</button>`
@@ -2717,7 +2722,78 @@ function openGameSheet(cid, idx, ri, gi) {
     </div>
     <div class="sheet-links">
       ${['a', 'b'].filter(k => !isSlot(g[k])).map(k => `<button type="button" onclick="editPairFromSheet('${k}')">✎ ${dnH(g[k])}</button>`).join('')}
+      ${meta.phase === 'tournament' && !scored && !isSlot(g.a) && !isSlot(g.b) ? ['a', 'b'].map(k =>
+        `<button type="button" class="danger-link" onclick="techLoss('${k}')">${t('game.wo')}: ${dnH(g[k])}</button>`).join('') : ''}
+      ${meta.phase === 'tournament' && String(g.sa ?? '') !== '' && String(g.sb ?? '') !== '' && +g.sa !== +g.sb && !g.forced
+        ? `<button type="button" onclick="forceSave()">${t('game.forced')} ${escH(g.sa)}:${escH(g.sb)}</button>` : ''}
     </div>`);
+}
+
+// Volleylab rules: a technical loss is recorded as pointsToWin : 12 (2:0 in a best-of-3 stage).
+function woScore(cid, g, isKO) {
+  const r = getRuleForGame(cid, g, isKO), cfg = categories.find(c => c.id === cid)?.cfg || DEF_CAT_CFG;
+  return (r.sets ?? cfg.sets) === 3 ? [2, 0] : [r.pts || cfg.pointsToWin || 21, 12];
+}
+const dropUnsaved = r => { unsavedGames.delete(r.ri == null ? gameKey(r.cid, r.idx) : gameKey(r.cid, null, r.ri, r.gi)); mirrorUnsaved(); };
+
+async function techLoss(k) {
+  const r = sheetRef, g = r && gameRef(r);
+  if (!superAdmin || !g || hasScore(g)) return;
+  const [w, l] = woScore(r.cid, g, r.ri != null);
+  const score = k === 'a' ? `${l}:${w}` : `${w}:${l}`;
+  if (!await askConfirm(t('game.confirmWo', { name: dn(g[k]), score }), t('game.wo'))) return;
+  const ok = await commitState(r.cid, () => {
+    const x = gameRef(r);
+    if (!x || hasScore(x)) return false;
+    [x.sa, x.sb] = k === 'a' ? [l, w] : [w, l];
+    x.wo = true;
+    updateKOForCat(r.cid);
+  });
+  if (!ok) return;
+  dropUnsaved(r); closeSheet(); rerender();
+}
+
+async function forceSave() {
+  const r = sheetRef, g = r && gameRef(r);
+  if (!superAdmin || !g) return;
+  const sa = parseInt(g.sa), sb = parseInt(g.sb);
+  if (isNaN(sa) || isNaN(sb) || sa === sb || sa < 0 || sb < 0) return;
+  if (!await askConfirm(t('game.confirmForced', { sa, sb }), t('game.forced'))) return;
+  const ok = await commitState(r.cid, () => {
+    const x = gameRef(r);
+    if (!x) return false;
+    Object.assign(x, { sa, sb, forced: true });
+    delete x.wo;
+    updateKOForCat(r.cid);
+  });
+  if (!ok) return;
+  dropUnsaved(r); closeSheet(); rerender();
+}
+
+// The pair stays in the table; every unscored game of theirs becomes a technical loss.
+async function withdrawTeam(catId, gi, ti) {
+  const name = state[catId]?.groups[gi]?.teams[ti];
+  if (!superAdmin || meta.phase !== 'tournament' || !name) return;
+  if (!await askConfirm(t('stand.confirmWithdraw', { name: dn(name) }), t('stand.withdraw'))) return;
+  const is = s => normName(s) === normName(name);
+  const ok = await commitState(catId, cs => {
+    let n = 0;
+    cs.sched.forEach(g => {
+      if (hasScore(g) || !(is(g.a) || is(g.b)) || isSlot(g.a) || isSlot(g.b)) return;
+      const [w, l] = woScore(catId, g, false);
+      [g.sa, g.sb] = is(g.a) ? [l, w] : [w, l];
+      g.wo = true; n++;
+    });
+    cs.ko.forEach(rd => rd.forEach(g => {
+      if (g.isBye || hasScore(g) || !(is(g.a) || is(g.b)) || isSlot(g.a) || isSlot(g.b)) return;
+      const [w, l] = woScore(catId, g, true);
+      [g.sa, g.sb] = is(g.a) ? [l, w] : [w, l];
+      g.wo = true; n++;
+    }));
+    if (!n) return false;
+    updateKOForCat(catId);
+  });
+  if (ok) renderAll();
 }
 
 async function saveMove() {
@@ -3894,7 +3970,7 @@ Object.assign(window, {
   openEditTeam, closeEdit, saveEdit, deleteTeam,
   editBuildItem, deleteBuildItem,
   setGS, setKS, filterSchedule,
-  openGameSheet, closeSheet, saveMove, editPairFromSheet,
+  openGameSheet, closeSheet, saveMove, editPairFromSheet, techLoss, forceSave, withdrawTeam,
   updateMeta, updateCatName, updateCatCfg, adjCatCfg,
   addCategory, deleteCategory, resetAllScores,
   updateSponsorLogo, removeSponsorLogo, addSponsorLogo, uploadSponsorLogo, removeLogo, renderSettings,
