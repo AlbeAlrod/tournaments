@@ -602,7 +602,7 @@ const DICT = {
     'settings.parallelCategoriesDesc':'משחקי כל הקטגוריות משובצים יחד באותם סבבים.',
     'settings.allPoolsBeforeKO':      'כל שלב הבתים לפני הנוקאאוט',
     'settings.allPoolsBeforeKODesc':  'הנוקאאוט מתחיל רק כשכל הבתים בכל הקטגוריות הסתיימו.',
-    'settings.koSameAll':             'זהה לכל השלבים',
+    'settings.koSameAll':             'אותו דבר לכל השלבים',
     'settings.koHint':                'נוקאאוט: {n} זוגות → {round}',
     'settings.rules.sets':            'מערכות',
     'settings.rules.thirdPts':        'נק׳ במערכה 3',
