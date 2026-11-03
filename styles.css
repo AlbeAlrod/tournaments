@@ -1001,3 +1001,127 @@ body:lang(he) { letter-spacing: 0; }
 .scard-name, .build-cat-name, .build-cat-count { text-shadow: none; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden;
   clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+/* ===== WAVE 3: live operations ===== */
+/* Small icon action on a game row / time header (⇄ move, ⏱ delay) */
+.gact { min-width: var(--tap); min-height: var(--tap); padding: 0 8px; border: 1px solid var(--border2);
+  border-radius: var(--rs); background: var(--bg2); color: var(--primary-text); font-family: inherit;
+  font-size: var(--fs-md); cursor: pointer; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; }
+.gact:hover { background: var(--bg3); }
+
+/* Row tags — live next to .gtag inside a .gt */
+.tag-wo, .tag-forced, .tag-manual { font-size: var(--fs-xs); font-weight: 500; border-radius: 4px;
+  padding: 0 4px; margin-inline-start: 8px; vertical-align: 1px; white-space: nowrap; }
+.tag-wo { background: rgba(185,28,28,.10); color: var(--red); }
+.tag-forced { background: rgba(180,83,9,.10); color: #92400E; }
+.tag-manual { background: var(--bg3); color: var(--text2); }
+
+/* On court / next */
+.live-badge { font-size: var(--fs-xs); font-weight: 700; border-radius: 999px; padding: 2px 8px;
+  white-space: nowrap; margin-inline-start: 8px; vertical-align: 1px; }
+.live-now { background: var(--green); color: #fff; }
+.live-next { background: var(--bg3); color: var(--primary-text); box-shadow: inset 0 0 0 1px var(--border2); }
+.gc.is-now { border-color: var(--green); box-shadow: inset 3px 0 0 var(--green), var(--shadow-sm); }
+[dir=rtl] .gc.is-now { box-shadow: inset -3px 0 0 var(--green), var(--shadow-sm); }
+.gc.is-mine, .stbl tr.is-mine td, .bteam.is-mine { background: color-mix(in srgb, var(--gold) 12%, var(--bg2)); }
+
+/* Running-late banner + sync / offline banners */
+.late-banner, .sync-banner { display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  margin: 0 0 12px; padding: 8px 16px; border-radius: var(--rs); font-size: var(--fs-sm); font-weight: 500; }
+.late-banner { background: var(--gold-tint); color: #92400E; border-inline-start: 3px solid var(--amber); }
+.sync-banner { background: rgba(185,28,28,.06); color: var(--red); border-inline-start: 3px solid var(--red); }
+.sync-banner button { min-height: var(--tap); padding: 0 16px; border-radius: var(--rs); border: 1px solid currentColor;
+  background: var(--bg2); color: inherit; font-family: inherit; font-size: var(--fs-sm); font-weight: 700; cursor: pointer; }
+.late-banner.h, .sync-banner.h { display: none; }
+
+/* Sync dot states + "updated HH:MM" */
+.sync-pending { background: var(--amber); }
+.sync-offline { background: var(--red); box-shadow: 0 0 0 3px rgba(185,28,28,.2); }
+.sync-status { display: inline-flex; align-items: center; gap: 8px; font-size: var(--fs-xs); color: var(--text2);
+  font-variant-numeric: tabular-nums; white-space: nowrap; }
+.sync-status.offline { color: var(--red); font-weight: 500; }
+
+/* Bottom sheet (move game, delay, late pair) — reuses .overlay; a sheet on phones, a modal above 640px */
+.overlay.sheet-overlay { align-items: flex-end; padding: 0; }
+.sheet { background: var(--bg2); width: 100%; max-width: 480px; max-height: 90vh; overflow-y: auto;
+  border-radius: var(--r) var(--r) 0 0; padding: 20px 16px calc(16px + env(safe-area-inset-bottom));
+  box-shadow: var(--shadow-md); }
+.sheet h3 { font-size: var(--fs-lg); font-weight: 700; color: var(--text); margin-bottom: 4px; }
+.sheet-sub { font-size: var(--fs-sm); color: var(--text2); margin-bottom: 16px; unicode-bidi: plaintext; }
+.sheet-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+.sheet-grid label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; font-weight: 500; color: var(--text2); }
+.sheet-grid select, .sheet-grid input { min-height: var(--tap); border: 1px solid var(--field-border); border-radius: var(--rs);
+  background: var(--bg2); color: var(--text); padding: 0 12px; font-size: 16px; font-family: inherit; }
+.sheet-msg { font-size: var(--fs-sm); padding: 8px 12px; border-radius: var(--rs); margin-bottom: 12px; }
+.sheet-msg.err { color: var(--red); background: rgba(185,28,28,.06); }
+.sheet-msg.warn { color: #92400E; background: var(--gold-tint); }
+.sheet-msg:empty { display: none; }
+.sheet-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.sheet-chips button { flex: 1 1 64px; min-height: var(--tap); border: 1px solid var(--field-border); border-radius: 999px;
+  background: var(--bg2); color: var(--primary-text); font-family: inherit; font-size: var(--fs-md); font-weight: 700;
+  cursor: pointer; font-variant-numeric: tabular-nums; direction: ltr; }
+.sheet-chips button:hover { background: var(--bg3); }
+.sheet-links { display: flex; flex-wrap: wrap; gap: 8px; padding-top: 12px; margin-top: 4px; border-top: 1px solid var(--border); }
+.sheet-links button { min-height: var(--tap); padding: 0 12px; border: none; background: none; color: var(--primary-text);
+  font-family: inherit; font-size: var(--fs-sm); font-weight: 500; cursor: pointer; text-decoration: underline; }
+.danger-link { color: var(--red) !important; }
+@media (min-width: 641px) {
+  .overlay.sheet-overlay { align-items: center; padding: 16px; }
+  .sheet { border-radius: var(--r); padding: 24px; }
+}
+
+/* Unscheduled games block (late pairs that did not fit) */
+.unsched-block { margin: 0 0 20px; padding: 12px; border: 2px dashed var(--amber); border-radius: var(--r);
+  background: var(--gold-tint); }
+.unsched-block h4 { font-size: var(--fs-md); color: #92400E; margin-bottom: 4px; }
+.unsched-block p { font-size: var(--fs-xs); color: var(--text2); margin-bottom: 8px; }
+
+/* Bulk add textarea */
+.bulk-input { width: 100%; min-height: 160px; border: 1px solid var(--field-border); border-radius: var(--rs);
+  padding: 8px 12px; font-size: 16px; font-family: inherit; line-height: 1.5; color: var(--text); background: var(--bg2);
+  unicode-bidi: plaintext; resize: vertical; }
+.bulk-input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px var(--focus-ring); }
+
+/* Undo action inside the toast */
+.toast-btn { margin-inline-start: 12px; min-height: 36px; padding: 0 12px; border: 1px solid currentColor;
+  border-radius: var(--rs); background: transparent; color: inherit; font-family: inherit; font-size: var(--fs-sm);
+  font-weight: 700; cursor: pointer; }
+
+/* Bracket box: time + court under the label */
+.bm-when { font-size: var(--fs-xs); color: var(--text2); text-align: center; margin: -2px 0 4px;
+  font-variant-numeric: tabular-nums; }
+
+/* Print not supported (in-app browsers) */
+.print-unsupported { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 0 0 12px;
+  padding: 12px 16px; border-radius: var(--rs); background: var(--gold-tint); color: #92400E;
+  border-inline-start: 3px solid var(--amber); font-size: var(--fs-sm); font-weight: 500; }
+.print-unsupported button { min-height: var(--tap); padding: 0 16px; border-radius: var(--rs); border: 1px solid currentColor;
+  background: var(--bg2); color: inherit; font-family: inherit; font-size: var(--fs-sm); font-weight: 700; cursor: pointer; }
+.print-unsupported.h { display: none; }
+
+/* ===== Registration note rendered from markdown (.reg-note.md) ===== */
+.reg-note.md { white-space: normal; }
+.reg-note.md details > summary { cursor: pointer; font-weight: 700; color: var(--text); min-height: var(--tap);
+  display: flex; align-items: center; gap: 8px; list-style: none; }
+.reg-note.md details > summary::-webkit-details-marker { display: none; }
+.reg-note.md details > summary::after { content: '▾'; color: var(--primary-text); margin-inline-start: auto; transition: transform .2s; }
+.reg-note.md details[open] > summary::after { transform: rotate(180deg); }
+.reg-note.md :is(h3, h4, h5) { color: var(--text); font-weight: 700; line-height: 1.3; margin: 12px 0 4px; }
+.reg-note.md h3 { font-size: var(--fs-md); }
+.reg-note.md :is(h4, h5) { font-size: var(--fs-sm); }
+.reg-note.md p { margin: 0 0 8px; }
+.reg-note.md :is(ul, ol) { margin: 0 0 8px; padding-inline-start: 20px; }
+.reg-note.md li { margin-bottom: 2px; }
+.reg-note.md strong { color: var(--text); font-weight: 700; }
+.reg-note.md a { color: var(--primary-text); overflow-wrap: anywhere; }
+/* Settings: regNote editor + live preview */
+.reg-note-editor { width: 100%; min-height: 220px; resize: vertical; unicode-bidi: plaintext; line-height: 1.5; }
+.reg-note-preview { max-width: none; margin-top: 8px; }
+
+/* Paid badge in "my registrations" */
+.paid-badge { font-size: var(--fs-xs); font-weight: 700; border-radius: 999px; padding: 2px 8px;
+  background: rgba(4,120,87,.12); color: var(--green); white-space: nowrap; }
+.paid-badge.no { background: rgba(180,83,9,.10); color: #92400E; }
+
+/* Login role hint under the role buttons */
+.role-hint { font-size: var(--fs-xs); color: var(--text2); margin: -4px 0 12px; line-height: 1.4; }
