@@ -628,7 +628,7 @@ async function confirmStartTournament() {
   document.body.classList.add('phase-tournament');
   refreshAdmin();
   renderAll();
-  goPage('standings');
+  goPage('schedule');
 }
 
 // ============ REGISTRATION ============
@@ -2138,7 +2138,7 @@ function makeStandingsCard(catId, grp, gi, catIdx) {
     const adminCtrls = canEdit
       ? `<td><button class="gedit-btn" onclick="openEditTeam('${catId}',${gi},${ti})" title="${t('stand.editAria')}" aria-label="${t('stand.editAria')}">✎</button>${
           canDelete?`<button class="team-del" onclick="deleteTeam('${catId}',${gi},${ti})" title="${t('stand.removeAria')}" aria-label="${t('stand.removeAria')}">✕</button>`:''}</td>` : '';
-    return `<tr class="${isWinner?'winner':''}">
+    return `<tr class="${isWinner?'winner':''}${isMine(row.name)?' is-mine':''}">
       <td><span class="rnk num">#${i+1}</span>${dnH(row.name)}</td>
       <td>${row.w}</td><td>${row.l}</td>
       <td class="${diffClass}"><span class="num">${diff!==0||row.w>0||row.l>0?diffStr:'—'}</span></td>
@@ -2804,7 +2804,16 @@ function renderScheduleContent() {
   });
 }
 
-function filterSchedule() { renderScheduleContent(); }
+// "My pair": the schedule search, remembered per tournament and highlighted in standings and bracket.
+const ME_KEY = () => 'luz.me.' + tId;
+let myPairQ = '';
+try { myPairQ = localStorage.getItem(ME_KEY()) || ''; } catch(_) {}
+const isMine = name => myPairQ.trim().length >= 2 && String(name || '').toLowerCase().includes(myPairQ.trim().toLowerCase());
+function filterSchedule() {
+  myPairQ = document.getElementById('sched-search')?.value || '';
+  try { localStorage.setItem(ME_KEY(), myPairQ); } catch(_) {}
+  renderScheduleContent();
+}
 
 function renderCourtFilter() {
   const el = document.getElementById('court-filter');
@@ -2880,17 +2889,19 @@ function renderBracketForCat(catId, container) {
     const sa=parseInt(g.sa), sb=parseInt(g.sb);
     const hs=isValidScore(sa,sb,catId,getRuleForGame(catId,g,true).pts);
     const wa=hs&&sa>sb, wb=hs&&sb>sa;
-    let labelA=g.a||'TBD', labelB=g.b||'TBD', codeA='', codeB='', knownA=false, knownB=false;
+    let labelA=g.a||'TBD', labelB=g.b||'TBD', codeA='', codeB='', knownA=false, knownB=false, nameA='', nameB='';
     if (ri===0) {
       const sAk=g.seedA||seedPairs[gi]?.[0]||'TBD', sBk=g.seedB||seedPairs[gi]?.[1]||'TBD';
       const sA=resolvePoolSeed(catId,sAk), sB=resolvePoolSeed(catId,sBk);
       labelA=dnH(tSlot(sA.known?sA.label:sAk)); labelB=dnH(tSlot(sB.known?sB.label:sBk));
       codeA=sA.known?sAk:''; codeB=sB.known?sBk:'';
       knownA=sA.known; knownB=sB.known;
+      nameA=sA.known?sA.label:''; nameB=sB.known?sB.label:'';
     } else {
       const isSeed = s => !s || s.startsWith('Winner') || /^[A-Z]\d+(\/[A-Z]\d+)?$/.test(s);
       knownA=!isSeed(g.a);
       knownB=!isSeed(g.b);
+      nameA=knownA?g.a:''; nameB=knownB?g.b:'';
       if (g.directSeedA&&knownA) codeA=g.directSeedA;
       if (g.directSeedB&&knownB) codeB=g.directSeedB;
       labelA=dnH(tSlot(labelA)); labelB=dnH(tSlot(labelB));
@@ -2898,10 +2909,10 @@ function renderBracketForCat(catId, container) {
     const box=document.createElement('div'); box.className='bmatch-box';
     const glbl=tGameLbl(koGameLabel(catId,ri,gi));
     box.innerHTML=(glbl?`<div class="bm-label">${glbl}</div>`:'')+`<div class="bmatch">
-      <div class="bteam ${wa?'win':''} ${knownA?'':'tbd'}${g.directSeedA?' bdirect':''}">
+      <div class="bteam ${wa?'win':''} ${knownA?'':'tbd'}${g.directSeedA?' bdirect':''}${isMine(nameA)?' is-mine':''}">
         <span class="bname">${labelA}</span>${codeA?`<span class="bsc seed-tag">${codeA}</span>`:''}${hs?`<span class="bsc num">${g.sa}</span>`:''}
       </div>
-      <div class="bteam ${wb?'win':''} ${knownB?'':'tbd'}${g.directSeedB?' bdirect':''}">
+      <div class="bteam ${wb?'win':''} ${knownB?'':'tbd'}${g.directSeedB?' bdirect':''}${isMine(nameB)?' is-mine':''}">
         <span class="bname">${labelB}</span>${codeB?`<span class="bsc seed-tag">${codeB}</span>`:''}${hs?`<span class="bsc num">${g.sb}</span>`:''}
       </div>
     </div>`;
@@ -3815,6 +3826,7 @@ function goPage(p) {
   const pageEl=document.getElementById('page-'+p);
   if (!pageEl) return;
   pageEl.classList.add('on');
+  history.replaceState(null, '', '#' + p);
   const tab=document.getElementById('tab-'+p);
   if (tab) { tab.classList.add('on'); tab.setAttribute('aria-current', 'page'); }
   renderCatFilters();
@@ -4089,7 +4101,11 @@ window.addEventListener('load', async () => {
   document.getElementById('view-loading').classList.add('h');
   document.getElementById('view-app').classList.remove('h');
 
+  const si = document.getElementById('sched-search');
+  if (si) si.value = myPairQ;
   renderAll();
 
-  goPage(meta.phase !== 'registration' ? 'standings' : admin ? 'registrations' : 'register');
+  const h = location.hash.slice(1);
+  goPage(/^\w+$/.test(h) && document.getElementById('tab-' + h)?.offsetParent ? h
+    : meta.phase === 'tournament' ? 'schedule' : meta.phase === 'built' ? 'standings' : admin ? 'registrations' : 'register');
 });
