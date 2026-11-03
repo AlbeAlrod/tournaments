@@ -649,7 +649,7 @@ const pairKey = (a, b) => [normName(a), normName(b)].sort().join('|');
 // Existing registration that clashes with this one (same pair or same phone, same category).
 function findDuplicateReg(p1, p2, phone, catId) {
   const key = pairKey(p1, p2);
-  return registrations.find(r => r.category === catId && (
+  return registrations.find(r => r.category === catId && r.status !== 'rejected' && (
     pairKey(r.p1, r.p2) === key || (phone && normPhone(r.phone) === phone)));
 }
 const statusTxt = st => t('admin.status.' + st);
@@ -884,8 +884,8 @@ async function softRemoveReg(catId, name) {
   const reg = registrations.find(r => r.category === catId && r.status === 'approved' && normName(regPairName(r)) === normName(name));
   if (!reg) return;
   try {
-    await updateDoc(doc(db, 'tournaments', tId, 'registrations', reg.id), { status: 'rejected' });
-    reg.status = 'rejected'; // soft-reject: stays in Firestore, visible in Registrations
+    await updateDoc(doc(db, 'tournaments', tId, 'registrations', reg.id), { status: 'pending' });
+    reg.status = 'pending'; // stays listed; can be approved again
   } catch(e) { console.error('Could not update registration status', e); }
 }
 
