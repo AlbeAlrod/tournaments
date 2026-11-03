@@ -2342,7 +2342,8 @@ async function flushScoreWrites() {
       if (args.length) { args.push('updatedAt', serverTimestamp()); tx.update(TREF, ...args); }
     });
     sent.forEach(({ gk, e, sa, sb }) => {
-      if (unsavedGames.get(gk) === e && e.sa === sa && e.sb === sb) unsavedGames.delete(gk);
+      const lost = skipped.some(x => x.e === e);
+      if (lost || (unsavedGames.get(gk) === e && e.sa === sa && e.sb === sb)) unsavedGames.delete(gk);
       else e.base = { sa, sb };
       markGameRow(gk);
     });
