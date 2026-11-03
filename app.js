@@ -3691,7 +3691,8 @@ function rerender() {
   if (active==='standings')     renderStandings();
   if (active==='schedule')      { renderStats(); renderCourtFilter(); renderScheduleContent(); }
   if (active==='bracket')       renderBracket();
-  if (active==='settings')      renderSettings();
+  // Our own write's server ack re-renders too: never rebuild Settings under the cursor.
+  if (active==='settings' && !document.getElementById('page-settings')?.contains(document.activeElement)) renderSettings();
   if (active==='registrations') renderRegistrations();
   if (active==='build')         renderBuildPage();
   if (active==='participants')  renderParticipants();
