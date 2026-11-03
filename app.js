@@ -2530,8 +2530,7 @@ function renderStats() {
     totalPool += poolG.length;
     donePool  += poolG.filter(g=>isValidScore(parseInt(g.sa),parseInt(g.sb),cat.id,getRuleForGame(cat.id,g,false),g)).length;
     totalKO   += cs.ko.reduce((s,r)=>s+r.filter(g=>!g.isBye).length, 0) + thirdG.length;
-    const last = cs.ko.length ? cs.ko[cs.ko.length-1][0] : cs.sched[cs.sched.length-1];
-    if (last?.time && t2m(last.time)>t2m(lastTime)) { lastTime=last.time; lastDur=cat.cfg?.gameDur||30; }
+    allGamesOf(cs).forEach(g => { if (g.time && t2m(g.time) > t2m(lastTime)) { lastTime = g.time; lastDur = cat.cfg?.gameDur||30; } });
   });
   if (!totalPool) { el.innerHTML=''; return; }
   // "Scheduled end", not "Est. End": this is the last game's planned slot, so it
