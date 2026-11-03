@@ -263,7 +263,8 @@ async function loadTournament() {
   });
 
   // Registrations: live listener (Participants / my-registration status update by themselves)
-  await subscribeRegistrations();
+  // Registrations hold phone numbers: viewers only need them before the tournament starts.
+  if (meta.phase !== 'tournament') await subscribeRegistrations();
 
   // Live listener
   // Our own pending writes echo back first (hasPendingWrites): skip those; the
@@ -296,11 +297,12 @@ async function loadTournament() {
 }
 
 const regTime = r => r.createdAt?.seconds ?? 9e15;   // pending server timestamp → last
-let regsLoaded = false;
+let regsLoaded = false, regsSub = false;
 // Resolves after the first snapshot so boot renders with data. No orderBy in the
 // query: docs whose createdAt is still pending would be dropped by it; sort here.
 function subscribeRegistrations() {
-  if (!REGS_REF) return Promise.resolve();
+  if (!REGS_REF || regsSub) return Promise.resolve();
+  regsSub = true;
   return new Promise(resolve => {
     let first = true;
     const done = () => { if (first) { first = false; resolve(); } };
@@ -308,7 +310,7 @@ function subscribeRegistrations() {
       registrations = snap.docs.map(d => ({ id: d.id, ...d.data({ serverTimestamps: 'estimate' }) }))
         .sort((a, b) => regTime(a) - regTime(b));
       regsLoaded = true;
-      if (first) return done();
+      done();
       const active = ['register','participants','registrations']
         .find(p => document.getElementById('page-'+p)?.classList.contains('on'));
       if (active === 'register')      renderRegisterPage();
@@ -532,6 +534,7 @@ async function tryLogin() {
     setRole(loginRole);
     try { sessionStorage.setItem(AUTH_KEY(), JSON.stringify({ role: loginRole, h: hashed })); } catch(_) {}
     closeLogin(); refreshAdmin(); rerender();
+    if (meta.phase === 'registration' && document.getElementById('page-register')?.classList.contains('on')) goPage('registrations');
   } else {
     document.getElementById('pw-err').classList.remove('h');
     document.getElementById('pw-inp').value = '';
@@ -543,6 +546,7 @@ function setRole(role) {
   adminLevel = role === 'master' ? 2 : 1;
   admin      = true;
   superAdmin = adminLevel === 2;
+  subscribeRegistrations();
 }
 
 // Login survives reloads for this browser tab (sessionStorage, per tournament).
@@ -588,16 +592,13 @@ function refreshAdmin() {
     else if (meta.phase==='built') mtxt.textContent = t(adminLevel===2 ? 'admin.modeMasterBuilt' : 'admin.modeAdminBuilt');
     else mtxt.textContent = t(adminLevel===2 ? 'admin.modeMasterScores' : 'admin.modeScores');
   }
-  // Hide Register tab when admin is logged in (registration phase)
+  // Register tab stays visible to admins too (preview of the public form)
   const regTab = document.getElementById('tab-register');
-  if (regTab) regTab.classList.toggle('h', regManager);
+  if (regTab) regTab.classList.remove('h');
   // Hide Settings tab in tournament phase (even from master)
   const settingsTab = document.getElementById('tab-settings');
   if (settingsTab) settingsTab.classList.toggle('h', !superAdmin || meta.phase === 'tournament');
   // Auto-navigate away from pages that don't belong in current phase
-  if (regManager && document.getElementById('page-register')?.classList.contains('on')) {
-    goPage('registrations');
-  }
   if (builtManager) {
     const onRegOnlyPage = ['register','registrations'].some(p =>
       document.getElementById('page-'+p)?.classList.contains('on'));
@@ -782,8 +783,8 @@ async function submitRegistration() {
   };
   if (!regErrors.p1 && !regErrors.p2 && normName(p1) === normName(p2)) regErrors.p2 = () => t('errors.sameNames');
   if (!Object.values(regErrors).some(Boolean)) {
-    const dup = findDuplicateReg(p1, p2, phone, catId);
-    if (dup) regErrors.form = () => t(pairKey(dup.p1, dup.p2) === pairKey(p1, p2) ? 'errors.dupPair' : 'errors.dupPhone', { status: statusTxt(dup.status) });
+    const dup = findDuplicateReg(p1, p2, '', catId);
+    if (dup) regErrors.form = () => t('errors.dupPair', { status: statusTxt(dup.status) });
   }
   renderRegErrors();
   const first = Object.keys(REG_FIELDS).find(k => regErrors[k]);
@@ -804,6 +805,7 @@ async function submitRegistration() {
       createdAt: serverTimestamp()
     });
     setMyRegs([...getMyRegs(), ref.id]);
+    if (registrations.some(r => r.id !== ref.id && r.category === catId && r.status !== 'rejected' && normPhone(r.phone) === phone)) toast(t('errors.dupPhoneWarn'));
     document.getElementById('frm-p1').value = '';
     document.getElementById('frm-p2').value = '';
     document.getElementById('frm-phone').value = '';
@@ -945,7 +947,7 @@ function renderRegCounts() {
     const appr = rs.filter(r => r.status === 'approved').length;
     const pend = rs.filter(r => r.status === 'pending').length;
     const paid = rs.filter(r => r.paid).length;
-    return `<span class="d-reg-count"><strong>${escH(c.name)}</strong> ${rs.length} · ✓${appr} · ⏳${pend} · ₪${paid}</span>`;
+    return `<span class="d-reg-count"><strong><bdi>${escH(c.name)}</bdi></strong> ${t('admin.counts', { total: rs.length, appr, pend, paid })}</span>`;
   });
   el.innerHTML = rows.join('');
 }
@@ -973,7 +975,7 @@ function exportRegistrationsCSV() {
   const blob = new Blob(['\ufeff' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = `registrations-${tId}.csv`;
+  a.download = `registrations-${(meta.name || tId).replace(/[\\/:*?"<>|]+/g, '-').trim()}.csv`;
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
@@ -1039,26 +1041,22 @@ function renderParticipants() {
     return;
   }
   hiddenMsg?.classList.add('h');
-  const approved = registrations.filter(r => r.status === 'approved');
-  if (!approved.length) {
+  // Once a roster exists it is the truth (direct adds, renames); registrations only seed it.
+  const pairsOf = cat => state[cat.id]?.roster?.length ? state[cat.id].roster
+    : registrations.filter(r => r.status === 'approved' && r.category === cat.id).map(regPairName);
+  if (!categories.some(c => pairsOf(c).length)) {
     el.innerHTML = `<div class="empty"><h3>${t('parts.empty')}</h3></div>`;
     return;
   }
-  const byCat = {};
-  categories.forEach(c => { byCat[c.id] = []; });
-  approved.forEach(r => {
-    if (!byCat[r.category]) byCat[r.category] = [];
-    byCat[r.category].push(r);
-  });
   el.innerHTML = categories.map(cat => {
-    const list = byCat[cat.id] || [];
+    const list = pairsOf(cat);
     if (!list.length) return '';
     return `<div class="part-cat">
       <div class="part-cat-title">${escH(cat.name)}</div>
-      <div class="part-grid">${list.map((r,i) => `
+      <div class="part-grid">${list.map((n,i) => `
         <div class="part-card">
           <span class="part-num num">${i+1}</span>
-          <span class="part-name">${dnH(r.p1)}${r.p2 ? ' / '+dnH(r.p2) : ''}</span>
+          <span class="part-name">${n.split('/').map(x => dnH(x.trim())).join(' / ')}</span>
         </div>`).join('')}
       </div>
     </div>`;
@@ -4007,7 +4005,7 @@ async function autoAddPairToDB(name) {
   if (!name) return;
   const parts = name.includes('/') ? name.split('/').map(s=>s.trim()) : [name];
   for (const p of parts) {
-    if (p && !playerDB.find(x => x.name.toLowerCase() === p.toLowerCase())) {
+    if (p && !playerDB.find(x => normName(x.name) === normName(p))) {
       playerDB.push({ name: p, phone: '' });
     }
   }
