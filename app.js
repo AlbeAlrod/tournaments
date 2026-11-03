@@ -2136,6 +2136,12 @@ function renderStandings() {
     sub.className = 'stnds-subgrid';
     cs.groups.forEach((grp, gi) => sub.appendChild(makeStandingsCard(cat.id, grp, gi, catIdx)));
     grid.appendChild(sub);
+    if (superAdmin && meta.phase !== 'registration') {
+      const b = document.createElement('button');
+      b.className = 'build-add-pair'; b.textContent = t('stand.addLate');
+      b.onclick = () => openLatePair(cat.id);
+      grid.appendChild(b);
+    }
   });
   if (!grid.children.length) {
     grid.innerHTML = `<div class="empty"><h3>${t('stand.emptyH')}</h3><p>${t('common.buildFirst')}</p></div>`;
@@ -2619,8 +2625,16 @@ function renderScheduleContent() {
   }
 
   const byTime = {};
-  filtered.forEach(g => { const k=g.time||'00:00'; if(!byTime[k])byTime[k]=[]; byTime[k].push(g); });
+  filtered.filter(g => g.time).forEach(g => { const k=g.time; if(!byTime[k])byTime[k]=[]; byTime[k].push(g); });
   el.innerHTML = '';
+  const unsched = filtered.filter(g => !g.time);
+  if (unsched.length) {
+    const ub = document.createElement('div');
+    ub.className = 'unsched-block';
+    ub.innerHTML = `<h4>${t('sched.unscheduled')}</h4><p>${t('sched.unscheduledHint')}</p>`;
+    unsched.forEach(g => ub.appendChild(buildGameRow(g._catId, g, g._idx, g._isKO)));
+    el.appendChild(ub);
+  }
   // Global breaks (e.g. Friday-dinner) shown as their own marker block, in time order.
   const brs = (meta.breaks||[]).map(b=>({at:t2m(b.atTime), min:b.minutes||0, done:false})).sort((a,b)=>a.at-b.at);
   const dinnerNote = meta.dinnerBreakNote || t('sched.breakDefault');
@@ -2826,6 +2840,84 @@ async function saveMove() {
   closeSheet();
   toast(t(sr ? 'move.swapped' : 'move.moved'));
   rerender();
+}
+
+// Late pair after the build: joins a group, its games go into free court/time slots
+// (never before the last scored game); what doesn't fit stays unscheduled for ⇄.
+function openLatePair(cid) {
+  const cs = state[cid];
+  if (!superAdmin || !cs?.groups.length) return;
+  const small = cs.groups.reduce((m, g, i) => g.teams.length < cs.groups[m].teams.length ? i : m, 0);
+  openSheet(`<h3 id="sheet-title">${t('late.title')} · <bdi>${escH(categories.find(c => c.id === cid)?.name || '')}</bdi></h3>
+    <div class="sheet-grid">
+      <label>${t('common.player1')}<input id="lp-p1" dir="auto" list="player-datalist" autocomplete="off"/></label>
+      <label>${t('common.player2')}<input id="lp-p2" dir="auto" list="player-datalist" autocomplete="off"/></label>
+      <label>${t('late.group')}<select id="lp-group">${cs.groups.map((g, i) =>
+        `<option value="${i}"${i === small ? ' selected' : ''}>${escH(g.name)} (${g.teams.length})</option>`).join('')}</select></label>
+    </div>
+    <details><summary>${t('late.bulk')}</summary><textarea id="lp-bulk" class="bulk-input" dir="auto" placeholder="${t('late.bulkPh')}"></textarea></details>
+    <p class="sheet-msg err" id="lp-msg" role="alert"></p>
+    <div class="modal-btns">
+      <button class="mbtn mbtn-ok" onclick="saveLatePair('${cid}')">${t('common.add')}</button>
+      <button class="mbtn mbtn-cancel" onclick="closeSheet()">${t('common.cancel')}</button>
+    </div>`);
+}
+
+function placeLateGames(cid, games) {
+  const all = liveGames(), courts = coordBuild() ? coordCfg().COURTS : categories.find(c => c.id === cid)?.cfg?.courts || 2;
+  const floor = Math.max(0, ...all.filter(x => hasScore(x.g) && x.g.time).map(x => t2m(x.g.time)));
+  const times = [...new Set(all.map(x => x.g.time).filter(s => s && t2m(s) >= floor))].sort((a, b) => t2m(a) - t2m(b));
+  let unplaced = 0;
+  games.forEach(g => {
+    const x = { cid, g };
+    const slot = times.flatMap(time => Array.from({ length: courts }, (_, i) => [i + 1, time]))
+      .find(([court, time]) => !clashesAt(x, court, time).length);
+    if (slot) [g.court, g.time] = slot; else unplaced++;
+  });
+  return unplaced;
+}
+
+async function saveLatePair(cid) {
+  const msg = document.getElementById('lp-msg');
+  const bulk = document.getElementById('lp-bulk').value.split('\n').map(cleanName).filter(Boolean);
+  const one = [cleanName(document.getElementById('lp-p1').value), cleanName(document.getElementById('lp-p2').value)];
+  let pairs;
+  if (bulk.length) {
+    const bad = bulk.findIndex(l => l.split('/').length !== 2 || l.split('/').some(s => !cleanName(s)));
+    if (bad >= 0) { msg.textContent = t('late.badLine', { n: bad + 1 }); return; }
+    pairs = bulk.map(l => l.split('/').map(cleanName));
+  } else pairs = [one];
+  for (const [p1, p2] of pairs) {
+    const err = nameError(p1, 'common.player1') || nameError(p2, 'common.player2');
+    if (err) { msg.textContent = err(); return; }
+  }
+  const names = pairs.map(([p1, p2]) => `${p1} / ${p2}`);
+  const dup = names.find((n, i) => pairTaken(cid, n) || names.findIndex(m => normName(m) === normName(n)) !== i);
+  if (dup) { msg.textContent = t('errors.dupName', { name: dn(dup) }); return; }
+  const pick = bulk.length ? null : +document.getElementById('lp-group').value;
+  let unplaced = 0;
+  const ok = await commitState(cid, cs => {
+    if (!cs.groups.length || names.some(n => cs.roster.some(m => normName(m) === normName(n)))) return false;
+    unplaced = 0;
+    names.forEach(name => {
+      const gi = pick ?? cs.groups.reduce((m, g, i) => g.teams.length < cs.groups[m].teams.length ? i : m, 0);
+      const grp = cs.groups[gi];
+      const games = grp.teams.map(b => ({ catId: cid, gi, gn: grp.name, a: name, b, sa: '', sb: '', court: '', time: '' }));
+      grp.teams.push(name);
+      cs.roster.push(name);
+      cs.sched.push(...games);
+      unplaced += placeLateGames(cid, games);
+    });
+    updateKOForCat(cid);
+  });
+  if (!ok) return;
+  for (const [p1, p2] of pairs) {
+    try { await addDoc(REGS_REF, { p1, p2, phone: '', category: cid, status: 'approved', paid: false, createdAt: serverTimestamp() }); } catch(e) { console.error(e); }
+    addPlayerToDB(p1, ''); addPlayerToDB(p2, '');
+  }
+  closeSheet();
+  toast(t('late.added', { n: names.length }) + (unplaced ? ' · ' + t('late.unplaced', { n: unplaced }) : ''));
+  renderAll();
 }
 
 function editPairFromSheet(k) {
@@ -3970,7 +4062,7 @@ Object.assign(window, {
   openEditTeam, closeEdit, saveEdit, deleteTeam,
   editBuildItem, deleteBuildItem,
   setGS, setKS, filterSchedule,
-  openGameSheet, closeSheet, saveMove, editPairFromSheet, techLoss, forceSave, withdrawTeam,
+  openGameSheet, closeSheet, saveMove, editPairFromSheet, techLoss, forceSave, withdrawTeam, saveLatePair,
   updateMeta, updateCatName, updateCatCfg, adjCatCfg,
   addCategory, deleteCategory, resetAllScores,
   updateSponsorLogo, removeSponsorLogo, addSponsorLogo, uploadSponsorLogo, removeLogo, renderSettings,
