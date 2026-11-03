@@ -3331,10 +3331,7 @@ function applyGroupColors() {
   const style = document.getElementById('grp-color-style') || (() => {
     const s=document.createElement('style'); s.id='grp-color-style'; document.head.appendChild(s); return s;
   })();
-  style.textContent = colors.map((c,i) => {
-    const oc = onColor(c);
-    return `.gi${i}{background:${c};color:${oc}}`;
-  }).join('');
+  style.textContent = colors.map((c,i) => `.gi${i}{--gc:${c}}`).join('');
 }
 
 // ── Site colors ──────────────────────────────────────────────────
