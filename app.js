@@ -3920,6 +3920,7 @@ document.getElementById('main-nav')?.addEventListener('scroll', updateNavFade, {
 window.addEventListener('load', async () => {
   initLang();
   applyStatic();
+  document.querySelectorAll('.print-link').forEach(a => a.href = a.getAttribute('href').split('?')[0] + location.search);
   const ok = await loadTournament();
   if (!ok) return;
   initLang(meta.lang);

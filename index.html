@@ -186,8 +186,8 @@
         <input class="team-search-input" id="sched-search" type="search" dir="auto" data-i18n-ph="sched.searchPh" data-i18n-aria="sched.searchAria" placeholder="Search team…" oninput="filterSchedule()"/>
       </div>
       <div class="master-only print-bar">
-        <button class="build-btn" onclick="open('print-courts.html'+location.search)" data-i18n="sched.printCourts">Print court sheets</button>
-        <button class="build-btn" onclick="open('bracket.html'+location.search)" data-i18n="sched.printBracket">Print bracket</button>
+        <a class="build-btn print-link" target="_blank" rel="noopener" href="print-courts.html" data-i18n="sched.printCourts">הדפסת דפי מגרשים</a>
+        <a class="build-btn print-link" target="_blank" rel="noopener" href="bracket.html" data-i18n="sched.printBracket">הדפסת עץ הנוקאאוט</a>
       </div>
       <div id="court-filter" class="court-filter"></div>
       <div id="schedule-content"></div>
