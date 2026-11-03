@@ -3455,6 +3455,9 @@ function addSponsorLogo() {
   renderSettings();
 }
 
+const KO_STAGES = ['pool', 'r16', 'qf', 'sf', 'third', 'final'];
+const KO_LIM = { pts: [11, 30], change: [0, 15], dur: [5, 60], thirdPts: [11, 30] };
+const KO_COL = { pts: 'settings.rules.pts', change: 'settings.rules.switch', dur: 'settings.rules.min', thirdPts: 'settings.rules.thirdPts' };
 function renderCatItem(cat, ci, live) {
   const cfg=cat.cfg||DEF_CAT_CFG;
   const coord=coordBuild();
@@ -3496,28 +3499,23 @@ function renderCatItem(cat, ci, live) {
     <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
       <div class="cat-sett-label" style="margin-bottom:8px">${t('settings.scoringRules')}</div>
       <div class="srt-wrap"><table class="scoring-rules-tbl">
-        <thead><tr><th>${t('settings.rules.stage')}</th><th>${t('settings.rules.pts')}</th><th>${t('settings.rules.switch')}</th>${coord ? '' : `<th>${t('settings.rules.min')}</th>`}</tr></thead>
+        <thead><tr><th>${t('settings.rules.stage')}</th><th>${t('settings.rules.pts')}</th><th>${t('settings.rules.switch')}</th>${coord ? '' : `<th>${t('settings.rules.min')}</th>`}<th>${t('settings.rules.sets')}</th><th>${t('settings.rules.thirdPts')}</th></tr></thead>
         <tbody>
-          ${['pool', 'r16', 'qf', 'sf', 'third', 'final'].map(key => {
-            const label = t('settings.stage.' + key);
-            const r = { ...DEF_KO_RULES[key], ...(cfg.koRules?.[key]||{}) };
+          ${['all', ...KO_STAGES].map(key => {
+            const label = t(key === 'all' ? 'settings.koSameAll' : 'settings.stage.' + key);
+            const r = { ...DEF_KO_RULES[key === 'all' ? 'pool' : key], ...(cfg.koRules?.[key === 'all' ? 'pool' : key]||{}) };
+            const inp = (f, v) => `<input class="text-inp" type="number" inputmode="numeric" style="width:64px" min="${KO_LIM[f][0]}" max="${KO_LIM[f][1]}"
+              value="${v ?? ''}" aria-label="${label} · ${t(KO_COL[f])}" onchange="updateKORuleField(${ci},'${key}','${f}',this.value)"/>`;
             return `<tr>
               <td class="srt-label">${label}</td>
-              <td><div class="cat-sett-ctrl">
-                <button class="s-num-btn" onclick="updateKORuleField(${ci},'${key}','pts',Math.max(11,(${r.pts||15})-1))">−</button>
-                <span class="s-num-val">${r.pts||15}</span>
-                <button class="s-num-btn" onclick="updateKORuleField(${ci},'${key}','pts',Math.min(30,(${r.pts||15})+1))">+</button>
-              </div></td>
-              <td><div class="cat-sett-ctrl">
-                <button class="s-num-btn" onclick="updateKORuleField(${ci},'${key}','change',${r.change?r.change-1:null})">−</button>
-                <span class="s-num-val">${r.change||'—'}</span>
-                <button class="s-num-btn" onclick="updateKORuleField(${ci},'${key}','change',${r.change?r.change+1:5})">+</button>
-              </div></td>
-              ${coord ? '' : `<td><div class="cat-sett-ctrl">
-                <button class="s-num-btn" onclick="updateKORuleField(${ci},'${key}','dur',Math.max(5,(${r.dur||cfg.gameDur||15})-5))">−</button>
-                <span class="s-num-val">${r.dur||cfg.gameDur||15}</span>
-                <button class="s-num-btn" onclick="updateKORuleField(${ci},'${key}','dur',Math.min(60,(${r.dur||cfg.gameDur||15})+5))">+</button>
-              </div></td>`}
+              <td>${inp('pts', r.pts||15)}</td>
+              <td>${inp('change', r.change||'')}</td>
+              ${coord ? '' : `<td>${inp('dur', r.dur||cfg.gameDur||15)}</td>`}
+              <td><select class="form-input" style="width:64px" aria-label="${label} · ${t('settings.rules.sets')}" onchange="updateKORuleField(${ci},'${key}','sets',this.value)">
+                <option value="1" ${r.sets===3?'':'selected'}>1</option>
+                <option value="3" ${r.sets===3?'selected':''}>3</option>
+              </select></td>
+              <td>${r.sets===3 ? inp('thirdPts', r.thirdPts||15) : ''}</td>
             </tr>`;
           }).join('')}
         </tbody>
@@ -3585,14 +3583,19 @@ function updateKORuleField(ci, roundKey, field, val) {
   if (!categories[ci]) return;
   if (!categories[ci].cfg) categories[ci].cfg = structuredClone(DEF_CAT_CFG);
   if (!categories[ci].cfg.koRules) categories[ci].cfg.koRules = {};
-  if (!categories[ci].cfg.koRules[roundKey]) categories[ci].cfg.koRules[roundKey] = {...DEF_KO_RULES[roundKey]};
-  categories[ci].cfg.koRules[roundKey][field] = val === '' || val === null ? null : Number(val);
+  const lim = KO_LIM[field];
+  const v = val === '' || val === null ? null : lim ? Math.min(lim[1], Math.max(lim[0], Math.round(Number(val)))) : Number(val);
+  (roundKey === 'all' ? KO_STAGES : [roundKey]).forEach(k => {
+    const r = categories[ci].cfg.koRules[k] || (categories[ci].cfg.koRules[k] = {...DEF_KO_RULES[k]});
+    if (field === 'sets' && v !== 3) delete r.sets;
+    else r[field] = v;
+  });
   pushCategories();
   // Changing a stage's length shifts every slot after it — recompute the clock.
   const cid = categories[ci].id;
   // Coordinated grids use one slot for every stage; re-timing one category would collide.
   if (field === 'dur' && !coordBuild() && state[cid]?.sched.length) commitState(cid, () => assignSlotTimes(cid));
-  renderSettings();
+  if (roundKey === 'all' || field === 'sets' || lim && v !== Number(val)) renderSettings();
 }
 
 function updateCatName(ci, val) {
