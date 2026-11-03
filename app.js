@@ -2570,7 +2570,8 @@ function buildGameRow(catId, g, idx, isKO) {
     : `<span class="pill ${pc}">${court}</span>`) + (koLbl?`<span class="ko-lbl">${koLbl}</span>`:'');
   if (admin && meta.phase === 'tournament') {
     // Each input sits next to its own team; on a phone the row stacks as "team – score".
-    const inp = (k, team) => `<input class="si" id="${sid(k)}" type="number" min="0" inputmode="numeric" placeholder="—"
+    const bo3 = (rule.sets ?? categories.find(c => c.id === catId)?.cfg?.sets) === 3;
+    const inp = (k, team) => `<input class="si" id="${sid(k)}" type="number" min="0"${bo3 ? ' max="2"' : ''} inputmode="numeric" placeholder="—"
       aria-label="${escH(t('sched.scoreFor', { team: dn(tSlot(team)) }))}" value="${escH(String(g[k] ?? ''))}"
       oninput="${setter(k)})" onchange="${setter(k)},true)"/>`;
     row.classList.add('edit');
