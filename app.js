@@ -1997,16 +1997,18 @@ function buildQueenKO(catId, cfg, nc, slotDur, startTime, rs) {
 }
 
 // ============ SCORE VALIDATION ============
-function isValidScore(sa, sb, catId, ptwOverride) {
+function isValidScore(sa, sb, catId, rule, g) {
   if (isNaN(sa)||isNaN(sb)||sa===''||sb==='') return false;
   if (sa < 0 || sb < 0) return false;
+  if (g?.forced || g?.wo) return sa !== sb;
   const cat = categories.find(c=>c.id===catId);
   const cfg = cat?.cfg || DEF_CAT_CFG;
-  if (cfg.sets === 3) {
+  const r = rule && typeof rule === 'object' ? rule : { pts: rule };
+  if ((r.sets || cfg.sets) === 3) {
     const hi = Math.max(sa,sb), lo = Math.min(sa,sb);
     return (hi===2 && lo>=0 && lo<=1);
   }
-  const ptw = ptwOverride || cfg.pointsToWin || 21;
+  const ptw = r.pts || cfg.pointsToWin || 21;
   if (sa===sb) return false;
   const hi = Math.max(sa,sb), lo = Math.min(sa,sb);
   if (hi < ptw) return false;
@@ -2014,20 +2016,22 @@ function isValidScore(sa, sb, catId, ptwOverride) {
   return hi-lo===2;
 }
 
-function scoreError(sa, sb, catId, ptwOverride) {
+function scoreError(sa, sb, catId, rule, g) {
   if (sa===''||sb==='') return null;
   const a=parseInt(sa), b=parseInt(sb);
   if (isNaN(a)||isNaN(b)) return null;
   if (a < 0 || b < 0) return { key:'score.nonNegative' };
+  if (g?.forced || g?.wo) return a === b ? { key:'score.noDraw' } : null;
   const cat = categories.find(c=>c.id===catId);
   const cfg = cat?.cfg || DEF_CAT_CFG;
-  if (cfg.sets===3) {
+  const r = rule && typeof rule === 'object' ? rule : { pts: rule };
+  if ((r.sets || cfg.sets)===3) {
     const hi=Math.max(a,b), lo=Math.min(a,b);
     if (hi>2||lo<0) return { key:'score.setsFormat' };
     if (hi!==2) return { key:'score.setsWinner' };
     return null;
   }
-  const ptw = ptwOverride || cfg.pointsToWin||21;
+  const ptw = r.pts || cfg.pointsToWin||21;
   const hi=Math.max(a,b), lo=Math.min(a,b);
   if (hi===lo) return { key:'score.noDraw' };
   if (hi<ptw) return { key:'score.mustReachEg', params:{ n:ptw, lo } };
@@ -2054,7 +2058,7 @@ function getStandings(catId, gi) {
   const resolve = s => normMap[normName(s)] || s;
   cs.sched.filter(g=>g.gi===gi).forEach(g => {
     const sa=parseInt(g.sa), sb=parseInt(g.sb);
-    if (!isValidScore(sa, sb, catId, getRuleForGame(catId, g, false).pts)) return;
+    if (!isValidScore(sa, sb, catId, getRuleForGame(catId, g, false), g)) return;
     const a=resolve(g.a), b=resolve(g.b);
     if (rec[a]) { rec[a].scored+=sa; rec[a].against+=sb; }
     if (rec[b]) { rec[b].scored+=sb; rec[b].against+=sa; }
@@ -2076,7 +2080,7 @@ function makeStandingsCard(catId, grp, gi, catIdx) {
   const adv = cfg.advPerGroup||1;
   const st  = getStandings(catId, gi);
   const totalGames = (grp.teams.length*(grp.teams.length-1))/2;
-  const played = cs.sched.filter(g=>g.gi===gi && isValidScore(parseInt(g.sa),parseInt(g.sb),catId,getRuleForGame(catId,g,false).pts)).length;
+  const played = cs.sched.filter(g=>g.gi===gi && isValidScore(parseInt(g.sa),parseInt(g.sb),catId,getRuleForGame(catId,g,false),g)).length;
   const poolDone = played===totalGames && totalGames>0;
   const card = document.createElement('div');
   card.className = 'scard';
@@ -2294,7 +2298,7 @@ function scoreMsg(e) {
   const g = gameRef(e);
   if (!g) return '';
   if (isHalf(g)) return t('score.bothSides');
-  const err = scoreError(String(g.sa ?? ''), String(g.sb ?? ''), e.cid, getRuleForGame(e.cid, g, e.ri != null).pts);
+  const err = scoreError(String(g.sa ?? ''), String(g.sb ?? ''), e.cid, getRuleForGame(e.cid, g, e.ri != null), g);
   return err ? t(err.key, err.params) : '';
 }
 const gameReady = e => !!gameRef(e) && !scoreMsg(e);
@@ -2403,7 +2407,7 @@ function resolvePoolSeed(catId, seed) {
   if (gi<0||gi>=cs.groups.length) return { label:seed, known:false };
   const grp = cs.groups[gi];
   const totalGames = (grp.teams.length*(grp.teams.length-1))/2;
-  const done = cs.sched.filter(g=>g.gi===gi&&isValidScore(parseInt(g.sa),parseInt(g.sb),catId,getRuleForGame(catId,g,false).pts)).length;
+  const done = cs.sched.filter(g=>g.gi===gi&&isValidScore(parseInt(g.sa),parseInt(g.sb),catId,getRuleForGame(catId,g,false),g)).length;
   if (done!==totalGames) return { label:seed, known:false };
   const st = getStandings(catId, gi);
   if (!st[rank-1]) return { label:seed, known:false };
@@ -2413,7 +2417,7 @@ function resolvePoolSeed(catId, seed) {
 function getKOLoser(game, catId) {
   if (!game || game.isBye) return null;
   const sa=parseInt(game.sa), sb=parseInt(game.sb);
-  if (isValidScore(sa,sb,catId,getRuleForGame(catId,game,true).pts)) return sa>sb ? game.b : game.a;
+  if (isValidScore(sa,sb,catId,getRuleForGame(catId,game,true),game)) return sa>sb ? game.b : game.a;
   return null;
 }
 
@@ -2427,7 +2431,7 @@ function getKOWinner(game, catId) {
     return seed;
   }
   const sa=parseInt(game.sa), sb=parseInt(game.sb);
-  if (isValidScore(sa,sb,catId,getRuleForGame(catId,game,true).pts)) return sa>sb?game.a:game.b;
+  if (isValidScore(sa,sb,catId,getRuleForGame(catId,game,true),game)) return sa>sb?game.a:game.b;
   return null;
 }
 
@@ -2512,7 +2516,7 @@ function renderStats() {
     const poolG = cs.sched.filter(g=>g.gi>=0);          // real pool games
     const thirdG = cs.sched.filter(g=>g.gi===-1);       // 3rd-place game lives in sched
     totalPool += poolG.length;
-    donePool  += poolG.filter(g=>isValidScore(parseInt(g.sa),parseInt(g.sb),cat.id,getRuleForGame(cat.id,g,false).pts)).length;
+    donePool  += poolG.filter(g=>isValidScore(parseInt(g.sa),parseInt(g.sb),cat.id,getRuleForGame(cat.id,g,false),g)).length;
     totalKO   += cs.ko.reduce((s,r)=>s+r.filter(g=>!g.isBye).length, 0) + thirdG.length;
     const last = cs.ko.length ? cs.ko[cs.ko.length-1][0] : cs.sched[cs.sched.length-1];
     if (last?.time && t2m(last.time)>t2m(lastTime)) { lastTime=last.time; lastDur=cat.cfg?.gameDur||30; }
@@ -2529,7 +2533,7 @@ function renderStats() {
 
 function buildGameRow(catId, g, idx, isKO) {
   const rule = getRuleForGame(catId, g, isKO);
-  const done = isValidScore(parseInt(g.sa), parseInt(g.sb), catId, rule.pts);
+  const done = isValidScore(parseInt(g.sa), parseInt(g.sb), catId, rule, g);
   // Color pill by group index for pool; by court→group for KO (dynamic group colors).
   // The 3rd-place game lives in sched with gi === -1, which produced the
   // non-existent class "gi-1" and left its court pill unpainted — colour it by
@@ -2693,7 +2697,7 @@ function renderBracketForCat(catId, container) {
   updateKOForCat(catId);
 
   const poolGames = cs.sched.filter(g=>g.gi>=0);   // exclude the 3rd-place game (gi=-1)
-  const done  = poolGames.filter(g=>isValidScore(parseInt(g.sa),parseInt(g.sb),catId,getRuleForGame(catId,g,false).pts)).length;
+  const done  = poolGames.filter(g=>isValidScore(parseInt(g.sa),parseInt(g.sb),catId,getRuleForGame(catId,g,false),g)).length;
   const total = poolGames.length;
   const info  = document.createElement('div');
   info.className='binfo';
@@ -2730,7 +2734,7 @@ function renderBracketForCat(catId, container) {
       return box;
     }
     const sa=parseInt(g.sa), sb=parseInt(g.sb);
-    const hs=isValidScore(sa,sb,catId,getRuleForGame(catId,g,true).pts);
+    const hs=isValidScore(sa,sb,catId,getRuleForGame(catId,g,true),g);
     const wa=hs&&sa>sb, wb=hs&&sb>sa;
     let labelA=g.a||'TBD', labelB=g.b||'TBD', codeA='', codeB='', knownA=false, knownB=false;
     if (ri===0) {
@@ -2831,7 +2835,7 @@ function renderBracketForCat(catId, container) {
     const lastCol = tree.querySelector('.bround:last-child');
     if (lastCol) {
       const sa3=parseInt(thirdGame.sa), sb3=parseInt(thirdGame.sb);
-      const hs3=isValidScore(sa3,sb3,catId,getRuleForGame(catId,thirdGame,false).pts);
+      const hs3=isValidScore(sa3,sb3,catId,getRuleForGame(catId,thirdGame,false),thirdGame);
       const wa3=hs3&&sa3>sb3, wb3=hs3&&sb3>sa3;
       const isSeed3=s=>!s||s.startsWith('Loser')||/^[A-Z]\d+(\/[A-Z]\d+)?$/.test(s);
       const lA3=dnH(tSlot(thirdGame.a)), lB3=dnH(tSlot(thirdGame.b));
@@ -2854,7 +2858,7 @@ function renderBracketForCat(catId, container) {
   const fin=cs.ko[cs.ko.length-1][0];
   if (fin) {
     const fsa=parseInt(fin.sa),fsb=parseInt(fin.sb);
-    if (isValidScore(fsa,fsb,catId,getRuleForGame(catId,fin,true).pts)) {
+    if (isValidScore(fsa,fsb,catId,getRuleForGame(catId,fin,true),fin)) {
       const w=fsa>fsb?fin.a:fin.b;
       const champEl=document.createElement('div');
       champEl.innerHTML=`<div class="champ-wrap"><div class="ci">${t('bracket.champion')}</div><div class="champ-name">${dnH(w)}</div></div>`;

@@ -571,17 +571,19 @@ export function createLegacy(ctx) {
   }
 
   // from app.js:1463
-  function isValidScore(sa, sb, catId, ptwOverride) {
+  function isValidScore(sa, sb, catId, rule, g) {
     const { categories } = ctx;
     if (isNaN(sa)||isNaN(sb)||sa===''||sb==='') return false;
     if (sa < 0 || sb < 0) return false;
+    if (g?.forced || g?.wo) return sa !== sb;
     const cat = categories.find(c=>c.id===catId);
     const cfg = cat?.cfg || DEF_CAT_CFG;
-    if (cfg.sets === 3) {
+    const r = rule && typeof rule === 'object' ? rule : { pts: rule };
+    if ((r.sets || cfg.sets) === 3) {
       const hi = Math.max(sa,sb), lo = Math.min(sa,sb);
       return (hi===2 && lo>=0 && lo<=1);
     }
-    const ptw = ptwOverride || cfg.pointsToWin || 21;
+    const ptw = r.pts || cfg.pointsToWin || 21;
     if (sa===sb) return false;
     const hi = Math.max(sa,sb), lo = Math.min(sa,sb);
     if (hi < ptw) return false;
@@ -590,21 +592,23 @@ export function createLegacy(ctx) {
   }
 
   // from app.js:1480
-  function scoreError(sa, sb, catId, ptwOverride) {
+  function scoreError(sa, sb, catId, rule, g) {
     const { categories } = ctx;
     if (sa===''||sb==='') return null;
     const a=parseInt(sa), b=parseInt(sb);
     if (isNaN(a)||isNaN(b)) return null;
     if (a < 0 || b < 0) return { key:'score.nonNegative' };
+    if (g?.forced || g?.wo) return a === b ? { key:'score.noDraw' } : null;
     const cat = categories.find(c=>c.id===catId);
     const cfg = cat?.cfg || DEF_CAT_CFG;
-    if (cfg.sets===3) {
+    const r = rule && typeof rule === 'object' ? rule : { pts: rule };
+    if ((r.sets || cfg.sets)===3) {
       const hi=Math.max(a,b), lo=Math.min(a,b);
       if (hi>2||lo<0) return { key:'score.setsFormat' };
       if (hi!==2) return { key:'score.setsWinner' };
       return null;
     }
-    const ptw = ptwOverride || cfg.pointsToWin||21;
+    const ptw = r.pts || cfg.pointsToWin||21;
     const hi=Math.max(a,b), lo=Math.min(a,b);
     if (hi===lo) return { key:'score.noDraw' };
     if (hi<ptw) return { key:'score.mustReachEg', params:{ n:ptw, lo } };
@@ -628,7 +632,7 @@ export function createLegacy(ctx) {
     const resolve = s => normMap[normName(s)] || s;
     cs.sched.filter(g=>g.gi===gi).forEach(g => {
       const sa=parseInt(g.sa), sb=parseInt(g.sb);
-      if (!isValidScore(sa, sb, catId, getRuleForGame(catId, g, false).pts)) return;
+      if (!isValidScore(sa, sb, catId, getRuleForGame(catId, g, false), g)) return;
       const a=resolve(g.a), b=resolve(g.b);
       if (rec[a]) { rec[a].scored+=sa; rec[a].against+=sb; }
       if (rec[b]) { rec[b].scored+=sb; rec[b].against+=sa; }
@@ -655,7 +659,7 @@ export function createLegacy(ctx) {
     if (gi<0||gi>=cs.groups.length) return { label:seed, known:false };
     const grp = cs.groups[gi];
     const totalGames = (grp.teams.length*(grp.teams.length-1))/2;
-    const done = cs.sched.filter(g=>g.gi===gi&&isValidScore(parseInt(g.sa),parseInt(g.sb),catId,getRuleForGame(catId,g,false).pts)).length;
+    const done = cs.sched.filter(g=>g.gi===gi&&isValidScore(parseInt(g.sa),parseInt(g.sb),catId,getRuleForGame(catId,g,false),g)).length;
     if (done!==totalGames) return { label:seed, known:false };
     const st = getStandings(catId, gi);
     if (!st[rank-1]) return { label:seed, known:false };
@@ -666,7 +670,7 @@ export function createLegacy(ctx) {
   function getKOLoser(game, catId) {
     if (!game || game.isBye) return null;
     const sa=parseInt(game.sa), sb=parseInt(game.sb);
-    if (isValidScore(sa,sb,catId,getRuleForGame(catId,game,true).pts)) return sa>sb ? game.b : game.a;
+    if (isValidScore(sa,sb,catId,getRuleForGame(catId,game,true),game)) return sa>sb ? game.b : game.a;
     return null;
   }
 
@@ -680,7 +684,7 @@ export function createLegacy(ctx) {
       return seed;
     }
     const sa=parseInt(game.sa), sb=parseInt(game.sb);
-    if (isValidScore(sa,sb,catId,getRuleForGame(catId,game,true).pts)) return sa>sb?game.a:game.b;
+    if (isValidScore(sa,sb,catId,getRuleForGame(catId,game,true),game)) return sa>sb?game.a:game.b;
     return null;
   }
 
