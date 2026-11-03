@@ -1,7 +1,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
 import {
   getFirestore, doc, getDoc, setDoc, onSnapshot, serverTimestamp,
-  collection, addDoc, getDocs, updateDoc, deleteDoc, query, orderBy, FieldPath, runTransaction
+  collection, addDoc, getDocs, updateDoc, deleteDoc, query, orderBy, FieldPath, runTransaction, deleteField
 } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
 import { pickImage, attachDropZone } from "./uploader.js?v=69";
 import { t, initLang, setLang, getLang, applyStatic, fmtDate, tRound, tSlot } from './i18n.js?v=69';
@@ -36,6 +36,7 @@ let meta = { name:'', logoUrl:'', primaryColor:DEF_PRIMARY, secondaryColor:'#7a3
 let categories = [];   // [{id, name, cfg}]
 let state = {};        // {[catId]: {roster:[], groups:[], sched:[], ko:[]}}
 let registrations = [];// [{id, p1, p2, phone, category, status, paid, createdAt}]
+let lastBuild = null;  // {at, phase, breaks, state} — doc field, one backup slot before each build
 
 let adminLevel = 0;    // 0=view  1=admin(scores in tournament)  2=manager(full in reg + scores)
 let admin = false;
@@ -49,7 +50,6 @@ let regSearch = '';
 let schedFilter = [];
 let activeCourt = 'all';
 let applyingRemote = false;
-let skipNextSnapshot = 0;
 let firebaseReady = false;
 
 let TREF = null;
@@ -59,6 +59,7 @@ let playerDB = []; // [{name, phone}]
 
 // ============ HTML ESCAPE ============
 const escH = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+const fsi = s => '⁨' + s + '⁩';
 
 // ============ SHA-256 ============
 async function sha256(str) {
@@ -115,10 +116,13 @@ const DEF_CAT_CFG = {
 };
 
 // ============ SYNC ============
-function setSyncStatus(ok) {
+let syncOk = true;
+function setSyncStatus(ok = syncOk) {
+  syncOk = ok;
   const el = document.getElementById('sync-indicator');
   if (!el) return;
-  el.className = 'sync-dot ' + (ok ? 'sync-ok' : 'sync-err');
+  el.className = 'sync-dot ' + (ok && navigator.onLine ? 'sync-ok' : 'sync-err');
+  el.title = unsavedGames.size ? t('sync.unsaved', { n: unsavedGames.size }) : '';
 }
 
 // ============ FIRESTORE HELPERS ============
@@ -144,36 +148,59 @@ function catStateFromFB(data) {
   };
 }
 
-async function pushToCloud() {
-  if (!firebaseReady || applyingRemote || !TREF) return;
-  const stateObj = {};
-  Object.entries(state).forEach(([cid, cs]) => { stateObj[cid] = catStateToFB(cs); });
-  skipNextSnapshot++;
+const emptyCat = () => ({ roster:[], groups:[], sched:[], ko:[] });
+
+// Structural edit of one or more categories: read the server copy in a transaction,
+// let fn change it, write state.<cid> back whole (replace, so no ghost ko.rN survives).
+// While fn runs, state[cid] IS the fresh copy (so scheduler helpers work on it); the
+// first one is also fn's argument. fn returns false to abort, or an object of extra
+// top-level fields to write in the same transaction ({'meta.phase': 'built'}).
+// fn may run more than once (transaction retry): no side effects outside state.
+async function commitState(cids, fn) {
+  if (!firebaseReady || !TREF) return false;
+  const ids = [].concat(cids);
+  let fresh = null;
   try {
-    await setDoc(TREF, {
-      meta, categories,
-      state: stateObj,
-      updatedAt: serverTimestamp()
-    }, { merge: true });
+    const ok = await runTransaction(db, async tx => {
+      const remote = (await tx.get(TREF)).data()?.state || {};
+      const mine = {};
+      ids.forEach(id => { mine[id] = state[id] || emptyCat(); });
+      fresh = Object.fromEntries(ids.map(id =>
+        [id, catStateFromFB(structuredClone(remote[id] || catStateToFB(mine[id])))]));
+      let extra;
+      Object.assign(state, fresh);
+      try { extra = fn(fresh[ids[0]]); ids.forEach(id => { fresh[id] = state[id]; }); } finally { Object.assign(state, mine); }
+      if (extra === false) return false;
+      const args = ids.flatMap(id => [new FieldPath('state', id), catStateToFB(fresh[id])]);
+      if (extra && typeof extra === 'object') Object.entries(extra).forEach(([k, v]) => args.push(k, v));
+      tx.update(TREF, ...args, 'updatedAt', serverTimestamp());
+      return true;
+    });
+    if (!ok) return false;
+    Object.assign(state, fresh);
+    applyUnsaved();
     setSyncStatus(true);
+    return true;
   } catch(e) {
-    skipNextSnapshot--;
-    console.error('Push error', e);
+    console.error('Commit error', e);
     setSyncStatus(false);
+    toast(t('errors.saveFailed'));
+    return false;
   }
 }
 
-async function pushMetaOnly() {
-  if (!TREF) return;
-  // Guard like pushToCloud: without this our OWN write comes back through
-  // onSnapshot → renderAll() → the focused input is rebuilt and you lose focus
-  // after every keystroke (tournament name / category names).
-  skipNextSnapshot++;
+async function pushDoc(...args) {
+  if (!firebaseReady || !TREF) return false;
   try {
-    await setDoc(TREF, { meta, updatedAt: serverTimestamp() }, { merge: true });
+    await updateDoc(TREF, ...args, 'updatedAt', serverTimestamp());
     setSyncStatus(true);
-  } catch(e) { skipNextSnapshot--; setSyncStatus(false); }
+    return true;
+  } catch(e) { console.error('Push error', e); setSyncStatus(false); return false; }
 }
+// Only the given meta keys are written — never the whole meta (password hashes,
+// phase, expiry stay as the server has them).
+const pushMeta = (...keys) => pushDoc(...keys.flatMap(k => [new FieldPath('meta', k), meta[k] ?? deleteField()]));
+const pushCategories = () => pushDoc('categories', categories);
 
 // ============ LOAD TOURNAMENT ============
 async function loadTournament() {
@@ -185,7 +212,21 @@ async function loadTournament() {
   TREF = doc(db, 'tournaments', tId);
   REGS_REF = collection(db, 'tournaments', tId, 'registrations');
 
-  const snap = await getDoc(TREF);
+  let snap;
+  try { snap = await getDoc(TREF); }
+  catch(e) {
+    console.error('Load error', e);
+    const p = document.querySelector('#view-loading p');
+    if (p) {
+      p.textContent = t('sync.noConnection');
+      const b = document.createElement('button');
+      b.className = 'add-cat-btn'; b.textContent = t('sync.retry');
+      b.onclick = () => location.reload();
+      p.after(b);
+    }
+    window.addEventListener('online', () => location.reload(), { once: true });
+    return false;
+  }
   if (!snap.exists()) {
     // Unknown id (typo / deleted): never create a doc from a public link —
     // tournaments are created in admin.html. Show a friendly not-found view.
@@ -208,6 +249,7 @@ async function loadTournament() {
       }
     }
     if (data.categories) categories = data.categories;
+    lastBuild = data.lastBuild || null;
     if (data.state) {
       Object.entries(data.state).forEach(([cid, cs]) => {
         state[cid] = catStateFromFB(cs);
@@ -224,17 +266,18 @@ async function loadTournament() {
   await subscribeRegistrations();
 
   // Live listener
-  onSnapshot(TREF, snap => {
-    if (!snap.exists() || applyingRemote) return;
-    if (skipNextSnapshot > 0) { skipNextSnapshot--; return; }
+  // Our own pending writes echo back first (hasPendingWrites): skip those; the
+  // server ack follows as a metadata change and carries anything others wrote meanwhile.
+  onSnapshot(TREF, { includeMetadataChanges: true }, snap => {
+    if (!snap.exists() || applyingRemote || snap.metadata.hasPendingWrites) return;
     applyingRemote = true;
     const data = snap.data();
     if (data.meta) meta = { ...meta, ...data.meta };
     if (data.categories) categories = data.categories;
+    lastBuild = data.lastBuild || null;
     if (data.state) {
       Object.entries(data.state).forEach(([cid, cs]) => { state[cid] = catStateFromFB(cs); });
-      // Scores typed here but not saved yet win over the remote copy of that game.
-      unsavedGames.forEach(e => { const g = gameRef(e); if (g) { g.sa = e.sa; g.sb = e.sb; } });
+      applyUnsaved();
     }
     categories.forEach(cat => {
       if (!state[cat.id]) state[cat.id] = { roster:[], groups:[], sched:[], ko:[] };
@@ -247,7 +290,7 @@ async function loadTournament() {
     rerender();
     _focusRestore(_f);
     setSyncStatus(true);
-  });
+  }, e => { console.error('Tournament listener', e); setSyncStatus(false); });
 
   return true;
 }
@@ -579,7 +622,7 @@ async function confirmStartTournament() {
   closeStartModal();
   if (!categories.length) return;
   meta.phase = 'tournament';
-  await pushMetaOnly();
+  await pushMeta('phase');
   document.body.classList.remove('phase-registration');
   document.body.classList.add('phase-tournament');
   refreshAdmin();
@@ -785,10 +828,7 @@ async function setRegStatus(id, status) {
       if (reg) {
         const catId = reg.category;
         const name = reg.p1 + (reg.p2 ? ' / ' + reg.p2 : '');
-        if (state[catId]?.roster) {
-          const ri = state[catId].roster.indexOf(name);
-          if (ri !== -1) { state[catId].roster.splice(ri, 1); await pushToCloud(); }
-        }
+        await commitState(catId, cs => withdrawPair(catId, cs, name));
       }
       await deleteDoc(doc(db, 'tournaments', tId, 'registrations', id));
       registrations = registrations.filter(r => r.id !== id);
@@ -799,8 +839,8 @@ async function setRegStatus(id, status) {
         const wasApproved = r.status === 'approved';
         r.status = status;
         // Any approval → make sure the pair is in its category's build roster.
-        if (status === 'approved' && addRegToRoster(r)) await pushToCloud();
-        if (wasApproved && status !== 'approved' && removeRegFromRoster(r)) await pushToCloud();
+        if (status === 'approved') await commitState(r.category, () => addRegToRoster(r));
+        if (wasApproved && status !== 'approved') await commitState(r.category, cs => withdrawPair(r.category, cs, regPairName(r)));
       }
     }
     renderRegistrations();
@@ -817,10 +857,9 @@ function regPairName(r) { return r.p1 + (r.p2 ? ' / ' + r.p2 : ''); }
 function addRegToRoster(r) {
   const catId = r.category;
   if (!catId || !categories.some(c => c.id === catId)) return false;
-  if (!state[catId]) state[catId] = { roster:[], groups:[], sched:[], ko:[] };
   const cs = state[catId];
   if (!cs.roster.length) {
-    cs.roster = registrations.filter(x => x.status === 'approved' && x.category === catId).map(regPairName);
+    cs.roster = approvedNames(catId);
     return cs.roster.length > 0;
   }
   const name = regPairName(r);
@@ -828,13 +867,32 @@ function addRegToRoster(r) {
   cs.roster.push(name);
   return true;
 }
+const approvedNames = catId => registrations.filter(r => r.status === 'approved' && r.category === catId).map(regPairName);
+// The Build page shows approved registrations while the stored roster is still empty.
+const seedRoster = (cs, catId) => { if (!cs.roster.length) cs.roster = approvedNames(catId); };
+const hasScore = g => String(g.sa ?? '') !== '' || String(g.sb ?? '') !== '';
 
-function removeRegFromRoster(r) {
-  const roster = state[r.category]?.roster;
-  const i = roster ? roster.findIndex(n => normName(n) === normName(regPairName(r))) : -1;
-  if (i < 0) return false;
-  roster.splice(i, 1);
-  return true;
+// Withdrawal without a rebuild: the pair leaves roster and group, only its unplayed
+// pool games go; every other game keeps its court, time and score.
+function withdrawPair(catId, cs, name) {
+  seedRoster(cs, catId);
+  const is = s => normName(s) === normName(name);
+  const size = () => cs.roster.length + cs.sched.length + cs.groups.reduce((n, g) => n + g.teams.length, 0);
+  const before = size();
+  cs.roster = cs.roster.filter(x => !is(x));
+  cs.groups.forEach(grp => { grp.teams = grp.teams.filter(x => !is(x)); });
+  cs.sched = cs.sched.filter(g => g.gi < 0 || !(is(g.a) || is(g.b)) || hasScore(g));
+  if (size() === before) return false;
+  updateKOForCat(catId);
+}
+
+async function softRemoveReg(catId, name) {
+  const reg = registrations.find(r => r.category === catId && r.status === 'approved' && normName(regPairName(r)) === normName(name));
+  if (!reg) return;
+  try {
+    await updateDoc(doc(db, 'tournaments', tId, 'registrations', reg.id), { status: 'rejected' });
+    reg.status = 'rejected'; // soft-reject: stays in Firestore, visible in Registrations
+  } catch(e) { console.error('Could not update registration status', e); }
 }
 
 async function setRegPaid(id, paid) {
@@ -1135,10 +1193,7 @@ function renderBuildPage() {
   categories.forEach(cat => {
     if (!state[cat.id]) state[cat.id] = { roster:[], groups:[], sched:[], ko:[] };
     const cs = state[cat.id];
-    if (!cs.roster.length) {
-      cs.roster = registrations.filter(r => r.status === 'approved' && r.category === cat.id)
-        .map(r => r.p1 + (r.p2 ? ' / '+r.p2 : ''));
-    }
+    seedRoster(cs, cat.id);
     const roster = cs.roster;
 
     const div = document.createElement('div');
@@ -1159,13 +1214,21 @@ function renderBuildPage() {
         ${roster.map((name,i) => buildItem(cat.id, name, i)).join('')}
       </div>
       <div class="build-foot">
-        <button class="build-btn" onclick="buildTournament('${cat.id}')">${t(meta.phase === 'built' ? 'build.rebuild' : 'build.build')}</button>
+        ${coordBuild() ? '' : `<button class="build-btn" onclick="buildTournament('${cat.id}')">${t(meta.phase === 'built' ? 'build.rebuild' : 'build.build')}</button>`}
         <button class="build-shuffle" onclick="shuffleBuildRoster('${cat.id}')">${t('build.shuffle')}</button>
         <button class="build-add-pair" onclick="openAddPair('${cat.id}')">${t('build.addPair')}</button>
       </div>`;
     el.appendChild(div);
     setupDragDrop(cat.id);
   });
+
+  if (coordBuild() || (superAdmin && lastBuild)) {
+    const bw = document.createElement('div');
+    bw.className = 'build-foot';
+    bw.innerHTML = (coordBuild() ? `<button class="build-btn" onclick="buildTournament()">${t(meta.phase === 'built' ? 'build.rebuildAll' : 'build.build')}</button>` : '')
+      + (superAdmin && lastBuild ? `<button class="build-shuffle" onclick="undoLastBuild()">${t('build.undoLast')}</button>` : '');
+    el.appendChild(bw);
+  }
 
   // Start Tournament button — visible to any admin in registration / built phase
   const startWrap = document.createElement('div');
@@ -1212,22 +1275,9 @@ function editBuildItem(catId, idx) {
 async function deleteBuildItem(catId, idx) {
   if (!admin || (meta.phase !== 'registration' && meta.phase !== 'built')) return;
   const name = state[catId]?.roster[idx];
-  if (!await askConfirm(name ? t('build.confirmRemove', { name }) : t('build.confirmRemoveAnon'), t('common.remove'))) return;
-  if (name) {
-    const parts = name.split(' / ').map(s => s.trim());
-    const p1 = parts[0], p2 = parts[1] || '';
-    const reg = registrations.find(r =>
-      r.category === catId && r.p1 === p1 && (r.p2 || '') === p2 && r.status === 'approved'
-    );
-    if (reg) {
-      try {
-        await updateDoc(doc(db, 'tournaments', tId, 'registrations', reg.id), { status: 'rejected' });
-        reg.status = 'rejected'; // soft-reject: stays in Firestore, visible in Registrations
-      } catch(e) { console.error('Could not update registration status', e); }
-    }
-  }
-  state[catId].roster.splice(idx, 1);
-  pushToCloud();
+  if (!name || !await askConfirm(t('build.confirmRemove', { name }), t('common.remove'))) return;
+  if (!await commitState(catId, cs => withdrawPair(catId, cs, name))) return;
+  await softRemoveReg(catId, name);
   renderBuildPage();
   renderRegistrations();
 }
@@ -1270,13 +1320,15 @@ function onDrop(e, targetCatId) {
   const toIdx    = parseInt(target.dataset.idx);
   const srcCatId = dragSrcCat;
   if (srcCatId === targetCatId) {
-    const cs = state[srcCatId];
-    if (!cs) return;
-    const roster = [...cs.roster];
-    const [moved] = roster.splice(fromIdx, 1);
-    roster.splice(toIdx, 0, moved);
-    cs.roster = roster;
-    pushToCloud(); renderBuildPage();
+    const from = state[srcCatId]?.roster[fromIdx], to = state[srcCatId]?.roster[toIdx];
+    if (from === undefined || to === undefined) return;
+    commitState(srcCatId, cs => {
+      seedRoster(cs, srcCatId);
+      const i = cs.roster.indexOf(from), j = cs.roster.indexOf(to);
+      if (i < 0 || j < 0) return false;
+      cs.roster.splice(i, 1);
+      cs.roster.splice(j, 0, from);
+    }).then(renderBuildPage);
   } else {
     moveBetweenCategories(srcCatId, fromIdx, targetCatId, toIdx);
   }
@@ -1288,54 +1340,52 @@ function onListDrop(e, targetCatId) {
   moveBetweenCategories(dragSrcCat, parseInt(dragSrc.dataset.idx), targetCatId, -1);
 }
 async function moveBetweenCategories(srcCatId, fromIdx, dstCatId, toIdx) {
-  const srcCs = state[srcCatId], dstCs = state[dstCatId];
-  if (!srcCs || !dstCs) return;
-  const name = srcCs.roster[fromIdx];
+  if (!state[srcCatId] || !state[dstCatId]) return;
+  const name = state[srcCatId].roster[fromIdx], at = state[dstCatId].roster[toIdx];
   if (name === undefined) return;
-  srcCs.roster.splice(fromIdx, 1);
-  if (toIdx < 0 || toIdx >= dstCs.roster.length) dstCs.roster.push(name);
-  else dstCs.roster.splice(toIdx, 0, name);
-  // Update registration's category in Firestore
-  const parts = name.split(' / ').map(s => s.trim());
-  const p1 = parts[0], p2 = parts[1] || '';
-  const reg = registrations.find(r => r.p1 === p1 && (r.p2||'') === p2 && r.category === srcCatId);
+  const ok = await commitState([srcCatId, dstCatId], () => {
+    const src = state[srcCatId], dst = state[dstCatId];
+    seedRoster(src, srcCatId); seedRoster(dst, dstCatId);
+    const i = src.roster.indexOf(name);
+    if (i < 0) return false;
+    src.roster.splice(i, 1);
+    const j = at === undefined ? -1 : dst.roster.indexOf(at);
+    dst.roster.splice(j < 0 ? dst.roster.length : j, 0, name);
+  });
+  if (!ok) return;
+  const reg = registrations.find(r => r.category === srcCatId && normName(regPairName(r)) === normName(name));
   if (reg) {
     try {
       await updateDoc(doc(db, 'tournaments', tId, 'registrations', reg.id), { category: dstCatId });
       reg.category = dstCatId;
     } catch(e) { console.error('Could not update registration category', e); }
   }
-  await pushToCloud();
   renderBuildPage();
   renderRegistrations();
 }
 
 function moveBuildItem(catId, idx, dir) {
   if (!admin || (meta.phase !== 'registration' && meta.phase !== 'built')) return;
-  const cs = state[catId];
-  if (!cs) return;
-  const roster = cs.roster;
-  const newIdx = idx + dir;
-  if (newIdx < 0 || newIdx >= roster.length) return;
-  [roster[idx], roster[newIdx]] = [roster[newIdx], roster[idx]];
-  pushToCloud();
-  renderBuildPage();
+  const a = state[catId]?.roster[idx], b = state[catId]?.roster[idx + dir];
+  if (a === undefined || b === undefined) return;
+  commitState(catId, cs => {
+    seedRoster(cs, catId);
+    const i = cs.roster.indexOf(a), j = cs.roster.indexOf(b);
+    if (i < 0 || j < 0) return false;
+    [cs.roster[i], cs.roster[j]] = [b, a];
+  }).then(renderBuildPage);
 }
 
 function shuffleBuildRoster(catId) {
   if (!admin || (meta.phase !== 'registration' && meta.phase !== 'built')) return;
-  const cs = state[catId];
-  if (!cs) return;
-  if (!cs.roster.length) {
-    cs.roster = registrations.filter(r => r.status === 'approved' && r.category === catId)
-      .map(r => r.p1 + (r.p2 ? ' / '+r.p2 : ''));
-  }
-  for (let i = cs.roster.length-1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i+1));
-    [cs.roster[i], cs.roster[j]] = [cs.roster[j], cs.roster[i]];
-  }
-  pushToCloud();
-  renderBuildPage();
+  if (!state[catId]) return;
+  commitState(catId, cs => {
+    seedRoster(cs, catId);
+    for (let i = cs.roster.length-1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i+1));
+      [cs.roster[i], cs.roster[j]] = [cs.roster[j], cs.roster[i]];
+    }
+  }).then(renderBuildPage);
 }
 
 function openAddPair(catId) {
@@ -1350,16 +1400,17 @@ function closeAddPair() {
   document.getElementById('addpair-modal').classList.add('h');
 }
 async function saveAddPair() {
-  const p1    = document.getElementById('ap-p1').value.trim();
-  const p2    = document.getElementById('ap-p2').value.trim();
+  if (!admin) return;
+  const p1    = cleanName(document.getElementById('ap-p1').value);
+  const p2    = cleanName(document.getElementById('ap-p2').value);
   const catId = document.getElementById('ap-cat').value;
-  if (!p1) return;
-  const name = p2 ? `${p1} / ${p2}` : p1;
-  if (!state[catId]) state[catId] = { roster:[], groups:[], sched:[], ko:[] };
-  state[catId].roster.push(name);
-  await addDoc(REGS_REF, { p1, p2, phone:'', category: catId, status:'approved', paid:false, createdAt: serverTimestamp() });
-  await pushToCloud();
+  if (!p1 || !state[catId]) return;
+  const r = { p1, p2, phone:'', category: catId, status:'approved', paid:false };
+  const name = regPairName(r);
+  if (pairTaken(catId, name)) { toast(t('errors.dupName', { name: fsi(name) })); return; }
+  await addDoc(REGS_REF, { ...r, createdAt: serverTimestamp() });
   await loadRegistrations();
+  await commitState(catId, () => addRegToRoster(r));
   // Auto-save both players to the database
   if (p1) addPlayerToDB(p1, '');
   if (p2) addPlayerToDB(p2, '');
@@ -1499,7 +1550,7 @@ function generateCoordinatedSchedule(){
   }
   // Dinner exactly at the pool->knockout boundary: all pools done -> break -> KO.
   // Computes the concrete time and writes it into meta.breaks so the board + print
-  // sheets show the marker (persisted by the pushToCloud that follows a build).
+  // sheets show the marker (buildTournament persists it with the build).
   if(meta.breakBeforeKO){
     let P=-1;
     for(let r=0;r<rounds.length;r++){ if(rounds[r].some(id=>byId[id]&&byId[id].kind!=='pool')){ P=r; break; } }
@@ -1521,29 +1572,109 @@ function generateCoordinatedSchedule(){
   categories.forEach(c=>{ if(state[c.id]) updateKOForCat(c.id); });
 }
 
+const coordBuild = () => !!meta.coordinated;
+const allGamesOf = cs => [...cs.sched, ...cs.ko.flat().filter(g => !g.isBye)];
+
+// A rebuild keeps scores (and manual court/time) of games that still exist with the
+// same two pairs: pool by pair, KO by position in a bracket of the same shape.
+const koKey = (cid, cs, ri, gi) => `${cid}|K|${cs.ko.length}|${ri}|${cs.ko[ri].length}|${gi}`;
+function gameIndex(cids) {
+  const m = new Map();
+  cids.forEach(cid => {
+    const cs = state[cid]; if (!cs) return;
+    cs.sched.forEach(g => m.set(g.gi < 0 ? `${cid}|3P` : `${cid}|${pairKey(g.a, g.b)}`, g));
+    cs.ko.forEach((r, ri) => r.forEach((g, gi) => m.set(koKey(cid, cs, ri, gi), g)));
+  });
+  return m;
+}
+function carryOver(cids, old) {
+  const same = (g, o) => normName(g.a) === normName(o.a) && normName(g.b) === normName(o.b);
+  const take = (g, o, swap) => {
+    if (hasScore(o)) {
+      [g.sa, g.sb] = swap ? [o.sb, o.sa] : [o.sa, o.sb];
+      ['wo', 'forced'].forEach(k => { if (o[k]) g[k] = o[k]; });
+    }
+    if (o.manual) Object.assign(g, { court: o.court, time: o.time, manual: true });
+  };
+  cids.forEach(cid => {
+    const cs = state[cid];
+    if (!cs) return;
+    cs.sched.forEach(g => { const o = g.gi >= 0 && old.get(`${cid}|${pairKey(g.a, g.b)}`); if (o) take(g, o, !same(g, o)); });
+    updateKOForCat(cid);
+    cs.ko.forEach((r, ri) => {
+      r.forEach((g, gi) => { const o = old.get(koKey(cid, cs, ri, gi)); if (o && same(g, o)) take(g, o); });
+      updateKOForCat(cid);
+    });
+    const g3 = cs.sched.find(g => g.gi < 0), o3 = old.get(`${cid}|3P`);
+    if (g3 && o3 && same(g3, o3)) take(g3, o3);
+  });
+}
+
 async function buildTournament(catId) {
   if (!admin || (meta.phase !== 'registration' && meta.phase !== 'built')) return;
-  if (meta.coordinated) {
-    buildCoordinatedGroups(); generateCoordinatedSchedule(); await pushToCloud();
-    if (meta.phase === 'registration') { meta.phase = 'built'; await pushMetaOnly(); renderAll(); goPage('standings'); }
-    else renderBuildPage();
-    return;
+  const coord = coordBuild();
+  const cids = coord ? categories.map(c => c.id) : [catId];
+  if (!cids.some(id => state[id]?.roster.length || approvedNames(id).length)) { alert(t('errors.noApproved')); return; }
+  const rebuild = meta.phase === 'built';
+  if (rebuild) {
+    const games = cids.flatMap(id => state[id] ? allGamesOf(state[id]) : []);
+    const msg = t('build.confirmRebuild') + ' ' + t('build.rebuildCounts', { games: games.length, scored: games.filter(hasScore).length });
+    if (!await askConfirm(msg, t(coord ? 'build.rebuildAll' : 'build.rebuild'))) return;
   }
+  const prev = { phase: meta.phase, breaks: meta.breaks ?? null };
+  let backup;
+  const ok = await commitState(cids, () => {
+    backup = Object.fromEntries(cids.map(id => [id, catStateToFB(structuredClone(state[id]))]));
+    const old = gameIndex(cids);
+    if (coord) { buildCoordinatedGroups(); generateCoordinatedSchedule(); }
+    else if (!buildCategory(catId)) return false;
+    carryOver(cids, old);
+    const extra = { lastBuild: { at: serverTimestamp(), ...prev, state: backup } };
+    if (meta.breakBeforeKO) extra['meta.breaks'] = meta.breaks;
+    if (!rebuild) extra['meta.phase'] = 'built';
+    return extra;
+  });
+  if (!ok) return;
+  lastBuild = { at: { seconds: Date.now() / 1000 }, ...prev, state: backup };
+
+  // First build → 'built' phase so the tournament tabs become visible
+  if (!rebuild) { meta.phase = 'built'; renderAll(); goPage('standings'); }
+  else renderBuildPage();
+}
+
+async function undoLastBuild() {
+  const lb = lastBuild;
+  if (!superAdmin || !lb?.state || meta.phase === 'tournament') return;
+  const at = lb.at?.seconds ? new Date(lb.at.seconds * 1000).toTimeString().slice(0, 5) : '';
+  if (!await askConfirm(t('build.confirmUndo', { time: at }), t('build.undoLast'))) return;
+  const cids = Object.keys(lb.state).filter(id => categories.some(c => c.id === id));
+  const ok = await commitState(cids, () => {
+    cids.forEach(id => { state[id] = catStateFromFB(structuredClone(lb.state[id])); });
+    return { 'meta.phase': lb.phase, 'meta.breaks': lb.breaks ?? deleteField(), lastBuild: deleteField() };
+  });
+  if (!ok) return;
+  meta.phase = lb.phase;
+  if (lb.breaks) meta.breaks = lb.breaks; else delete meta.breaks;
+  lastBuild = null;
+  renderAll(); goPage('build');
+}
+
+// Pure part of a single-category build (mirrored in core/legacy.js).
+function buildCategory(catId) {
   const cs  = state[catId];
   const cat = categories.find(c => c.id === catId);
-  if (!cat || !cs) return;
+  if (!cat || !cs) return false;
 
   let roster = cs.roster.length ? cs.roster :
     registrations.filter(r => r.status === 'approved' && r.category === catId)
       .map(r => r.p1 + (r.p2 ? ' / '+r.p2 : ''));
 
-  if (!roster.length) { alert(t('errors.noApproved')); return; }
+  if (!roster.length) return false;
 
   const cfg = cat.cfg || DEF_CAT_CFG;
   const ng  = cfg.numGroups || 2;
   let groups;
   if (cfg.seeding === 'snake') {
-    // Ranking tournament: pools by past ranking, serpentine (roster is ranked best-first).
     groups = snakeDistribute(roster, ng);
   } else {
     const sizes = distributeGroups(roster.length, ng);
@@ -1559,19 +1690,7 @@ async function buildTournament(catId) {
   cs.sched  = [];
   cs.ko     = [];
   generateScheduleForCat(catId);
-
-  await pushToCloud();
-
-  // First build → advance to 'built' phase so tournament tabs become visible
-  if (meta.phase === 'registration') {
-    meta.phase = 'built';
-    await pushMetaOnly();
-    renderAll();
-    goPage('standings');
-  } else {
-    // Already in built phase → just refresh build page
-    renderBuildPage();
-  }
+  return true;
 }
 
 // ============ SCHEDULE GENERATION ============
@@ -2012,72 +2131,72 @@ function closeEdit() {
   document.getElementById('edit-modal').classList.add('h');
   editTarget = null;
 }
-function saveEdit() {
+const pairTaken = (catId, name, except) => [...(state[catId]?.roster || []), ...approvedNames(catId)]
+  .some(n => normName(n) === normName(name) && normName(n) !== normName(except));
+
+// Rename a pair everywhere in one category; false when it isn't there.
+function renamePair(cs, old, name) {
+  const is = s => normName(s) === normName(old);
+  const before = JSON.stringify(cs);
+  cs.roster = cs.roster.map(x => is(x) ? name : x);
+  cs.groups.forEach(g => { g.teams = g.teams.map(x => is(x) ? name : x); });
+  allGamesOf(cs).forEach(g => { if (is(g.a)) g.a = name; if (is(g.b)) g.b = name; });
+  if (JSON.stringify(cs) === before) return false;
+}
+
+async function saveEdit() {
   if (!admin || !editTarget) return;
-  const p1 = document.getElementById('edit-p1').value.trim();
-  const p2 = document.getElementById('edit-p2').value.trim();
+  const p1 = cleanName(document.getElementById('edit-p1').value);
+  const p2 = cleanName(document.getElementById('edit-p2').value);
   const name = p2?`${p1} / ${p2}`:p1;
   if (!name) return;
 
   // Build page roster edit
   if (editTarget.buildIdx !== undefined) {
-    const { catId, buildIdx, oldName } = editTarget;
+    const { catId, oldName } = editTarget;
     const newCatId = document.getElementById('edit-cat')?.value || catId;
-    if (newCatId !== catId) {
-      // Cross-category move via edit
-      state[catId].roster.splice(buildIdx, 1);
-      if (!state[newCatId]) state[newCatId] = { roster:[], groups:[], sched:[], ko:[] };
+    if (newCatId === catId && name === oldName) { closeEdit(); return; }
+    if (pairTaken(newCatId, name, newCatId === catId ? oldName : '')) { toast(t('errors.dupName', { name: fsi(name) })); return; }
+    const ok = await commitState(newCatId === catId ? catId : [catId, newCatId], () => {
+      const src = state[catId];
+      seedRoster(src, catId);
+      if (!src.roster.some(n => normName(n) === normName(oldName))) return false;
+      if (newCatId === catId) return renamePair(src, oldName, name);
+      withdrawPair(catId, src, oldName);
+      seedRoster(state[newCatId], newCatId);
       state[newCatId].roster.push(name);
-      const oldParts = (oldName||'').split(' / ').map(s=>s.trim());
-      const reg = registrations.find(r =>
-        r.p1===oldParts[0] && (r.p2||'')===(oldParts[1]||'') && r.category===catId);
-      if (reg) {
-        updateDoc(doc(db,'tournaments',tId,'registrations',reg.id), {category:newCatId, p1, p2});
-        reg.category = newCatId; reg.p1 = p1; reg.p2 = p2;
-      }
-    } else {
-      state[catId].roster[buildIdx] = name;
-      const oldParts = (oldName||'').split(' / ').map(s=>s.trim());
-      const reg = registrations.find(r =>
-        r.p1===oldParts[0] && (r.p2||'')===(oldParts[1]||'') && r.category===catId);
-      if (reg) {
-        updateDoc(doc(db,'tournaments',tId,'registrations',reg.id), {p1, p2});
-        reg.p1 = p1; reg.p2 = p2;
-      }
+    });
+    if (!ok) return;
+    const reg = registrations.find(r => r.category === catId && normName(regPairName(r)) === normName(oldName));
+    if (reg) {
+      updateDoc(doc(db,'tournaments',tId,'registrations',reg.id), {category:newCatId, p1, p2});
+      reg.category = newCatId; reg.p1 = p1; reg.p2 = p2;
     }
-    closeEdit(); pushToCloud(); renderBuildPage(); renderRegistrations();
+    closeEdit(); renderBuildPage(); renderRegistrations();
     return;
   }
 
   // Standings group team edit — master only
   if (!superAdmin) return;
   const {catId,gi,ti} = editTarget;
-  const old = state[catId].groups[gi].teams[ti];
-  state[catId].groups[gi].teams[ti] = name;
-  state[catId].sched.forEach(g => { if(g.a===old)g.a=name; if(g.b===old)g.b=name; });
-  state[catId].ko.forEach(r => r.forEach(g => { if(g.a===old)g.a=name; if(g.b===old)g.b=name; }));
-  // Also update flat roster
-  const rIdx = state[catId].roster?.indexOf(old);
-  if (rIdx >= 0) state[catId].roster[rIdx] = name;
-  closeEdit(); pushToCloud(); renderStandings(); renderScheduleContent(); renderBracket();
+  const old = state[catId]?.groups[gi]?.teams[ti];
+  if (!old) return;
+  if (name === old) { closeEdit(); return; }
+  if (pairTaken(catId, name, old)) { toast(t('errors.dupName', { name: fsi(name) })); return; }
+  if (!await commitState(catId, cs => renamePair(cs, old, name))) return;
+  closeEdit(); renderStandings(); renderScheduleContent(); renderBracket();
 }
+// Before the start: the pair leaves its group; only its unplayed games are dropped.
 async function deleteTeam(catId, gi, ti) {
   if (!superAdmin || (meta.phase !== 'registration' && meta.phase !== 'built')) return;
-  const cs  = state[catId];
-  const grp = cs.groups[gi];
+  const grp = state[catId]?.groups[gi];
+  const name = grp?.teams[ti];
+  if (!name) return;
   if (grp.teams.length<=1) { alert(t('errors.groupMin')); return; }
-  if (!await askConfirm(t('stand.confirmRemove', { name: grp.teams[ti], group: grp.name }), t('common.remove'))) return;
-  grp.teams.splice(ti,1);
-  // Coordinated mode: re-run the whole shared-grid scheduler so the board updates itself.
-  if (meta.coordinated) { generateCoordinatedSchedule(); pushToCloud(); renderAll(); return; }
-  // Withdrawal before start: re-optimize the pool schedule (no idle court) — keep the bracket
-  if (cs.sched?.some(g => g.gi >= 0)) {
-    const third = cs.sched.find(g => g.isThirdPlace);
-    cs.sched = genPoolSched(catId);
-    if (third) cs.sched.push(third);
-    assignSlotTimes(catId);
-  }
-  pushToCloud(); renderAll();
+  if (!await askConfirm(t('stand.confirmRemove', { name, group: grp.name }), t('common.remove'))) return;
+  if (!await commitState(catId, cs => withdrawPair(catId, cs, name))) return;
+  await softRemoveReg(catId, name);
+  renderAll();
 }
 
 // ============ SCORES ============
@@ -2088,11 +2207,49 @@ async function deleteTeam(catId, gi, ti) {
 // don't overwrite each other. (sched/ko are arrays in Firestore, so an element
 // can't be addressed by a field path — hence read-merge-write.)
 const SCORE_DEBOUNCE_MS = 600;
-const unsavedGames = new Map();   // gk -> {cid, idx} | {cid, ri, gi} + {sa, sb, shown}
+// gk -> {cid, idx, id} | {cid, ri, gi, id} + {sa, sb, base, shown}. `id` = which game it
+// was typed into (pair / seeds), `base` = the score it showed before typing.
+const unsavedGames = new Map();
 let scoreTimer = null, flushing = false;
 
 const gameKey = (cid, idx, ri, gi) => ri == null ? `${cid}-${idx}` : `${cid}-k${ri}-${gi}`;
-const gameRef = e => e.ri == null ? state[e.cid]?.sched?.[e.idx] : state[e.cid]?.ko?.[e.ri]?.[e.gi];
+const gameId = (g, isKO) => isKO ? (g.seedA && g.seedB ? `${g.seedA}|${g.seedB}` : '')
+  : g.gi < 0 ? '3P' : pairKey(g.a, g.b);
+// The game an unsaved entry belongs to — re-found by pair if the schedule moved under it.
+function findGame(cs, e) {
+  if (!cs) return null;
+  if (e.ri != null) { const g = cs.ko?.[e.ri]?.[e.gi]; return g && gameId(g, true) === e.id ? g : null; }
+  const g = cs.sched?.[e.idx];
+  return g && gameId(g, false) === e.id ? g : cs.sched?.find(x => gameId(x, false) === e.id) || null;
+}
+const gameRef = e => findGame(state[e.cid], e);
+const sameScore = (g, x) => String(g.sa ?? '') === String(x.sa ?? '') && String(g.sb ?? '') === String(x.sb ?? '');
+
+const UNSAVED_KEY = () => 'luz.unsaved.' + tId;
+function mirrorUnsaved() {
+  try {
+    if (unsavedGames.size) localStorage.setItem(UNSAVED_KEY(), JSON.stringify([...unsavedGames]));
+    else localStorage.removeItem(UNSAVED_KEY());
+  } catch(_) {}
+  setSyncStatus();
+}
+function restoreUnsaved() {
+  try { JSON.parse(localStorage.getItem(UNSAVED_KEY()) || '[]').forEach(([gk, e]) => unsavedGames.set(gk, e)); } catch(_) {}
+  applyUnsaved();
+}
+// Scores typed here but not saved yet win over the remote copy of that game;
+// an entry whose game is gone (rebuilt / moved) is dropped.
+function applyUnsaved() {
+  let lost = 0;
+  unsavedGames.forEach((e, gk) => {
+    const g = gameRef(e);
+    if (!g) { unsavedGames.delete(gk); lost++; return; }
+    g.sa = e.sa; g.sb = e.sb;
+    const idx = e.ri == null ? state[e.cid].sched.indexOf(g) : e.idx;
+    if (idx !== e.idx) { unsavedGames.delete(gk); e.idx = idx; unsavedGames.set(gameKey(e.cid, idx), e); }
+  });
+  if (lost) { mirrorUnsaved(); toast(t('score.dropped', { n: lost })); }
+}
 // A score with only one side filled is never saved.
 const isHalf = g => !String(g.sa ?? '') !== !String(g.sb ?? '');
 function scoreMsg(e) {
@@ -2128,14 +2285,19 @@ async function flushScoreWrites() {
   const sent = [...unsavedGames].filter(([, e]) => gameReady(e)).map(([gk, e]) => ({ gk, e, sa: e.sa, sb: e.sb }));
   if (!sent.length) return;
   flushing = true;
+  let skipped;
   try {
     await runTransaction(db, async tx => {
       const remote = (await tx.get(TREF)).data()?.state || {};
       const cats = {};
-      sent.forEach(({ e, sa, sb }) => {
+      skipped = [];
+      sent.forEach(x => {
+        const { e, sa, sb } = x;
         const cs = cats[e.cid] ??= catStateFromFB(structuredClone(remote[e.cid] || catStateToFB(state[e.cid])));
-        const g = e.ri == null ? cs.sched[e.idx] : cs.ko[e.ri]?.[e.gi];
-        if (g) Object.assign(g, { sa, sb });
+        const g = findGame(cs, e);
+        // Someone else saved a different score for this game since we started typing.
+        if (!g || (e.base && !sameScore(g, e.base) && !sameScore(g, { sa, sb }))) { skipped.push({ e, g }); return; }
+        Object.assign(g, { sa, sb });
       });
       const args = [];
       Object.entries(cats).forEach(([cid, cs]) => {
@@ -2144,18 +2306,21 @@ async function flushScoreWrites() {
         state[cid] = cs; updateKOForCat(cid); state[cid] = mine;
         args.push(new FieldPath('state', cid), catStateToFB(cs));
       });
-      args.push('updatedAt', serverTimestamp());
-      tx.update(TREF, ...args);
+      if (args.length) { args.push('updatedAt', serverTimestamp()); tx.update(TREF, ...args); }
     });
     sent.forEach(({ gk, e, sa, sb }) => {
       if (unsavedGames.get(gk) === e && e.sa === sa && e.sb === sb) unsavedGames.delete(gk);
+      else e.base = { sa, sb };
       markGameRow(gk);
     });
+    skipped.forEach(({ e, g }) => { const mine = gameRef(e); if (mine && g) Object.assign(mine, { sa: g.sa, sb: g.sb }); });
+    if (skipped.length) { toast(t('score.conflict', { n: skipped.length })); rerender(); }
     setSyncStatus(true);
+    mirrorUnsaved();
   } catch(e) {
     console.error('Score push error', e);
     setSyncStatus(false);
-    scoreTimer = setTimeout(flushScoreWrites, 3000);
+    if (navigator.onLine) scoreTimer = setTimeout(flushScoreWrites, 3000);
   } finally { flushing = false; }
 }
 
@@ -2164,6 +2329,7 @@ function scoreChanged(gk, ref, g, commit) {
   e.sa = g.sa ?? ''; e.sb = g.sb ?? '';
   if (commit) e.shown = true;
   unsavedGames.set(gk, e);
+  mirrorUnsaved();
   updateKOForCat(ref.cid);
   markGameRow(gk);
   scheduleFlush(commit);
@@ -2172,16 +2338,20 @@ function scoreChanged(gk, ref, g, commit) {
 function setGS(catId, idx, k, v, commit) {
   if (!admin || meta.phase !== 'tournament') return;
   const g = state[catId].sched[idx];
+  const gk = gameKey(catId, idx);
+  const ref = { cid: catId, idx, id: gameId(g, false), base: unsavedGames.has(gk) ? null : { sa: g.sa ?? '', sb: g.sb ?? '' } };
   g[k] = v;
-  scoreChanged(gameKey(catId, idx), { cid: catId, idx }, g, commit);
+  scoreChanged(gk, ref, g, commit);
   renderStandings();
 }
 function setKS(catId, ri, gi, k, v, commit) {
   if (!admin || meta.phase !== 'tournament') return;
   const g = state[catId].ko[ri][gi];
+  const gk = gameKey(catId, null, ri, gi);
+  const ref = { cid: catId, ri, gi, id: gameId(g, true), base: unsavedGames.has(gk) ? null : { sa: g.sa ?? '', sb: g.sb ?? '' } };
   g[k] = v;
   g.ri = ri;
-  scoreChanged(gameKey(catId, null, ri, gi), { cid: catId, ri, gi }, g, commit);
+  scoreChanged(gk, ref, g, commit);
 }
 
 // ============ KO UPDATE ============
@@ -3112,7 +3282,7 @@ function applyGroupColors() {
 function updateBgColor(color) {
   meta.bgColor = color;
   document.body.style.backgroundColor = color;
-  pushMetaOnly();
+  pushMeta('bgColor');
 }
 function updateGroupColor(gi, color) {
   // Ensure full 4-element array (avoids sparse array issues in Firestore)
@@ -3120,7 +3290,7 @@ function updateGroupColor(gi, color) {
   cur[gi] = color;
   meta.groupColors = cur;
   applyGroupColors();
-  pushMetaOnly();
+  pushMeta('groupColors');
   renderStandings();
   renderBuildPage();
   renderScheduleContent();
@@ -3130,34 +3300,37 @@ function updateGroupColor(gi, color) {
 function updateCatColor(ci, color) {
   if (!categories[ci]) return;
   categories[ci].color = color;
-  pushToCloud();
+  pushCategories();
   renderStandings();
   renderBuildPage();
 }
 
 // ── Group management ─────────────────────────────────────────────
-function renameGroup(catId, gi, name) {
-  const cs = state[catId];
-  if (!cs || !cs.groups[gi]) return;
-  cs.groups[gi].name = name;
-  cs.sched.forEach(g => { if (g.gi === gi) g.gn = name; });
-  pushToCloud();
+async function renameGroup(catId, gi, name) {
+  if (!state[catId]?.groups[gi]) return;
+  await commitState(catId, cs => {
+    if (!cs.groups[gi]) return false;
+    cs.groups[gi].name = name;
+    cs.sched.forEach(g => { if (g.gi === gi) g.gn = name; });
+  });
   renderStandings();
   renderScheduleContent();
 }
 
-function moveTeam(catId, fromGi, teamIdx, toGi) {
+async function moveTeam(catId, fromGi, teamIdx, toGi) {
   if (fromGi === toGi) return;
-  const cs = state[catId];
-  if (!cs || !cs.groups[fromGi] || !cs.groups[toGi]) return;
-  const team = cs.groups[fromGi].teams[teamIdx];
-  if (!team) return;
-  cs.groups[fromGi].teams.splice(teamIdx, 1);
-  cs.groups[toGi].teams.push(team);
-  cs.sched.forEach(g => {
-    if ((g.a === team || g.b === team) && g.gi === fromGi) g.gi = toGi;
+  const team = state[catId]?.groups[fromGi]?.teams[teamIdx];
+  if (!team || !state[catId].groups[toGi]) return;
+  await commitState(catId, cs => {
+    const from = cs.groups[fromGi], to = cs.groups[toGi];
+    const i = from?.teams.indexOf(team) ?? -1;
+    if (i < 0 || !to) return false;
+    from.teams.splice(i, 1);
+    to.teams.push(team);
+    cs.sched.forEach(g => {
+      if ((g.a === team || g.b === team) && g.gi === fromGi) { g.gi = toGi; g.gn = to.name; }
+    });
   });
-  pushToCloud();
   renderStandings();
   renderSettings();
 }
@@ -3169,7 +3342,7 @@ function updateSponsorLogo(i, key, val) {
   meta.sponsorLogos[i][key] = val;
   renderSponsorBar();
   renderSettings();
-  pushMetaOnly();
+  pushMeta('sponsorLogos');
 }
 const isDataUrl = u => /^data:image\//i.test(u || '');
 // The tournament doc must stay well under Firestore's 1 MiB limit (images are data URLs).
@@ -3198,7 +3371,7 @@ function removeSponsorLogo(i) {
   meta.sponsorLogos.splice(i, 1);
   renderSponsorBar();
   renderSettings();
-  pushMetaOnly();
+  pushMeta('sponsorLogos');
 }
 function addSponsorLogo() {
   if (!Array.isArray(meta.sponsorLogos)) meta.sponsorLogos = [];
@@ -3314,7 +3487,7 @@ function updateMeta(key, val) {
   if (['eventDate','venue','price'].includes(key)) renderInfoCards();
   if (key === 'sport') renderAll();
   if (key === 'lang') { initLang(val); applyStatic(); renderAll(); }
-  pushMetaOnly();
+  pushMeta(key);
 }
 
 function applyLogo(url) {
@@ -3337,56 +3510,63 @@ function updateKORuleField(ci, roundKey, field, val) {
   if (!categories[ci].cfg.koRules) categories[ci].cfg.koRules = {};
   if (!categories[ci].cfg.koRules[roundKey]) categories[ci].cfg.koRules[roundKey] = {...DEF_KO_RULES[roundKey]};
   categories[ci].cfg.koRules[roundKey][field] = val === '' || val === null ? null : Number(val);
+  pushCategories();
   // Changing a stage's length shifts every slot after it — recompute the clock.
-  if (field === 'dur') assignSlotTimes(categories[ci].id);
-  pushToCloud();
+  const cid = categories[ci].id;
+  if (field === 'dur' && state[cid]?.sched.length) commitState(cid, () => assignSlotTimes(cid));
   renderSettings();
 }
 
 function updateCatName(ci, val) {
   if (!categories[ci]) return;
   categories[ci].name=val;
-  pushToCloud();
+  pushCategories();
 }
 function updateCatCfg(ci, key, val) {
   if (!categories[ci]) return;
   if (!categories[ci].cfg) categories[ci].cfg=structuredClone(DEF_CAT_CFG);
   categories[ci].cfg[key]=val;
-  pushToCloud(); renderSettings();
+  pushCategories(); renderSettings();
 }
 function adjCatCfg(ci, key, delta, min, max) {
   if (!categories[ci]) return;
   if (!categories[ci].cfg) categories[ci].cfg=structuredClone(DEF_CAT_CFG);
   const cur=categories[ci].cfg[key]||min;
   categories[ci].cfg[key]=Math.min(max,Math.max(min,cur+delta));
-  pushToCloud(); renderSettings();
+  pushCategories(); renderSettings();
 }
 
-function addCategory() {
+async function addCategory() {
   const id='cat_'+Date.now();
   categories.push({ id, name:t('settings.newCategory'), cfg:structuredClone(DEF_CAT_CFG) });
-  state[id]={ roster:[], groups:[], sched:[], ko:[] };
-  pushToCloud(); renderSettings();
+  state[id]=emptyCat();
+  await pushDoc('categories', categories, new FieldPath('state', id), catStateToFB(state[id]));
+  renderSettings();
 }
 async function deleteCategory(ci) {
   if (meta.phase === 'tournament') { alert(t('settings.cantDeleteCat')); return; }
-  if (!await askConfirm(t('settings.confirmDeleteCat'), t('common.delete'))) return;
-  const id=categories[ci].id;
-  categories.splice(ci,1);
-  delete state[id];
-  pushToCloud(); renderSettings(); renderAll();
+  const cat = categories[ci];
+  if (!cat || !await askConfirm(t('settings.confirmDeleteCat', { name: fsi(cat.name) }), t('common.delete'))) return;
+  const i = categories.findIndex(c => c.id === cat.id);
+  if (i < 0) return;
+  categories.splice(i,1);
+  delete state[cat.id];
+  await pushDoc('categories', categories, new FieldPath('state', cat.id), deleteField());
+  renderSettings(); renderAll();
 }
 
 async function resetAllScores() {
   if (!superAdmin||!await askConfirm(t('settings.confirmResetScores'), t('common.reset'))) return;
-  unsavedGames.clear();
-  categories.forEach(cat => {
-    const cs=state[cat.id];
-    if (!cs) return;
-    cs.sched.forEach(g=>{g.sa='';g.sb='';});
-    cs.ko.forEach(r=>r.forEach(g=>{g.sa='';g.sb='';}));
+  unsavedGames.clear(); mirrorUnsaved();
+  await commitState(categories.map(c => c.id), () => {
+    categories.forEach(cat => {
+      const cs=state[cat.id];
+      cs.sched.forEach(g=>{g.sa='';g.sb='';});
+      cs.ko.forEach(r=>r.forEach(g=>{g.sa='';g.sb='';}));
+      updateKOForCat(cat.id);
+    });
   });
-  pushToCloud(); renderAll();
+  renderAll();
 }
 
 // ============ NAV ============
@@ -3520,7 +3700,7 @@ Object.assign(window, {
   submitRegistration, cancelMyRegistration, registerAnother, setRegStatus, setRegPaid, setRegFilter,
   setRegPaidFilter, setRegSearch, exportRegistrationsCSV, selectRegCat,
   openAddPair, closeAddPair, saveAddPair,
-  buildTournament, shuffleBuildRoster, moveBuildItem,
+  buildTournament, undoLastBuild, shuffleBuildRoster, moveBuildItem,
   onDragStart, onDragEnd, onDragOver, onDrop, onListDragOver, onListDrop,
   openEditTeam, closeEdit, saveEdit, deleteTeam,
   editBuildItem, deleteBuildItem,
@@ -3644,6 +3824,8 @@ async function autoAddPairToDB(name) {
 // Don't lose a debounced score when the scorer locks the phone / leaves the page.
 document.addEventListener('visibilitychange', () => { if (document.hidden) flushScoreWrites(); });
 window.addEventListener('pagehide', () => flushScoreWrites());
+window.addEventListener('online', () => { setSyncStatus(true); flushScoreWrites(); });
+window.addEventListener('offline', () => { setSyncStatus(false); if (unsavedGames.size) toast(t('sync.unsaved', { n: unsavedGames.size })); });
 
 window.addEventListener('langchange', () => { applyStatic(); renderAll(); });
 window.addEventListener('resize', updateNavFade);
@@ -3660,6 +3842,7 @@ window.addEventListener('load', async () => {
   activeCat = null;
   await restoreLogin();
   firebaseReady = true;
+  if (admin) { restoreUnsaved(); flushScoreWrites(); }
   loadPlayerDB(); // load player database in background
   document.getElementById('view-loading').classList.add('h');
   document.getElementById('view-app').classList.remove('h');
