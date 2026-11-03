@@ -314,15 +314,17 @@ describe('generateScheduleForCat: 16 pairs, 4 groups, 4 courts, adv 2', () => {
     assert.equal(cs.sched.length, 24);
     assert.equal(Math.max(...cs.sched.map(g => g.si)), 5);
     assert.deepEqual(cs.ko.map(r => r.length), [4, 2, 1]);
-    assert.deepEqual(cs.ko[0].map(g => `${g.a}-${g.b}`), ['A1-D2', 'B1-C2', 'C1-B2', 'D1-A2']);
+    // QF3/QF4 swapped so two pairs of one group can only meet in the final.
+    assert.deepEqual(cs.ko[0].map(g => `${g.a}-${g.b}`), ['A1-D2', 'B1-C2', 'D1-A2', 'C1-B2']);
     assert.deepEqual(cs.ko.map(r => r[0].time), ['11:00', '11:30', '12:00']);
   });
   test('QF→SF uses cross pairing (QF1×QF4, QF2×QF3)', () => {
     playPools(api, cs);
     cs.ko[0].forEach(g => { [g.sa, g.sb] = winScore(g, 18).map(String); });
     api.updateKOForCat('c');
-    // QF: T1-T14, T5-T10, T9-T6, T13-T2 → winners T1, T5, T6, T2 (lower number wins)
-    assert.deepEqual(cs.ko[1].map(g => [g.a, g.b]), [['T1', 'T2'], ['T5', 'T6']]);
+    // QF: T1-T14, T5-T10, T13-T2, T9-T6 → winners T1, T5, T2, T6 (lower number wins)
+    // SF: A1/D2 × C1/B2 and B1/C2 × D1/A2 — no group meets itself before the final.
+    assert.deepEqual(cs.ko[1].map(g => [g.a, g.b]), [['T1', 'T6'], ['T5', 'T2']]);
     assert.equal(api.koGameLabel('c', 0, 2), 'QF3');
     assert.equal(api.koGameLabel('c', 1, 1), 'SF2');
     assert.equal(api.koGameLabel('c', 2, 0), 'Final');

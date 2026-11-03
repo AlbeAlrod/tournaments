@@ -1479,6 +1479,8 @@ function generateCoordinatedSchedule(){
       for(let i=0;i<bs/2;i++) first.push(seeds[bs-1-i]==='TBD'
         ? {isBye:true,a:seeds[i],b:'',seedA:seeds[i],seedB:'',sa:'',sb:'',catId:cat.id}
         : {a:seeds[i],b:seeds[bs-1-i],seedA:seeds[i],seedB:seeds[bs-1-i],sa:'',sb:'',catId:cat.id});
+      // 4 QFs: swap QF3/QF4 so the cross SF (QF1×QF4, QF2×QF3) never pairs a group with itself.
+      if(first.length===4 && !first.some(g=>g.isBye)) [first[2],first[3]]=[first[3],first[2]];
       rounds.push(first);
       let m=first.length/2;
       while(m>=1){const rd=[]; for(let i=0;i<m;i++) rd.push({a:`W${i*2+1}`,b:`W${i*2+2}`,sa:'',sb:'',catId:cat.id}); rounds.push(rd); m=Math.floor(m/2);}
@@ -1918,6 +1920,9 @@ function generateScheduleForCat(catId) {
       ? { isBye:true, a:aSeed, b:'', seedA:aSeed, seedB:'', sa:'', sb:'', catId }
       : { a:aSeed, b:bSeed, seedA:aSeed, seedB:bSeed, sa:'', sb:'', catId });
   }
+  // 4 QFs: swap QF3/QF4 so the cross SF (QF1×QF4, QF2×QF3) never pairs a group with itself.
+  if (firstRound.length === 4 && !firstRound.some(g => g.isBye)) [firstRound[2], firstRound[3]] = [firstRound[3], firstRound[2]];
+
   firstRound.filter(g => !g.isBye).forEach((g, gi) => {
     g.court = (gi % nc) + 1;
     g.si    = rs + Math.floor(gi/nc);
