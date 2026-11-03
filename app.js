@@ -2662,7 +2662,7 @@ function liveState() {
     const cs = state[cat.id];
     if (!cs) return;
     const add = (g, isKO, gk) => {
-      if (!g.court || !g.time || isValidScore(parseInt(g.sa), parseInt(g.sb), cat.id, getRuleForGame(cat.id, g, isKO).pts)) return;
+      if (!g.court || !g.time || isValidScore(parseInt(g.sa), parseInt(g.sb), cat.id, getRuleForGame(cat.id, g, isKO), g)) return;
       (byCourt[g.court] ||= []).push({ gk, time: g.time, dur: getRuleForGame(cat.id, g, isKO).dur || cat.cfg?.gameDur || 25 });
     };
     cs.sched.forEach((g, i) => add(g, false, gameKey(cat.id, i)));
@@ -3457,7 +3457,7 @@ function renderBracket() {
     const sc = [...container.querySelectorAll('.bscroll[data-cat]')].find(x => x.dataset.cat === cat.id);
     if (!sc) return;
     if (cat.id in prev) { sc.scrollLeft = prev[cat.id]; return; }
-    const ri = state[cat.id].ko.findIndex(r => r.some(g => !g.isBye && !isValidScore(parseInt(g.sa), parseInt(g.sb), cat.id, getRuleForGame(cat.id, g, true).pts)));
+    const ri = state[cat.id].ko.findIndex(r => r.some(g => !g.isBye && !isValidScore(parseInt(g.sa), parseInt(g.sb), cat.id, getRuleForGame(cat.id, g, true), g)));
     const col = [...sc.querySelectorAll('.bround[data-ri]')].find(c => +c.dataset.ri >= ri);
     if (ri <= 0 || !col) return;
     const c = col.getBoundingClientRect(), r = sc.getBoundingClientRect();
@@ -4446,7 +4446,7 @@ window.addEventListener('pagehide', () => flushScoreWrites());
 window.addEventListener('online', () => { setSyncStatus(true); flushScoreWrites(); });
 window.addEventListener('offline', () => { setSyncStatus(false); if (unsavedGames.size) toast(t('sync.unsaved', { n: unsavedGames.size })); });
 
-window.addEventListener('langchange', () => { applyStatic(); renderAll(); });
+window.addEventListener('langchange', () => { applyStatic(); renderAll(); setSyncStatus(); });
 window.addEventListener('resize', updateNavFade);
 document.getElementById('main-nav')?.addEventListener('scroll', updateNavFade, { passive: true });
 
