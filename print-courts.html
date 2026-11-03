@@ -1,66 +1,72 @@
 <!DOCTYPE html><html lang="he" dir="rtl"><head><meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>לוז בתים</title>
+<title>דפי מגרשים</title>
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700;800&display=swap');
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
-  --ink:#0a0a0a; --sec:#3a3a3a; --mut:#8a8a8a; --hair:#e4e4e4; --field:#c4c4c4;
+  --ink:#0a0a0a; --sec:#3a3a3a; --mut:#666; --hair:#e4e4e4; --field:#8a8a8a;
   --gutter:64px;
 }
-html,body{font-family:"Heebo","Assistant","Arial Hebrew",system-ui,sans-serif;color:var(--ink);-webkit-font-smoothing:antialiased}
+html,body{font-family:"Rubik","Arial Hebrew",system-ui,sans-serif;color:var(--ink);-webkit-font-smoothing:antialiased}
 body{background:#e7e7e7}
-.toolbar{max-width:210mm;margin:12px auto;padding:9px 14px;background:#fff;border:1px solid #ddd;border-radius:10px;display:flex;gap:10px;align-items:center}
-.toolbar b{color:#652d92} .toolbar .muted{color:#8a8a8a;font-size:12px}
-.toolbar button{font-family:inherit;font-size:14px;font-weight:700;padding:8px 15px;border:0;border-radius:8px;background:#652d92;color:#fff;cursor:pointer}
+.toolbar{max-width:210mm;margin:12px auto;padding:9px 14px;background:#fff;border:1px solid #ddd;border-radius:10px;display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.toolbar b{color:#652d92} .toolbar .muted{color:#666;font-size:12px}
+.toolbar button{font-family:inherit;font-size:14px;font-weight:700;min-height:44px;padding:8px 15px;border:0;border-radius:8px;background:#652d92;color:#fff;cursor:pointer}
+.noprint{flex-basis:100%;display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:10px 12px;border-radius:8px;background:#FEF3C7;color:#92400E;font-size:14px;font-weight:600}
+.noprint[hidden]{display:none}
+.empty{max-width:210mm;margin:40px auto;text-align:center;color:var(--mut);font-size:16px}
 
-.page{width:210mm;min-height:297mm;background:#fff;margin:10mm auto;padding:18mm 16mm 13mm;display:flex;flex-direction:column}
+.page{width:210mm;min-height:297mm;background:#fff;margin:10mm auto;padding:14mm 14mm 11mm;display:flex;flex-direction:column}
 
 .head{text-align:center}
-.head img{height:56px;width:auto;object-fit:contain;display:block;margin:0 auto 14px;}
-.head .eyebrow{font-size:13px;font-weight:500;letter-spacing:8px;color:var(--mut);padding-right:8px}
-.head .court{font-size:40px;font-weight:800;letter-spacing:1px;line-height:1.05;margin-top:6px}
-.head .sub{font-size:12.5px;color:var(--mut);font-weight:500;letter-spacing:1px;margin-top:4px}
-.head .rule{height:2.5px;background:var(--ink);margin-top:14px}
+.head img{height:56px;width:auto;object-fit:contain;display:block;margin:0 auto 10px;}
+.head .eyebrow{font-size:13px;font-weight:500;color:var(--mut)}
+.head .court{font-size:40px;font-weight:800;line-height:1.05;margin-top:4px}
+.head .sub{font-size:12.5px;color:var(--mut);font-weight:500;margin-top:4px}
+.head .rule{height:2.5px;background:var(--ink);margin-top:10px}
 
-.pool{margin-top:26px;break-inside:avoid}
-.pool + .pool{margin-top:24px}
+.pool{margin-top:16px}
 .pool-h{display:flex;align-items:center;gap:20px}
 .pool-h .ln{flex:1;height:1.5px;background:var(--ink)}
-.pool-h h2{font-size:21px;font-weight:800;letter-spacing:3px;white-space:nowrap;padding-bottom:2px}
+.pool-h h2{font-size:20px;font-weight:800;white-space:nowrap;padding-bottom:2px}
 
-.games{margin-top:6px}
-.row{display:grid;grid-template-columns:var(--gutter) 1fr auto 1fr var(--gutter);align-items:center;padding:12px 0;border-bottom:1px solid var(--hair)}
+.games{margin-top:4px}
+.row{display:grid;grid-template-columns:var(--gutter) 1fr auto 1fr var(--gutter);align-items:center;padding:7px 0;border-bottom:1px solid var(--hair);break-inside:avoid}
 .row:last-child{border-bottom:none}
-.row .time{text-align:center;font-size:16px;font-weight:700;color:var(--sec);font-variant-numeric:tabular-nums;letter-spacing:.5px}
-.row .tA{text-align:left;padding-left:16px}
-.row .tB{text-align:right;padding-right:16px}
-.row .tA,.row .tB{font-size:17px;font-weight:600;color:var(--ink);line-height:1.25}
-.row .sc{text-align:center}
-.row .pl{text-align:center;font-size:12px;font-weight:700;letter-spacing:1px;color:var(--mut)}
-.field{display:inline-flex;align-items:center;justify-content:center;gap:20px;width:108px;height:34px;border:1.3px solid var(--field);border-radius:17px;font-variant-numeric:tabular-nums}
+.row .time{text-align:center;font-size:16px;font-weight:700;color:var(--sec);font-variant-numeric:tabular-nums}
+.row .tA{text-align:left;padding-left:14px}
+.row .tB{text-align:right;padding-right:14px}
+.row .tA,.row .tB{font-size:16px;font-weight:600;color:var(--ink);line-height:1.25;unicode-bidi:plaintext}
+.row .sc{display:flex;gap:4px;justify-content:center}
+.row .pl{text-align:center;font-size:12px;font-weight:700;color:var(--mut)}
+.field{display:inline-flex;align-items:center;justify-content:center;gap:20px;width:108px;height:30px;border:1.3px solid var(--field);border-radius:15px;font-variant-numeric:tabular-nums}
+.sets .field{width:62px;gap:10px}
 .field .colon{color:var(--mut);font-weight:700;font-size:16px}
 
 .brk{display:flex;align-items:center;gap:16px;margin:6px 0;color:var(--ink)}
 .brk .ln{flex:1;height:1px;background:var(--field)}
-.brk span.txt{font-size:12px;font-weight:700;letter-spacing:2px;color:var(--sec);white-space:nowrap}
+.brk span.txt{font-size:12px;font-weight:700;color:var(--sec);white-space:nowrap}
 
-.note{margin-top:auto;padding-top:16px}
-.note .inner{border-top:1px solid var(--hair);padding-top:12px;text-align:center;font-size:12.5px;font-weight:500;letter-spacing:3px;color:var(--mut)}
+.note{margin-top:auto;padding-top:14px}
+.note .inner{border-top:1px solid var(--hair);padding-top:10px;text-align:center;font-size:12.5px;font-weight:500;color:var(--mut)}
 .note b{color:var(--ink);font-weight:800}
 
 @page{size:A4;margin:0}
 @media print{
+  *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
   body{background:#fff}
   .toolbar{display:none!important}
-  .page{margin:0;width:auto;min-height:auto;page-break-after:always}
-  .page:last-child{page-break-after:auto}
+  .page{margin:0;width:auto;min-height:auto;break-after:page}
+  .page:last-child{break-after:auto}
 }
 </style></head>
 <body>
-<div class="toolbar"><b>לוז בתים</b> <span id="stat" class="muted">טוען…</span>
-  <button onclick="window.print()">הדפס / שמור PDF</button>
-  <span class="muted">A4 למגרש · שלב הבתים · הנוק-אאוט בדף הבראקט</span>
+<div class="toolbar"><b>דפי מגרשים</b> <span id="stat" class="muted">טוען…</span>
+  <button onclick="doPrint()">הדפסה / שמירה כ־PDF</button>
+  <span class="muted">דף A4 לכל מגרש · שלב הבתים · הנוקאאוט בדף העץ</span>
+  <div id="noprint" class="noprint" hidden>ההדפסה לא נתמכת כאן — פתחו בכרום/ספארי ושם הדפיסו או שמרו כ־PDF
+    <button onclick="copyLink(this)">העתק קישור</button></div>
 </div>
 <div id="pages"></div>
 
@@ -71,62 +77,83 @@ const cfg={apiKey:"AIzaSyA-rPlg0Oau16QcTjD20hDfkyveRSrD8I0",authDomain:"tourname
 const db=getFirestore(getApps().length?getApps()[0]:initializeApp(cfg));
 const tId=new URLSearchParams(location.search).get('t');
 const t2m=t=>{const[a,b]=(t||'0:0').split(':').map(Number);return a*60+b;};
-const esc=s=>String(s==null?'':s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+const m2t=m=>`${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
+const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const stat=document.getElementById('stat');
+
+let printed=false;
+addEventListener('beforeprint',()=>{printed=true;});
+window.doPrint=()=>{printed=false; window.print(); setTimeout(()=>{ if(!printed) document.getElementById('noprint').hidden=false; },500);};
+window.copyLink=async b=>{try{await navigator.clipboard.writeText(location.href); b.textContent='הקישור הועתק ✓';}catch(_){prompt('העתיקו את הקישור:',location.href);}};
 
 (async()=>{
  try{
-  if(!tId){document.getElementById('stat').textContent='חסר מזהה טורניר בכתובת (?t=…)';return;}
+  if(!tId){stat.textContent='חסר מזהה טורניר בכתובת (?t=…)';return;}
   const snap=await getDoc(doc(db,'tournaments',tId));
-  if(!snap.exists()){document.getElementById('stat').textContent='לא נמצא: '+tId;return;}
-  const d=snap.data(), meta=d.meta||{}, tName=meta.name||tId;
+  if(!snap.exists()){stat.textContent='לא נמצא: ⁦'+tId+'⁩';return;}
+  const d=snap.data(), meta=d.meta||{}, tName=meta.name||tId, cats=d.categories||[];
+  const parallel=!!meta.parallelCategories&&cats.length>1;
   const breaks=((meta.breaks)||[]).map(b=>({at:t2m(b.atTime),min:b.minutes||0,note:meta.dinnerBreakNote||'הפסקה'})).sort((a,b)=>a.at-b.at);
-  // pool games only
   const games=[];
-  (d.categories||[]).forEach(cat=>{
+  cats.forEach(cat=>{
     const cs=(d.state||{})[cat.id]||{};
     (cs.sched||[]).forEach(g=>{ if(g.isThirdPlace||g.gi===-1) return;
-      games.push({court:g.court,time:g.time,catId:cat.id,cat:cat.name||cat.id,pool:g.gn||'',a:g.a,b:g.b}); });
+      games.push({court:+g.court,time:g.time,catId:cat.id,cat:cat.name||cat.id,pool:g.gn||'',a:g.a,b:g.b}); });
   });
-  const valid=games.filter(g=>Number.isFinite(g.court)&&g.time);
+  const valid=games.filter(g=>Number.isFinite(g.court)&&g.court>0&&g.time);
   const courts=[...new Set(valid.map(g=>g.court))].sort((a,b)=>a-b);
   const wrap=document.getElementById('pages'); wrap.innerHTML='';
+  if(!valid.length){wrap.innerHTML='<p class="empty">עוד אין לוח משחקים — יש לבנות את הטורניר קודם.</p>'; stat.textContent=tName; return;}
 
-  const brkDivider=b=>{const bs=`${String(Math.floor(b.at/60)).padStart(2,'0')}:${String(b.at%60).padStart(2,'0')}`,be=`${String(Math.floor((b.at+b.min)/60)).padStart(2,'0')}:${String((b.at+b.min)%60).padStart(2,'0')}`;
-    return `<div class="brk"><span class="ln"></span><span class="txt">🍽 ${esc(b.note)} · ${bs}–${be}</span><span class="ln"></span></div>`;};
-
-  const ruleOf=cat=>{const r=cat.cfg?.koRules?.pool; return meta.sport!=='volleyball'&&r?.pts?`${esc(cat.name||cat.id)}: סט ל-<b>${r.pts}</b>`+(r.change?` · החלפת צד כל <b>${r.change}</b> נקודות`:''):'';};
+  const brkDivider=b=>`<div class="brk"><span class="ln"></span><span class="txt">🍽 ${esc(b.note)} · ${m2t(b.at)}–${m2t(b.at+b.min)}</span><span class="ln"></span></div>`;
+  const setsOf=cat=>cat.cfg?.koRules?.pool?.sets||cat.cfg?.sets||1;
+  const field='<span class="field"><span></span><span class="colon">:</span><span></span></span>';
+  const catById=Object.fromEntries(cats.map(c=>[c.id,c]));
+  const rowsOf=gs=>{
+    let rows='', bd=new Set();
+    gs.forEach((g,i)=>{
+      breaks.forEach((b,bi)=>{ if(!bd.has(bi)&&t2m(g.time)>=b.at&&i>0&&t2m(gs[i-1].time)<b.at){bd.add(bi); rows+=brkDivider(b);}
+        else if(!bd.has(bi)&&i>0&&t2m(gs[i-1].time)>=b.at) bd.add(bi); });
+      const n=setsOf(catById[g.catId]);
+      rows+=`<div class="row"><div class="time">${esc(g.time)}</div>`+
+            `<div class="tA">${esc(g.a)}</div>`+
+            `<div class="sc${n>1?' sets':''}">${field.repeat(n)}</div>`+
+            `<div class="tB">${esc(g.b)}</div>`+
+            `<div class="pl">${parallel?esc(g.cat)+'<br>':''}בית ${esc(g.pool)}</div></div>`;
+    });
+    return rows;
+  };
+  const sortT=gs=>gs.sort((a,b)=>t2m(a.time)-t2m(b.time));
+  const ruleOf=cat=>{const r=cat.cfg?.koRules?.pool; return meta.sport!=='volleyball'&&r?.pts?`${esc(cat.name||cat.id)}: מערכה ל־<b>${r.pts}</b>`+(r.change?` · החלפת צד כל <b>${r.change}</b> נקודות`:''):'';};
+  const first=id=>Math.min(...valid.filter(g=>g.catId===id).map(g=>t2m(g.time)));
   courts.forEach(court=>{
     let sections='';
     const rules=[];
-    const first=id=>Math.min(...valid.filter(g=>g.catId===id).map(g=>t2m(g.time)));
-    [...(d.categories||[])].sort((a,b)=>first(a.id)-first(b.id)).forEach(cat=>{
-      const gs=valid.filter(g=>g.court===court&&g.catId===cat.id).sort((a,b)=>t2m(a.time)-t2m(b.time));
+    const order=[...cats].sort((a,b)=>first(a.id)-first(b.id));
+    if(parallel){
+      const gs=sortT(valid.filter(g=>g.court===court));
+      order.forEach(cat=>{ if(gs.some(g=>g.catId===cat.id)){ const r=ruleOf(cat); if(r) rules.push(r); } });
+      sections=`<div class="pool"><div class="pool-h"><span class="ln"></span><h2>שלב הבתים</h2><span class="ln"></span></div><div class="games">${rowsOf(gs)}</div></div>`;
+    } else order.forEach(cat=>{
+      const gs=sortT(valid.filter(g=>g.court===court&&g.catId===cat.id));
       if(!gs.length) return;
       const rule=ruleOf(cat); if(rule) rules.push(rule);
-      let rows='', bd=new Set();
-      gs.forEach((g,i)=>{
-        breaks.forEach((b,bi)=>{ if(!bd.has(bi)&&t2m(g.time)>=b.at&&i>0&&t2m(gs[i-1].time)<b.at){bd.add(bi); rows+=brkDivider(b);}
-          else if(!bd.has(bi)&&i>0&&t2m(gs[i-1].time)>=b.at) bd.add(bi); });
-        rows+=`<div class="row"><div class="time">${g.time}</div>`+
-              `<div class="tA">${esc(g.a)}</div>`+
-              `<div class="sc"><span class="field"><span></span><span class="colon">:</span><span></span></span></div>`+
-              `<div class="tB">${esc(g.b)}</div>`+
-              `<div class="pl">בית ${esc(g.pool)}</div></div>`;
-      });
-      sections+=`<div class="pool"><div class="pool-h"><span class="ln"></span><h2>${esc(cat.name||cat.id)} · שלב הבתים</h2><span class="ln"></span></div><div class="games">${rows}</div></div>`;
+      sections+=`<div class="pool"><div class="pool-h"><span class="ln"></span><h2>${esc(cat.name||cat.id)} · שלב הבתים</h2><span class="ln"></span></div><div class="games">${rowsOf(gs)}</div></div>`;
     });
+    if(meta.sport==='volleyball') rules.push('שיפוט: המפסידים במשחק הקודם במגרש');
     const sec=document.createElement('section'); sec.className='page';
-    sec.innerHTML=`<div class="head"><img src="${esc(meta.logoUrl||'assets/volleylab-logo.png')}" alt=""/>`+
+    sec.innerHTML=`<div class="head">${meta.logoUrl?`<img src="${esc(meta.logoUrl)}" alt=""/>`:''}`+
       `<div class="eyebrow">שלב הבתים</div><div class="court">מגרש ${court}</div>`+
       `<div class="sub">${esc(tName)}</div><div class="rule"></div></div>`+
       sections+
       (rules.length?`<div class="note"><div class="inner">${rules.join(' · ')}</div></div>`:'');
     wrap.appendChild(sec);
   });
-  document.getElementById('stat').textContent=`${tName} · ${courts.length} מגרשים · ${valid.length} משחקי בתים`;
-  document.title=`לוז בתים — ${tName}`;
+  stat.textContent=`${tName} · ${courts.length} מגרשים · ${valid.length} משחקי בתים`;
+  document.title=`דפי מגרשים — ${tName}`;
+  await document.fonts.ready;
   window.__READY__=true;
- }catch(e){document.getElementById('stat').textContent='שגיאה: '+e.message;console.error(e);}
+ }catch(e){stat.textContent='שגיאה: '+e.message;console.error(e);}
 })();
 </script>
 </body></html>
