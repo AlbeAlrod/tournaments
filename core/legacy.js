@@ -296,8 +296,18 @@ export function createLegacy(ctx) {
     const brs = (meta.breaks||[]).map(b=>({at:t2m(b.atTime), min:b.minutes||0})).sort((a,b)=>a.at-b.at);
     const roundTime = r => { let t=START+r*SLOT; for(const b of brs) if(t>=b.at) t+=b.min; return t; };
     cats.forEach(c=>{ state[c.id].sched=[]; state[c.id].ko=(koStruct[c.id]||[]).map(()=>[]); });
+    // Each pool game first gets the court its group played on last (fixed court per
+    // group, also with odd group sizes); the other games fill the free courts in order.
+    const grpCourt={};
     rounds.forEach((ids,r)=>{ const time=m2t(roundTime(r));
-      ids.forEach((id,ix)=>{ const g=byId[id], court=ix+1;
+      const courtOf={}, taken=new Set(), gk=g=>`${g.catId}:${g.gi}`;
+      ids.forEach(id=>{ const g=byId[id], c=g.kind==='pool'&&grpCourt[gk(g)];
+        if(c && c<=courtsAt(r) && !taken.has(c)){ courtOf[id]=c; taken.add(c); } });
+      let next=1;
+      ids.forEach(id=>{ if(courtOf[id]) return; while(taken.has(next)) next++; courtOf[id]=next; taken.add(next); });
+      ids.forEach(id=>{ const g=byId[id], court=courtOf[id];
+        if(g.kind==='pool') grpCourt[gk(g)]=court;
+
         if(g.kind==='pool') state[g.catId].sched.push({catId:g.catId,gi:g.gi,gn:g.gn,a:g.a,b:g.b,sa:'',sb:'',court,si:r,time});
         else if(g.kind==='ko3p') state[g.catId].sched.push({...g.ref,court,si:r,time});
         else state[g.catId].ko[g.ri][g.gi]={...g.ref,court,si:r,time};
