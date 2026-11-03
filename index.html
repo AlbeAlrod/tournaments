@@ -52,7 +52,7 @@
     <button class="admin-toggle" id="abtn" onclick="adminClick()"><span id="adm-txt" data-i18n="admin.btn">Admin</span></button>
   </div>
 
-  <div id="sticky-block" class="sticky-block">
+  <div class="sticky-block" style="position:static;box-shadow:none">
     <header>
       <div class="logo">
         <div class="lmark" id="logo-mark">
@@ -66,6 +66,9 @@
         <button type="button" class="langsw__b" data-lang="en" onclick="setLang('en')" lang="en">EN</button>
       </div>
     </header>
+  </div>
+
+  <div id="sticky-block" class="sticky-block">
     <nav id="main-nav" data-i18n-aria="common.nav.aria">
       <!-- Registration phase tabs -->
       <button class="tab phase-reg" id="tab-register" onclick="goPage('register')" data-i18n="common.nav.register">Register</button>

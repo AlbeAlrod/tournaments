@@ -2839,6 +2839,7 @@ function renderCourtFilter() {
 function setCourt(c) { activeCourt=c; renderCourtFilter(); renderScheduleContent(); }
 
 // ============ BRACKET ============
+const bmWhen = g => g.time && g.court ? `<div class="bm-when">${t('bracket.when', { time: g.time, n: g.court })}</div>` : '';
 function renderBracketForCat(catId, container) {
   const cs  = state[catId];
   const cat = categories.find(c=>c.id===catId);
@@ -2908,12 +2909,12 @@ function renderBracketForCat(catId, container) {
     }
     const box=document.createElement('div'); box.className='bmatch-box';
     const glbl=tGameLbl(koGameLabel(catId,ri,gi));
-    box.innerHTML=(glbl?`<div class="bm-label">${glbl}</div>`:'')+`<div class="bmatch">
+    box.innerHTML=(glbl?`<div class="bm-label">${glbl}</div>`:'')+bmWhen(g)+`<div class="bmatch">
       <div class="bteam ${wa?'win':''} ${knownA?'':'tbd'}${g.directSeedA?' bdirect':''}${isMine(nameA)?' is-mine':''}">
-        <span class="bname">${labelA}</span>${codeA?`<span class="bsc seed-tag">${codeA}</span>`:''}${hs?`<span class="bsc num">${g.sa}</span>`:''}
+        <span class="bname">${labelA}</span>${codeA?`<span class="bsc seed-tag" title="${escH(tSlot(codeA))}">${codeA}</span>`:''}${hs?`<span class="bsc num">${g.sa}</span>`:''}
       </div>
       <div class="bteam ${wb?'win':''} ${knownB?'':'tbd'}${g.directSeedB?' bdirect':''}${isMine(nameB)?' is-mine':''}">
-        <span class="bname">${labelB}</span>${codeB?`<span class="bsc seed-tag">${codeB}</span>`:''}${hs?`<span class="bsc num">${g.sb}</span>`:''}
+        <span class="bname">${labelB}</span>${codeB?`<span class="bsc seed-tag" title="${escH(tSlot(codeB))}">${codeB}</span>`:''}${hs?`<span class="bsc num">${g.sb}</span>`:''}
       </div>
     </div>`;
     return box;
@@ -2998,7 +2999,7 @@ function renderBracketForCat(catId, container) {
       const div3=document.createElement('div');
       div3.style.cssText='border-top:1px solid var(--border2);margin-top:16px;padding-top:10px;';
       const box3=document.createElement('div'); box3.className='bmatch-box';
-      box3.innerHTML=`<div class="bm-label">${t('bracket.third')}</div><div class="bmatch">
+      box3.innerHTML=`<div class="bm-label">${t('bracket.third')}</div>${bmWhen(thirdGame)}<div class="bmatch">
         <div class="bteam ${wa3?'win':''} ${knownA3?'':'tbd'}"><span class="bname">${lA3}</span>${hs3?`<span class="bsc num">${thirdGame.sa}</span>`:''}</div>
         <div class="bteam ${wb3?'win':''} ${knownB3?'':'tbd'}"><span class="bname">${lB3}</span>${hs3?`<span class="bsc num">${thirdGame.sb}</span>`:''}</div>
       </div>`;
