@@ -653,6 +653,7 @@ function findDuplicateReg(p1, p2, phone, catId) {
     pairKey(r.p1, r.p2) === key || (phone && normPhone(r.phone) === phone)));
 }
 const statusTxt = st => t('admin.status.' + st);
+const regAccepting = () => !!meta.regOpen && meta.phase === 'registration';
 
 // "My registrations" — every pair registered from this browser, per tournament.
 // Older builds stored one {regId} under luz.myReg.<tId>; it is folded into the list.
@@ -780,7 +781,7 @@ async function submitRegistration() {
   if (regErrors.form) return;
   // meta is kept live by onSnapshot — the organizer may have closed registration
   // while this form was open.
-  if (!meta.regOpen) { regErrors = { form: () => t('reg.closed') }; renderRegisterPage(); return; }
+  if (!regAccepting()) { regErrors = { form: () => t('reg.closed') }; renderRegisterPage(); return; }
   const btn = document.getElementById('frm-submit');
   if (btn?.disabled) return;           // double tap while a write is in flight
   const btnTxt = btn ? btn.textContent : '';
@@ -1099,10 +1100,11 @@ function renderRegisterPage() {
   const sub       = document.getElementById('reg-subtitle');
   const soonMsg   = document.getElementById('reg-soon-msg');
   const noCats    = !categories.length;
+  const open      = regAccepting();
   // Closed wins over "opens soon"; with no categories there is nothing to register for.
-  closedMsg?.classList.toggle('h', !!meta.regOpen);
-  soonMsg?.classList.toggle('h', !meta.regOpen || !noCats);
-  if (formWrap) formWrap.style.display = (meta.regOpen && !noCats && !lastReceipt) ? '' : 'none';
+  closedMsg?.classList.toggle('h', open);
+  soonMsg?.classList.toggle('h', !open || !noCats);
+  if (formWrap) formWrap.style.display = (open && !noCats && !lastReceipt) ? '' : 'none';
   renderMyReg();
   renderReceipt();
   if (sub) sub.innerHTML = meta.name ? t('reg.subtitle', { name: `<bdi>${escH(meta.name)}</bdi>` }) : '';
@@ -1645,7 +1647,7 @@ async function buildTournament(catId) {
       scores: games.filter(hasScore).length, manual: games.filter(g => g.manual).length });
     if (!await askConfirm(msg, t(coord ? 'build.rebuildAll' : 'build.rebuild'))) return;
   }
-  const prev = { phase: meta.phase, breaks: meta.breaks ?? null };
+  const prev = { phase: meta.phase, breaks: meta.breaks ?? null, regOpen: !!meta.regOpen };
   let backup;
   const ok = await commitState(cids, () => {
     backup = Object.fromEntries(cids.map(id => [id, catStateToFB(structuredClone(state[id]))]));
@@ -1655,11 +1657,12 @@ async function buildTournament(catId) {
     carryOver(cids, old);
     const extra = { lastBuild: { at: serverTimestamp(), ...prev, state: backup } };
     if (meta.breakBeforeKO) extra['meta.breaks'] = meta.breaks;
-    if (!rebuild) extra['meta.phase'] = 'built';
+    if (!rebuild) { extra['meta.phase'] = 'built'; extra['meta.regOpen'] = false; }
     return extra;
   });
   if (!ok) return;
   lastBuild = { at: { seconds: Date.now() / 1000 }, ...prev, state: backup };
+  if (!rebuild) meta.regOpen = false;
 
   // First build → 'built' phase so the tournament tabs become visible
   if (!rebuild) { meta.phase = 'built'; renderAll(); goPage('standings'); }
@@ -1674,10 +1677,11 @@ async function undoLastBuild() {
   const cids = Object.keys(lb.state).filter(id => categories.some(c => c.id === id));
   const ok = await commitState(cids, () => {
     cids.forEach(id => { state[id] = catStateFromFB(structuredClone(lb.state[id])); });
-    return { 'meta.phase': lb.phase, 'meta.breaks': lb.breaks ?? deleteField(), lastBuild: deleteField() };
+    return { 'meta.phase': lb.phase, 'meta.breaks': lb.breaks ?? deleteField(), 'meta.regOpen': lb.regOpen ?? !!meta.regOpen, lastBuild: deleteField() };
   });
   if (!ok) return;
   meta.phase = lb.phase;
+  if (lb.regOpen !== undefined) meta.regOpen = lb.regOpen;
   if (lb.breaks) meta.breaks = lb.breaks; else delete meta.breaks;
   lastBuild = null;
   renderAll(); goPage('build');
