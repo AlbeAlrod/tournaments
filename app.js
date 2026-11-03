@@ -3546,15 +3546,44 @@ function updateCatCfg(ci, key, val) {
   if (!categories[ci]) return;
   if (!categories[ci].cfg) categories[ci].cfg=structuredClone(DEF_CAT_CFG);
   categories[ci].cfg[key]=val;
-  pushCategories(); renderSettings();
+  pushCategories(); retimeAfter(ci, key); renderSettings();
 }
 function adjCatCfg(ci, key, delta, min, max) {
   if (!categories[ci]) return;
   if (!categories[ci].cfg) categories[ci].cfg=structuredClone(DEF_CAT_CFG);
   const cur=categories[ci].cfg[key]||min;
   categories[ci].cfg[key]=Math.min(max,Math.max(min,cur+delta));
-  pushCategories(); renderSettings();
+  pushCategories(); retimeAfter(ci, key); renderSettings();
 }
+
+// New game minutes / break / start time re-time the built schedule: same rounds and
+// courts, new clock; manually moved games keep their time.
+function retimeAfter(ci, key) {
+  if (!['gameDur', 'breakDur', 'startTime'].includes(key)) return;
+  const coord = coordBuild();
+  const cids = coord ? categories.map(c => c.id) : [categories[ci].id];
+  if (!cids.some(id => state[id]?.sched.length)) return;
+  commitState(cids, () => {
+    const manual = cids.flatMap(id => allGamesOf(state[id]).filter(g => g.manual).map(g => [g, g.time]));
+    if (!coord) cids.forEach(assignSlotTimes);
+    else {
+      const { SLOT, START } = coordCfg();
+      const games = cids.flatMap(id => allGamesOf(state[id])).filter(g => g.si != null);
+      const extra = {};
+      if (meta.breakBeforeKO) {
+        const P = Math.min(...cids.flatMap(id => allGamesOf(state[id]).filter(g => !(g.gi >= 0)).map(g => g.si ?? Infinity)));
+        meta.breaks = P > 0 && P < Infinity ? [{ atTime: m2t(START + P*SLOT), minutes: meta.breakBeforeKO }] : [];
+        extra['meta.breaks'] = meta.breaks;
+      }
+      const brs = (meta.breaks||[]).map(b => ({ at: t2m(b.atTime), min: b.minutes||0 })).sort((a,b) => a.at-b.at);
+      games.forEach(g => { let t = START + g.si*SLOT; for (const b of brs) if (t >= b.at) t += b.min; g.time = m2t(t); });
+      manual.forEach(([g, t]) => { g.time = t; });
+      return extra;
+    }
+    manual.forEach(([g, t]) => { g.time = t; });
+  });
+}
+
 
 async function addCategory() {
   const id='cat_'+Date.now();
