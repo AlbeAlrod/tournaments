@@ -1603,8 +1603,9 @@ function generateCoordinatedSchedule(){
 const coordBuild = () => !!meta.coordinated || categories.length > 1;
 const allGamesOf = cs => [...cs.sched, ...cs.ko.flat().filter(g => !g.isBye)];
 
-// A rebuild keeps scores (and manual court/time) of games that still exist with the
-// same two pairs: pool by pair, KO by position in a bracket of the same shape.
+// A rebuild keeps scores of games that still exist with the same two pairs: pool by
+// pair, KO by position in a bracket of the same shape. Manual court/time is not kept
+// (it could collide with the new grid).
 const koKey = (cid, cs, ri, gi) => `${cid}|K|${cs.ko.length}|${ri}|${cs.ko[ri].length}|${gi}`;
 function gameIndex(cids) {
   const m = new Map();
@@ -1618,11 +1619,9 @@ function gameIndex(cids) {
 function carryOver(cids, old) {
   const same = (g, o) => normName(g.a) === normName(o.a) && normName(g.b) === normName(o.b);
   const take = (g, o, swap) => {
-    if (hasScore(o)) {
-      [g.sa, g.sb] = swap ? [o.sb, o.sa] : [o.sa, o.sb];
-      ['wo', 'forced'].forEach(k => { if (o[k]) g[k] = o[k]; });
-    }
-    if (o.manual) Object.assign(g, { court: o.court, time: o.time, manual: true });
+    if (!hasScore(o)) return;
+    [g.sa, g.sb] = swap ? [o.sb, o.sa] : [o.sa, o.sb];
+    ['wo', 'forced'].forEach(k => { if (o[k]) g[k] = o[k]; });
   };
   cids.forEach(cid => {
     const cs = state[cid];
