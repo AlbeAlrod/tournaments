@@ -161,7 +161,7 @@ export function onColor(bgHex) {
 export function applyTheme(primary, secondary, opts = {}) {
   const { bgColor = '', hasLogo = false } = opts;
 
-  primary   = primary   || '#6B21A8';
+  primary   = primary   || '#652d92';
   secondary = secondary || primary;
 
   const [r1,g1,b1] = hexToRgb(primary);
