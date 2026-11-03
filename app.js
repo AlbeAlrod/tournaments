@@ -697,12 +697,16 @@ function renderMyReg() {
       <div>
         <div>${dnH(regPairName(r))}${cat ? ` · <bdi>${escH(cat.name)}</bdi>` : ''}</div>
         <span class="status-badge badge-${escH(r.status)}">${escH(statusTxt(r.status))}</span>
+        ${r.status !== 'rejected' ? `<span class="paid-badge${r.paid ? '' : ' no'}">${t(r.paid ? 'reg.paidBadge' : 'reg.unpaidBadge')}</span>` : ''}
       </div>
       ${r.status === 'pending'
         ? `<button type="button" class="reg-btn reject" onclick="cancelMyRegistration('${escH(r.id)}')">${t('common.cancel')}</button>`
         : `<span class="d-muted">${t('reg.cancelContact')}</span>`}
     </div>`;
-  }).join('');
+  }).join('') + '<div id="mine-pay-wrap"></div>';
+  // The form and the receipt carry their own pay buttons.
+  const formShown = document.getElementById('reg-form-wrap')?.style.display !== 'none';
+  if (!formShown && !lastReceipt && mine.some(r => !r.paid && r.status !== 'rejected')) renderPayLink('mine-pay-wrap');
 }
 
 async function cancelMyRegistration(id) {
@@ -997,7 +1001,9 @@ function renderRegistrations() {
     el.innerHTML = `<div class="empty"><h3>${t('admin.noRegs')}</h3></div>`;
     return;
   }
-  el.innerHTML = list.map(r => {
+  const toApprove = meta.phase === 'registration' ? list.filter(r => r.status !== 'approved').length : 0;
+  el.innerHTML = (toApprove > 1 ? `<button type="button" class="filter-btn" style="margin-bottom:12px" onclick="approveAllShown()">${t('admin.approveAllShown', { n: toApprove })}</button>` : '')
+    + list.map(r => {
     const cat = categories.find(c => c.id === r.category);
     const catName = cat ? cat.name : r.category;
     const wa = waLink(r.phone);
@@ -1013,7 +1019,8 @@ function renderRegistrations() {
       <span class="status-badge badge-${escH(r.status)}">${escH(statusTxt(r.status))}</span>
       <label class="d-paid-toggle"><input type="checkbox" ${r.paid ? 'checked' : ''} aria-label="${escH(t('admin.paidFor', { pair: regPairName(r) }))}" onchange="setRegPaid('${r.id}',this.checked)"/> <span aria-hidden="true">${t('admin.paid')}</span></label>
       <div class="reg-actions">
-        ${r.status !== 'approved' ? `<button class="reg-btn approve" onclick="setRegStatus('${r.id}','approved')">${t('admin.approve')}</button>` : ''}
+        <button class="reg-btn" onclick="openEditReg('${r.id}')" title="${t('admin.editReg')}" aria-label="${t('admin.editReg')}">✎</button>
+        ${r.status !== 'approved' ?`<button class="reg-btn approve" onclick="setRegStatus('${r.id}','approved')">${t('admin.approve')}</button>` : ''}
         ${r.status === 'approved'  ? `<button class="reg-btn" onclick="setRegStatus('${r.id}','pending')">${t('admin.undo')}</button>` : ''}
         ${r.status !== 'rejected'  ? `<button class="reg-btn reject" onclick="setRegStatus('${r.id}','rejected')">${t('admin.reject')}</button>` : ''}
         <button class="reg-btn reject" onclick="setRegStatus('${r.id}','deleted')" title="${t('admin.deleteTitle')}">${t('admin.delete')}</button>
@@ -2204,6 +2211,7 @@ function openEditTeam(catId, gi, ti) {
 }
 function closeEdit() {
   document.getElementById('edit-modal').classList.add('h');
+  document.getElementById('edit-phone-row')?.classList.add('h');
   editTarget = null;
 }
 const pairTaken = (catId, name, except) => [...(state[catId]?.roster || []), ...approvedNames(catId)]
@@ -2219,10 +2227,73 @@ function renamePair(cs, old, name) {
   if (JSON.stringify(cs) === before) return false;
 }
 
+function openEditReg(id) {
+  const r = registrations.find(x => x.id === id);
+  if (!admin || !r) return;
+  editTarget = { regId: id };
+  document.getElementById('edit-p1').value = r.p1 || '';
+  document.getElementById('edit-p2').value = r.p2 || '';
+  document.getElementById('edit-phone').value = r.phone || '';
+  document.getElementById('edit-phone-row').classList.remove('h');
+  document.getElementById('edit-modal-title').textContent = t('admin.editReg');
+  const catSel = document.getElementById('edit-cat');
+  catSel.innerHTML = categories.map(c => `<option value="${escH(c.id)}"${c.id===r.category?' selected':''}>${escH(c.name)}</option>`).join('');
+  document.getElementById('edit-cat-row').classList.toggle('h', r.status === 'approved' && meta.phase !== 'registration');
+  document.getElementById('edit-modal').classList.remove('h');
+  document.getElementById('edit-p1').focus();
+}
+
+async function saveEditReg(p1, p2) {
+  const r = registrations.find(x => x.id === editTarget.regId);
+  if (!r) return closeEdit();
+  const phoneRaw = document.getElementById('edit-phone').value.trim();
+  const phone = phoneRaw ? normPhone(phoneRaw) : '';
+  const err = nameError(p1, 'common.player1') || nameError(p2, 'common.player2')
+    || (phoneRaw && !phone ? () => t('errors.phoneInvalid') : null);
+  if (err) { toast(err()); return; }
+  const catId = document.getElementById('edit-cat-row').classList.contains('h') ? r.category : document.getElementById('edit-cat').value || r.category;
+  const oldName = regPairName(r), name = `${p1} / ${p2}`;
+  if (pairKey(p1, p2) !== pairKey(r.p1, r.p2) || catId !== r.category) {
+    if (registrations.some(x => x.id !== r.id && x.status !== 'rejected' && x.category === catId && pairKey(x.p1, x.p2) === pairKey(p1, p2))) {
+      toast(t('errors.dupName', { name: fsi(name) })); return;
+    }
+  }
+  if (r.status === 'approved' && (name !== oldName || catId !== r.category)) {
+    const moved = catId !== r.category;
+    const ok = await commitState(moved ? [r.category, catId] : r.category, () => {
+      seedRoster(state[r.category], r.category);
+      if (!moved) { renamePair(state[r.category], oldName, name); return; }
+      withdrawPair(r.category, state[r.category], oldName);
+      seedRoster(state[catId], catId);
+      if (!state[catId].roster.some(n => normName(n) === normName(name))) state[catId].roster.push(name);
+    });
+    if (!ok) return;
+  }
+  try {
+    await updateDoc(doc(db, 'tournaments', tId, 'registrations', r.id), { p1, p2, phone, category: catId });
+    Object.assign(r, { p1, p2, phone, category: catId });
+  } catch(e) { alert(t('errors.statusUpdate')); return; }
+  closeEdit(); renderRegistrations(); renderBuildPage();
+}
+
+async function approveAllShown() {
+  if (!admin || meta.phase !== 'registration') return;
+  const list = filteredRegs().filter(r => r.status !== 'approved');
+  if (!list.length || !await askConfirm(t('admin.confirmApproveAll', { n: list.length }), t('admin.approve'))) return;
+  try {
+    await Promise.all(list.map(r => updateDoc(doc(db, 'tournaments', tId, 'registrations', r.id), { status: 'approved' })));
+  } catch(e) { alert(t('errors.statusUpdate')); return; }
+  list.forEach(r => { r.status = 'approved'; });
+  await commitState([...new Set(list.map(r => r.category))].filter(id => categories.some(c => c.id === id)),
+    () => list.forEach(addRegToRoster));
+  renderRegistrations(); renderParticipants(); renderBuildPage();
+}
+
 async function saveEdit() {
   if (!admin || !editTarget) return;
   const p1 = cleanName(document.getElementById('edit-p1').value);
   const p2 = cleanName(document.getElementById('edit-p2').value);
+  if (editTarget.regId) return saveEditReg(p1, p2);
   const name = p2?`${p1} / ${p2}`:p1;
   if (!name) return;
 
@@ -3815,7 +3886,7 @@ function renderAllInner() {
   renderCourtFilter();
   renderScheduleContent();
   renderBracket();
-  if (superAdmin) renderSettings();
+  if (superAdmin && !document.getElementById('page-settings')?.contains(document.activeElement)) renderSettings();
 }
 
 // ============ EXPOSE GLOBALS ============
@@ -3828,7 +3899,7 @@ Object.assign(window, {
   openAddPair, closeAddPair, saveAddPair,
   buildTournament, undoLastBuild, shuffleBuildRoster, moveBuildItem,
   onDragStart, onDragEnd, onDragOver, onDrop, onListDragOver, onListDrop,
-  openEditTeam, closeEdit, saveEdit, deleteTeam,
+  openEditTeam, closeEdit, saveEdit, deleteTeam, openEditReg, approveAllShown,
   editBuildItem, deleteBuildItem,
   setGS, setKS, filterSchedule,
   updateMeta, updateCatName, updateCatCfg, adjCatCfg,
