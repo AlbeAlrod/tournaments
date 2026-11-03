@@ -542,7 +542,7 @@
 
     <div class="form-group">
       <label class="form-label">העתקה מ־ <span style="font-weight:400;letter-spacing:0;text-transform:none;color:var(--text3)">— מעתיק עיצוב (צבעים, לוגו, ספונסרים) והגדרות קטגוריות</span></label>
-      <select class="modal-input" id="cr-template" style="width:100%"></select>
+      <select class="modal-input" id="cr-template" style="width:100%" onchange="pickTemplate(this.value)"></select>
     </div>
 
     <div id="cr-err" class="cr-err h"></div>
@@ -715,7 +715,7 @@ function openCreateModal() {
   for (const f of ['name', 'id', 'admin-pw', 'master-pw', 'expiry', 'date', 'venue', 'price']) $('cr-' + f).value = '';
   $('cr-lang').value = 'he';
   $('cr-err').classList.add('h');
-  $('cr-template').innerHTML = '<option value="">ברירת מחדל (ערכת צבעים סגולה)</option>' +
+  $('cr-template').innerHTML = '<option value="">ברירת מחדל — וולילאב (כמו 24.10)</option>' +
     '<option value="__queen__">פורמט Queen (4 בתים, 3 עולים מכל בית)</option>' +
     [...tournaments]
       .sort((a, b) => (a.meta?.name || a.id).localeCompare(b.meta?.name || b.id))
@@ -723,6 +723,28 @@ function openCreateModal() {
       .join('');
   $('create-modal').classList.remove('h');
   setTimeout(() => $('cr-name').focus(), 80);
+}
+
+const KO_STAGES = ['pool', 'r16', 'qf', 'sf', 'third', 'final'];
+const DEF_CAT_CFG = {
+  courts: 4, numGroups: 4, advPerGroup: 2, gameDur: 25, breakDur: 0, startTime: '07:00',
+  pointsToWin: 21, sets: 1, pointsThirdSet: 15,
+  koRules: Object.fromEntries(KO_STAGES.map(k => [k, { pts: 21, change: 7, dur: 25 }]))
+};
+const COPY_META = ['sport', 'lang', 'regNote', 'paymentLink', 'paymentLinkLabel', 'paymentLink2', 'paymentLink2Label',
+  'showRegistered', 'coordinated', 'parallelCategories', 'allPoolsBeforeKO', 'breakBeforeKO', 'dinnerBreakNote',
+  'logoUrl', 'primaryColor', 'secondaryColor', 'bgColor', 'sponsorLogos', 'groupColors'];
+const defaultMeta = () => ({
+  sport: 'volleyball', lang: 'he', coordinated: true, parallelCategories: true, allPoolsBeforeKO: true,
+  showRegistered: true, primaryColor: '#652d92', secondaryColor: '#7a3fb0', logoUrl: 'assets/volleylab-logo.png',
+  bgColor: '', groupColors: [], sponsorLogos: [],
+  paymentLink: '', paymentLinkLabel: '', paymentLink2: '', paymentLink2Label: '', regNote: ''
+});
+const copyMeta = m => ({ ...defaultMeta(), logoUrl: '', sport: 'footvolley',
+  ...structuredClone(Object.fromEntries(COPY_META.filter(k => m?.[k] !== undefined).map(k => [k, m[k]]))) });
+
+function pickTemplate(id) {
+  $('cr-lang').value = tournaments.find(t => t.id === id)?.meta?.lang || 'he';
 }
 
 async function createTournament() {
@@ -734,6 +756,9 @@ async function createTournament() {
   const tpl = (templateId && !isQueen) ? tournaments.find(t => t.id === templateId) : null;
 
   const metaObj = {
+    ...(tpl ? copyMeta(tpl.meta) : defaultMeta()),
+    ...(isQueen && { sport: 'footvolley', coordinated: false, parallelCategories: false, allPoolsBeforeKO: false, logoUrl: '', primaryColor: '#EC0F8C', secondaryColor: '#F84FB0', bgColor: '#0B0B16',
+      groupColors: ['#EC0F8C','#17A6E0','#C8DA1E','#33B24A'] }),
     name: f.name,
     adminPassword:  f.adminPassword,
     masterPassword: f.masterPassword,
@@ -741,18 +766,8 @@ async function createTournament() {
     eventDate:      $('cr-date').value,
     venue:          $('cr-venue').value.trim(),
     price:          $('cr-price').value.trim(),
-    logoUrl:        tpl?.meta?.logoUrl        || '',
-    primaryColor:   isQueen ? '#EC0F8C' : (tpl?.meta?.primaryColor   || '#652d92'),
-    secondaryColor: isQueen ? '#F84FB0' : (tpl?.meta?.secondaryColor || '#7a3fb0'),
-    sponsorLogos:   tpl?.meta?.sponsorLogos   || [],
-    bgColor:        isQueen ? '#0B0B16' : (tpl?.meta?.bgColor        || ''),
-    groupColors:    isQueen ? ['#EC0F8C','#17A6E0','#C8DA1E','#33B24A'] : (tpl?.meta?.groupColors || []),
-    paymentLink:    '', paymentLinkLabel:  '',
-    paymentLink2:   '', paymentLink2Label: '',
-    regNote:        '',
     phase:          'registration',
     regOpen:        true,
-    showRegistered: true,
   };
   if (expiryVal) metaObj.expiresAt = Timestamp.fromDate(new Date(expiryVal));
 
@@ -765,11 +780,12 @@ async function createTournament() {
           koRules:{ pool:{pts:15,change:5}, r16:{pts:18,change:6}, qf:{pts:18,change:6},
                     sf:{pts:18,change:6}, third:{pts:15,change:5}, final:{pts:21,change:7} } }
   }];
+  const defCats = [['women', 'נשים'], ['men', 'גברים']].map(([id, name]) => ({ id, name, cfg: structuredClone(DEF_CAT_CFG) }));
 
   try {
     await setDoc(doc(db, 'tournaments', f.tId), {
       meta:       metaObj,
-      categories: isQueen ? queenCats : (tpl?.categories || []),
+      categories: isQueen ? queenCats : tpl ? structuredClone(tpl.categories || []) : defCats,
       state:      {},
       updatedAt:  serverTimestamp()
     });
@@ -948,7 +964,7 @@ async function saveSponsors() {
 
 Object.assign(window, {
   checkAdminPw, adminLogout, loadTournaments, renderTable, closeModal,
-  openCreateModal, createTournament, refreshId, regenId,
+  openCreateModal, pickTemplate, createTournament, refreshId, regenId,
   openDupModal, duplicateTournament, setArchived,
   openEditModal, extendExpiry, saveEdit, revertPhase,
   openSponsorsModal, closeSponsorsModal, addSponsorRow, saveSponsors
