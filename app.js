@@ -598,9 +598,8 @@ function refreshAdmin() {
   const regTab = document.getElementById('tab-register');
   if (regTab) regTab.classList.toggle('h', regManager);
   document.getElementById('tab-registrations')?.classList.toggle('h', !admin);
-  // Hide Settings tab in tournament phase (even from master)
   const settingsTab = document.getElementById('tab-settings');
-  if (settingsTab) settingsTab.classList.toggle('h', !superAdmin || meta.phase === 'tournament');
+  if (settingsTab) settingsTab.classList.toggle('h', !superAdmin);
   // Auto-navigate away from pages that don't belong in current phase
   if (regManager && document.getElementById('page-register')?.classList.contains('on')) {
     goPage('registrations');
@@ -3321,6 +3320,28 @@ function renderSettings() {
   const keepY = window.scrollY;
   container.innerHTML = '';
 
+  // Tournament phase: only what is safe to change while games run.
+  if (meta.phase === 'tournament') {
+    const live = document.createElement('div');
+    live.className = 'sett-section';
+    live.innerHTML = `<div class="sett-section-title">${t('settings.title')}</div>
+      <p class="sett-desc">${t('settings.liveNote')}</p>
+      <div class="sett-row">
+        <div class="sett-label"><span class="sett-name">${t('settings.name')}</span></div>
+        <div class="sett-ctrl">
+          <input class="text-inp" style="width:220px" dir="auto" value="${escH(meta.name)}" onchange="updateMeta('name',this.value)"/>
+        </div>
+      </div>
+      ${coordBuild() && categories.length ? `<div class="sett-row" style="flex-wrap:wrap">
+        <div class="sett-label"><span class="sett-name">${t('settings.wholeTournament')}</span></div>
+        <div class="cat-settings-grid">${catNumField(t('settings.gameDur'), -1, 'gameDur', (categories[0].cfg || DEF_CAT_CFG).gameDur, 5, 120)}</div>
+      </div>` : ''}
+      ${categories.map((cat, ci) => renderCatItem(cat, ci, true)).join('')}`;
+    container.appendChild(live);
+    window.scrollTo(0, keepY);
+    return;
+  }
+
   // ── DESIGN ──────────────────────────────────────────────────────
   const pc = meta.primaryColor   || DEF_PRIMARY;
   const sc = meta.secondaryColor || pc;
@@ -3387,7 +3408,7 @@ function renderSettings() {
           oninput="document.getElementById('ct-bg').value=this.value;updateBgColor(this.value)"/>
         <input class="text-inp text-mono" id="ct-bg" style="width:100px" value="${meta.bgColor||'#ffffff'}"
           onchange="if(/^#[0-9A-Fa-f]{6}$/.test(this.value)){document.getElementById('cp-bg').value=this.value;updateBgColor(this.value)}"/>
-        <button class="add-cat-btn" style="padding:5px 10px" onclick="updateBgColor('')">${t('common.reset')}</button>
+        <button class="add-cat-btn" onclick="updateBgColor('')">${t('common.reset')}</button>
       </div>
     </div>`;
   container.appendChild(dsec);
@@ -3409,7 +3430,7 @@ function renderSettings() {
             : `<span class="d-drop-hint">${t('settings.logoDropHint')}</span>`}
         </div>
         <div id="logo-drop-err" class="d-drop-err" role="alert" style="display:none"></div>
-        ${meta.logoUrl ? `<button type="button" class="add-cat-btn" style="padding:5px 10px" onclick="removeLogo()">${t('settings.removeLogo')}</button>` : ''}
+        ${meta.logoUrl ? `<button type="button" class="add-cat-btn" onclick="removeLogo()">${t('settings.removeLogo')}</button>` : ''}
         <input class="text-inp" type="url" dir="ltr" style="width:260px" value="${isDataUrl(meta.logoUrl) ? '' : escH(meta.logoUrl)}"
           onchange="updateMeta('logoUrl',this.value.trim());renderSettings()"
           placeholder="${isDataUrl(meta.logoUrl) ? t('settings.uploadedPh') : 'https://…'}" aria-label="${t('settings.logoUrl')}"/>
@@ -3438,7 +3459,7 @@ function renderSettings() {
             oninput="document.getElementById('gct-${i}').value=this.value;updateGroupColor(${i},this.value)"/>
           <input class="text-inp text-mono" id="gct-${i}" style="width:100px" value="${cur}"
             onchange="if(/^#[0-9A-Fa-f]{6}$/.test(this.value)){document.getElementById('gcp-${i}').value=this.value;updateGroupColor(${i},this.value)}"/>
-          <button class="add-cat-btn" style="padding:5px 10px"
+          <button class="add-cat-btn"
             onclick="updateGroupColor(${i},'');renderSettings()">${t('common.reset')}</button>
         </div>
       </div>`;
@@ -3459,7 +3480,7 @@ function renderSettings() {
             : `<span style="color:var(--text3);font-size:20px;line-height:1">+</span>`}</div>
           <input class="text-inp" type="url" dir="ltr" style="flex:1;min-width:0" value="${isDataUrl(l.url) ? '' : escH(l.url)}"
             placeholder="${isDataUrl(l.url) ? t('settings.uploadedPh') : t('settings.sponsorUrlPh')}" onchange="updateSponsorLogo(${i},'url',this.value.trim())"/>
-          <button type="button" class="add-cat-btn" style="padding:5px 10px;flex-shrink:0" onclick="uploadSponsorLogo(${i})">${t('settings.upload')}</button>
+          <button type="button" class="add-cat-btn" style="flex-shrink:0" onclick="uploadSponsorLogo(${i})">${t('settings.upload')}</button>
           <input class="text-inp" dir="auto" style="width:100px;flex-shrink:0" value="${escH(l.alt)}"
             placeholder="${t('settings.sponsorNamePh')}" onchange="updateSponsorLogo(${i},'alt',this.value)"/>
           <button class="team-del" onclick="removeSponsorLogo(${i})" title="${t('common.remove')}" aria-label="${t('common.remove')}">✕</button>
@@ -3488,10 +3509,10 @@ function renderSettings() {
         ${cs.groups.map((grp, gi) => `
           <div class="grp-row">
             <div class="grp-row-head">
-              <span style="font-size:11px;color:var(--text3);flex-shrink:0">${t('settings.groupLabel')}</span>
-              <input class="text-inp" dir="auto" style="width:54px;font-weight:800;text-align:center;padding:5px 4px"
+              <span class="sett-desc" style="flex-shrink:0">${t('settings.groupLabel')}</span>
+              <input class="text-inp" dir="auto" style="width:54px;font-weight:700;text-align:center"
                 value="${escH(grp.name)}" onchange="renameGroup('${cat.id}',${gi},this.value)"/>
-              <span style="font-size:11px;color:var(--text3);margin-inline-start:4px">${t('settings.teamsCount', { n: grp.teams.length })}</span>
+              <span class="sett-desc" style="margin-inline-start:4px">${t('settings.teamsCount', { n: grp.teams.length })}</span>
             </div>
             <div class="grp-teams-list">
               ${grp.teams.map((team, ti) => `
@@ -3510,8 +3531,6 @@ function renderSettings() {
     gsec.innerHTML = `<div class="sett-section-title">${t('settings.groups')}</div>${gHtml}`;
     container.appendChild(gsec);
   }
-
-  if (meta.phase === 'tournament') { window.scrollTo(0, keepY); return; }
 
   // ── SPORT ───────────────────────────────────────────────────────
   const sportSection = document.createElement('div');
@@ -3605,9 +3624,16 @@ function renderSettings() {
         </div>
       </div>
     </div>` : '';
+  const toggles = categories.length >= 2 ? ['coordinated', 'parallelCategories', 'allPoolsBeforeKO'].map(k => `<div class="toggle-row">
+      <div class="sett-label toggle-label">
+        <span class="sett-name">${t('settings.' + k)}</span>
+        <span class="sett-desc">${t('settings.' + k + 'Desc')} ${t('settings.nextBuild')}</span>
+      </div>
+      <label class="toggle-switch"><input type="checkbox" ${meta[k]?'checked':''} onchange="updateMeta('${k}',this.checked)"/><span class="toggle-slider"></span></label>
+    </div>`).join('') : '';
   const catSection = document.createElement('div');
   catSection.className = 'sett-section';
-  catSection.innerHTML = `<div class="sett-section-title">${t('settings.categories')}</div>${coordHtml}
+  catSection.innerHTML = `<div class="sett-section-title">${t('settings.categories')}</div>${toggles}${coordHtml}
     <div id="cat-list">${categories.map((cat,ci)=>renderCatItem(cat,ci)).join('')}</div>
     <div class="sett-row" style="border-top:1px solid var(--border);margin-top:8px;padding-top:14px;border-bottom:none;padding-bottom:0">
       <div class="sett-label">
@@ -3747,31 +3773,35 @@ function addSponsorLogo() {
   renderSettings();
 }
 
-function renderCatItem(cat, ci) {
+const KO_STAGES = ['pool', 'r16', 'qf', 'sf', 'third', 'final'];
+const KO_LIM = { pts: [11, 30], change: [0, 15], dur: [5, 60], thirdPts: [11, 30] };
+const KO_COL = { pts: 'settings.rules.pts', change: 'settings.rules.switch', dur: 'settings.rules.min', thirdPts: 'settings.rules.thirdPts' };
+function renderCatItem(cat, ci, live) {
   const cfg=cat.cfg||DEF_CAT_CFG;
   const coord=coordBuild();
   const catColor = cat.color || meta.primaryColor || DEF_PRIMARY;
   return `<div class="cat-item">
     <div class="cat-item-head">
       <input class="text-inp" dir="auto" style="width:150px;font-weight:600" value="${escH(cat.name)}" onchange="updateCatName(${ci},this.value)"/>
-      <div class="color-pick-row" style="margin-inline-start:auto;margin-inline-end:8px">
-        <input type="color" class="color-inp" id="ccp-${ci}" style="width:36px;height:32px" value="${catColor}"
+      ${live ? '' : `<div class="color-pick-row" style="margin-inline-start:auto;margin-inline-end:8px">
+        <input type="color" class="color-inp" id="ccp-${ci}" value="${catColor}"
           oninput="document.getElementById('cct-${ci}').value=this.value;updateCatColor(${ci},this.value)"/>
-        <input class="text-inp text-mono" id="cct-${ci}" style="width:84px;padding:5px 8px;font-size:12px" value="${catColor}"
+        <input class="text-inp text-mono" id="cct-${ci}" style="width:100px" value="${catColor}"
           onchange="if(/^#[0-9A-Fa-f]{6}$/.test(this.value)){document.getElementById('ccp-${ci}').value=this.value;updateCatColor(${ci},this.value)}"/>
       </div>
-      <button class="team-del" onclick="deleteCategory(${ci})" title="${t('settings.deleteCategory')}" aria-label="${t('settings.deleteCategory')}">✕</button>
+      <button class="team-del" onclick="deleteCategory(${ci})" title="${t('settings.deleteCategory')}" aria-label="${t('settings.deleteCategory')}">✕</button>`}
     </div>
-    <div class="cat-settings-grid">
+    ${live ? (coord ? '' : `<div class="cat-settings-grid">${catNumField(t('settings.gameDur'), ci, 'gameDur', cfg.gameDur, 5, 120)}</div>`) : `<div class="cat-settings-grid">
       ${coord ? '' : catNumField(t('settings.courts'), ci, 'courts', cfg.courts, 1, 8)}
       ${catNumField(t('settings.numGroups'), ci, 'numGroups', cfg.numGroups, 2, 16)}
       ${catNumField(t('settings.advPerGroup'), ci, 'advPerGroup', cfg.advPerGroup, 1, 8)}
+      ${(n => n > 1 ? `<span class="sett-desc" style="grid-column:1/-1">${t('settings.koHint', { n, round: tRound(Math.ceil(Math.log2(n)) - 1, 2 ** Math.ceil(Math.log2(n))) })}</span>` : '')((cfg.numGroups||0) * (cfg.advPerGroup||0))}
       ${coord ? '' : catNumField(t('settings.gameDur'), ci, 'gameDur', cfg.gameDur, 5, 120)}
       ${coord ? '' : catNumField(t('settings.breakDur'), ci, 'breakDur', cfg.breakDur, 0, 60)}
       <div class="cat-sett-field">
         <span class="cat-sett-label">${t('settings.sets')}</span>
         <div class="cat-sett-ctrl">
-          <select class="form-input" style="width:80px;padding:4px 6px" onchange="updateCatCfg(${ci},'sets',parseInt(this.value))">
+          <select class="form-input" style="width:80px" onchange="updateCatCfg(${ci},'sets',parseInt(this.value))">
             <option value="1" ${cfg.sets===1?'selected':''}>1</option>
             <option value="3" ${cfg.sets===3?'selected':''}>3</option>
           </select>
@@ -3784,32 +3814,27 @@ function renderCatItem(cat, ci) {
           <input type="time" class="time-inp" value="${cfg.startTime||'08:00'}" onchange="updateCatCfg(${ci},'startTime',this.value)"/>
         </div>
       </div>`}
-    </div>
+    </div>`}
     <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
       <div class="cat-sett-label" style="margin-bottom:8px">${t('settings.scoringRules')}</div>
       <div class="srt-wrap"><table class="scoring-rules-tbl">
-        <thead><tr><th>${t('settings.rules.stage')}</th><th>${t('settings.rules.pts')}</th><th>${t('settings.rules.switch')}</th>${coord ? '' : `<th>${t('settings.rules.min')}</th>`}</tr></thead>
+        <thead><tr><th>${t('settings.rules.stage')}</th><th>${t('settings.rules.pts')}</th><th>${t('settings.rules.switch')}</th>${coord ? '' : `<th>${t('settings.rules.min')}</th>`}<th>${t('settings.rules.sets')}</th><th>${t('settings.rules.thirdPts')}</th></tr></thead>
         <tbody>
-          ${['pool', 'r16', 'qf', 'sf', 'third', 'final'].map(key => {
-            const label = t('settings.stage.' + key);
-            const r = { ...DEF_KO_RULES[key], ...(cfg.koRules?.[key]||{}) };
+          ${['all', ...KO_STAGES].map(key => {
+            const label = t(key === 'all' ? 'settings.koSameAll' : 'settings.stage.' + key);
+            const r = { ...DEF_KO_RULES[key === 'all' ? 'pool' : key], ...(cfg.koRules?.[key === 'all' ? 'pool' : key]||{}) };
+            const inp = (f, v) => `<input class="text-inp" type="number" inputmode="numeric" style="width:64px" min="${KO_LIM[f][0]}" max="${KO_LIM[f][1]}"
+              value="${v ?? ''}" aria-label="${label} · ${t(KO_COL[f])}" onchange="updateKORuleField(${ci},'${key}','${f}',this.value)"/>`;
             return `<tr>
               <td class="srt-label">${label}</td>
-              <td><div class="cat-sett-ctrl">
-                <button class="s-num-btn" onclick="updateKORuleField(${ci},'${key}','pts',Math.max(11,(${r.pts||15})-1))">−</button>
-                <span class="s-num-val">${r.pts||15}</span>
-                <button class="s-num-btn" onclick="updateKORuleField(${ci},'${key}','pts',Math.min(30,(${r.pts||15})+1))">+</button>
-              </div></td>
-              <td><div class="cat-sett-ctrl">
-                <button class="s-num-btn" onclick="updateKORuleField(${ci},'${key}','change',${r.change?r.change-1:null})">−</button>
-                <span class="s-num-val">${r.change||'—'}</span>
-                <button class="s-num-btn" onclick="updateKORuleField(${ci},'${key}','change',${r.change?r.change+1:5})">+</button>
-              </div></td>
-              ${coord ? '' : `<td><div class="cat-sett-ctrl">
-                <button class="s-num-btn" onclick="updateKORuleField(${ci},'${key}','dur',Math.max(5,(${r.dur||cfg.gameDur||15})-5))">−</button>
-                <span class="s-num-val">${r.dur||cfg.gameDur||15}</span>
-                <button class="s-num-btn" onclick="updateKORuleField(${ci},'${key}','dur',Math.min(60,(${r.dur||cfg.gameDur||15})+5))">+</button>
-              </div></td>`}
+              <td>${inp('pts', r.pts||15)}</td>
+              <td>${inp('change', r.change||'')}</td>
+              ${coord ? '' : `<td>${inp('dur', r.dur||cfg.gameDur||15)}</td>`}
+              <td><select class="form-input" style="width:64px" aria-label="${label} · ${t('settings.rules.sets')}" onchange="updateKORuleField(${ci},'${key}','sets',this.value)">
+                <option value="1" ${r.sets===3?'':'selected'}>1</option>
+                <option value="3" ${r.sets===3?'selected':''}>3</option>
+              </select></td>
+              <td>${r.sets===3 ? inp('thirdPts', r.thirdPts||15) : ''}</td>
             </tr>`;
           }).join('')}
         </tbody>
@@ -3877,14 +3902,19 @@ function updateKORuleField(ci, roundKey, field, val) {
   if (!categories[ci]) return;
   if (!categories[ci].cfg) categories[ci].cfg = structuredClone(DEF_CAT_CFG);
   if (!categories[ci].cfg.koRules) categories[ci].cfg.koRules = {};
-  if (!categories[ci].cfg.koRules[roundKey]) categories[ci].cfg.koRules[roundKey] = {...DEF_KO_RULES[roundKey]};
-  categories[ci].cfg.koRules[roundKey][field] = val === '' || val === null ? null : Number(val);
+  const lim = KO_LIM[field];
+  const v = val === '' || val === null ? null : lim ? Math.min(lim[1], Math.max(lim[0], Math.round(Number(val)))) : Number(val);
+  (roundKey === 'all' ? KO_STAGES : [roundKey]).forEach(k => {
+    const r = categories[ci].cfg.koRules[k] || (categories[ci].cfg.koRules[k] = {...DEF_KO_RULES[k]});
+    if (field === 'sets' && v !== 3) delete r.sets;
+    else r[field] = v;
+  });
   pushCategories();
   // Changing a stage's length shifts every slot after it — recompute the clock.
   const cid = categories[ci].id;
   // Coordinated grids use one slot for every stage; re-timing one category would collide.
   if (field === 'dur' && !coordBuild() && state[cid]?.sched.length) commitState(cid, () => assignSlotTimes(cid));
-  renderSettings();
+  if (roundKey === 'all' || field === 'sets' || lim && v !== Number(val)) renderSettings();
 }
 
 function updateCatName(ci, val) {
@@ -3974,7 +4004,7 @@ async function resetAllScores() {
 function goPage(p) {
   if (p==='registrations' && !admin) return;
   if (p==='build' && (!admin || (meta.phase !== 'registration' && meta.phase !== 'built'))) return;
-  if (p==='settings' && (!superAdmin || meta.phase === 'tournament')) return;
+  if (p==='settings' && !superAdmin) return;
   document.querySelectorAll('.pg').forEach(e=>e.classList.remove('on'));
   document.querySelectorAll('.tab').forEach(e=>{ e.classList.remove('on'); e.removeAttribute('aria-current'); });
   const pageEl=document.getElementById('page-'+p);
