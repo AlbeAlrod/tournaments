@@ -56,7 +56,7 @@ const legacySrc = fs.readFileSync(path.join(root, 'core', 'legacy.js'), 'utf8');
 const NAMES = ['koToFB','koFromFB','catStateToFB','catStateFromFB','t2m','m2t','addM','rr',
   'distributeGroups','snakeDistribute','cmpScore','roundName','getRuleForGame','coordCfg',
   'buildCoordinatedGroups','generateCoordinatedSchedule','getKORoundName','assignSlotTimes',
-  'genPoolSched','generateScheduleForCat','buildQueenKO','isValidScore','scoreError',
+  'genPoolSched','generateScheduleForCat','buildCategory','buildQueenKO','isValidScore','scoreError',
   'getStandings','resolvePoolSeed','getKOLoser','getKOWinner','updateKOForCat','koGameLabel'];
 
 test('legacy.js functions are token-identical to app.js', { skip: !hasApp && 'app.js not present' }, () => {

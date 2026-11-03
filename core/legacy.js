@@ -35,8 +35,13 @@ export const DEF_KO_RULES = {
 
 // from app.js:95
 export const DEF_CAT_CFG = {
-  courts: 2, gameDur: 30, breakDur: 0, numGroups: 2, advPerGroup: 2,
-  pointsToWin: 21, sets: 1, pointsThirdSet: 15, startTime: '08:00'
+  courts: 4, gameDur: 25, breakDur: 0, numGroups: 4, advPerGroup: 2,
+  pointsToWin: 21, sets: 1, pointsThirdSet: 15, startTime: '07:00',
+  koRules: {
+    pool: { pts: 21, change: 7, dur: 25 }, r16: { pts: 21, change: 7, dur: 25 },
+    qf: { pts: 21, change: 7, dur: 25 }, sf: { pts: 21, change: 7, dur: 25 },
+    third: { pts: 21, change: 7, dur: 25 }, final: { pts: 21, change: 7, dur: 25 },
+  }
 };
 
 // from app.js:108
@@ -52,11 +57,12 @@ export function koFromFB(obj) {
 }
 // from app.js:117
 export function catStateToFB(cs) {
-  return { roster: cs.roster||[], groups: cs.groups||[], sched: cs.sched||[], ko: koToFB(cs.ko||[]) };
+  return { ...cs, roster: cs.roster||[], groups: cs.groups||[], sched: cs.sched||[], ko: koToFB(cs.ko||[]) };
 }
 // from app.js:120
 export function catStateFromFB(data) {
   return {
+    ...data,
     roster: data.roster||[],
     groups: data.groups||[],
     sched:  data.sched||[],
@@ -198,19 +204,26 @@ export function createLegacy(ctx) {
       const groups=state[cat.id].groups; const poolIds=[];
       groups.forEach((grp,gi)=>rr(grp.teams).forEach(([a,b])=>{
         const id=`${cat.id}:P:${gi}:${a}#${b}`; poolIds.push(id);
-        games.push({id,catId:cat.id,ci,kind:'pool',gi,gn:grp.name,a,b,teams:[`${cat.id}~${a}`,`${cat.id}~${b}`]});
+        // Conflicts and rest are tracked per PLAYER, so one player in two categories is never double-booked.
+        games.push({id,catId:cat.id,ci,kind:'pool',gi,gn:grp.name,a,b,teams:[a,b].flatMap(p=>p.split(' / ').map(normName))});
+
       }));
       const cfg=cat.cfg||DEF_CAT_CFG; const adv=cfg.advPerGroup||0, ng=groups.length;
       if(adv>=1 && ng>=1){
         const seeds=[]; for(let rank=1;rank<=adv;rank++) for(let g=0;g<ng;g++) seeds.push(`${String.fromCharCode(65+g)}${rank}`);
         let bs=1; while(bs<seeds.length) bs*=2; while(seeds.length<bs) seeds.push('TBD');
         const rounds=[], first=[];
-        for(let i=0;i<bs/2;i++) first.push({a:seeds[i],b:seeds[bs-1-i],seedA:seeds[i],seedB:seeds[bs-1-i],sa:'',sb:'',catId:cat.id});
+        // Padding 'TBD' = no opponent: a bye, not a game that never resolves.
+        for(let i=0;i<bs/2;i++) first.push(seeds[bs-1-i]==='TBD'
+          ? {isBye:true,a:seeds[i],b:'',seedA:seeds[i],seedB:'',sa:'',sb:'',catId:cat.id}
+          : {a:seeds[i],b:seeds[bs-1-i],seedA:seeds[i],seedB:seeds[bs-1-i],sa:'',sb:'',catId:cat.id});
+        // 4 QFs: swap QF3/QF4 so the cross SF (QF1×QF4, QF2×QF3) never pairs a group with itself.
+        if(first.length===4 && !first.some(g=>g.isBye)) [first[2],first[3]]=[first[3],first[2]];
         rounds.push(first);
         let m=first.length/2;
         while(m>=1){const rd=[]; for(let i=0;i<m;i++) rd.push({a:`W${i*2+1}`,b:`W${i*2+2}`,sa:'',sb:'',catId:cat.id}); rounds.push(rd); m=Math.floor(m/2);}
         koStruct[cat.id]=rounds;
-        rounds.forEach((rd,ri)=>rd.forEach((g,gi)=>games.push({id:`${cat.id}:K${ri}:${gi}`,catId:cat.id,ci,kind:'ko',ri,gi,ref:g,poolIds,lastRound:ri===rounds.length-1})));
+        rounds.forEach((rd,ri)=>rd.forEach((g,gi)=>{ if(!g.isBye) games.push({id:`${cat.id}:K${ri}:${gi}`,catId:cat.id,ci,kind:'ko',ri,gi,ref:g,poolIds,lastRound:ri===rounds.length-1}); }));
         const sfRound=rounds.length-2;
         if(sfRound>=0) games.push({id:`${cat.id}:3P`,catId:cat.id,ci,kind:'ko3p',sfRound,
           ref:{catId:cat.id,gi:-1,isThirdPlace:true,a:'Loser of SF1',b:'Loser of SF2',sa:'',sb:''}});
@@ -234,6 +247,8 @@ export function createLegacy(ctx) {
     const played=t=>teamRounds[t]||new Set();
     let guard=0;
     const poolPending=cid=>games.some(g=>g.catId===cid&&g.kind==='pool'&&rem.has(g.id));
+    const grpLeft=g=>games.filter(x=>x.kind==='pool'&&x.catId===g.catId&&x.gi===g.gi&&rem.has(x.id)).length;
+
     while(rem.size && guard++<500){
       const r=rounds.length;
       const courtsThisRound=courtsAt(r);
@@ -252,17 +267,23 @@ export function createLegacy(ctx) {
         if(phase(x)!==phase(y)) return phase(x)-phase(y);
         const kx=rankKind(x),ky=rankKind(y); if(kx!==ky) return kx-ky;
         if(kx===0) return (koOrder(x)-koOrder(y))||((x.gi||0)-(y.gi||0));
-        const wx=Math.max(...x.teams.map(t=>r-lastPlayed(t))), wy=Math.max(...y.teams.map(t=>r-lastPlayed(t)));
-        return wy-wx;
+        // The most tired pair decides; then the group with more games left.
+        const wx=Math.min(...x.teams.map(t=>r-lastPlayed(t))), wy=Math.min(...y.teams.map(t=>r-lastPlayed(t)));
+        return (wy-wx)||(grpLeft(y)-grpLeft(x));
       });
       const chosen=[], usedTeams=new Set(), seenKO=new Set();
-      for(const g of cand){
+      const rested=g=>!g.teams.some(t=>played(t).has(r-1));
+      // Back-to-back games only fill courts that no rested pool game can take.
+      for(const pass of [0,1]) for(const g of cand){
         if(chosen.length>=courtsThisRound) break;
         if(g.kind==='pool'){
-          if(g.teams.some(t=>usedTeams.has(t))) continue;
+          if(chosen.includes(g) || g.teams.some(t=>usedTeams.has(t))) continue;
           if(g.teams.some(t=>played(t).has(r-1)&&played(t).has(r-2))) continue;
+          if(!pass && !rested(g)) continue;
           g.teams.forEach(t=>usedTeams.add(t)); chosen.push(g);
-        } else if(g.kind==='ko3p'){ chosen.push(g); }
+        } else if(pass) continue;
+        else if(g.kind==='ko3p'){ chosen.push(g); }
+
         else {
           const sk=`${g.catId}:${g.ri}`; if(seenKO.has(sk)) continue; seenKO.add(sk);
           const stage=(koRoundIds[sk]||[]).map(id=>byId[id]).filter(x=>rem.has(x.id)&&ready(x,done)&&!isFinaleLast(x));
@@ -281,9 +302,19 @@ export function createLegacy(ctx) {
     }
     const brs = (meta.breaks||[]).map(b=>({at:t2m(b.atTime), min:b.minutes||0})).sort((a,b)=>a.at-b.at);
     const roundTime = r => { let t=START+r*SLOT; for(const b of brs) if(t>=b.at) t+=b.min; return t; };
-    cats.forEach(c=>{ state[c.id].sched=[]; state[c.id].ko=(koStruct[c.id]||[]).map(()=>[]); });
+    cats.forEach(c=>{ state[c.id].sched=[]; state[c.id].ko=(koStruct[c.id]||[]).map(rd=>rd.map(g=>g.isBye?g:null)); });
+    // Each pool game first gets the court its group played on last (fixed court per
+    // group, also with odd group sizes); the other games fill the free courts in order.
+    const grpCourt={};
     rounds.forEach((ids,r)=>{ const time=m2t(roundTime(r));
-      ids.forEach((id,ix)=>{ const g=byId[id], court=ix+1;
+      const courtOf={}, taken=new Set(), gk=g=>`${g.catId}:${g.gi}`;
+      ids.forEach(id=>{ const g=byId[id], c=g.kind==='pool'&&grpCourt[gk(g)];
+        if(c && c<=courtsAt(r) && !taken.has(c)){ courtOf[id]=c; taken.add(c); } });
+      let next=1;
+      ids.forEach(id=>{ if(courtOf[id]) return; while(taken.has(next)) next++; courtOf[id]=next; taken.add(next); });
+      ids.forEach(id=>{ const g=byId[id], court=courtOf[id];
+        if(g.kind==='pool') grpCourt[gk(g)]=court;
+
         if(g.kind==='pool') state[g.catId].sched.push({catId:g.catId,gi:g.gi,gn:g.gn,a:g.a,b:g.b,sa:'',sb:'',court,si:r,time});
         else if(g.kind==='ko3p') state[g.catId].sched.push({...g.ref,court,si:r,time});
         else state[g.catId].ko[g.ri][g.gi]={...g.ref,court,si:r,time};
@@ -467,14 +498,20 @@ export function createLegacy(ctx) {
     const firstRound = [];
     for (let i=0; i<bracketSize/2; i++) {
       const aSeed = koSeeds[i], bSeed = koSeeds[bracketSize-1-i];
-      firstRound.push({ a:aSeed, b:bSeed, seedA:aSeed, seedB:bSeed, sa:'', sb:'', catId });
+      firstRound.push(bSeed === 'TBD'
+        ? { isBye:true, a:aSeed, b:'', seedA:aSeed, seedB:'', sa:'', sb:'', catId }
+        : { a:aSeed, b:bSeed, seedA:aSeed, seedB:bSeed, sa:'', sb:'', catId });
     }
-    firstRound.forEach((g, gi) => {
+    // 4 QFs: swap QF3/QF4 so the cross SF (QF1×QF4, QF2×QF3) never pairs a group with itself.
+    if (firstRound.length === 4 && !firstRound.some(g => g.isBye)) [firstRound[2], firstRound[3]] = [firstRound[3], firstRound[2]];
+
+    firstRound.filter(g => !g.isBye).forEach((g, gi) => {
       g.court = (gi % nc) + 1;
       g.si    = rs + Math.floor(gi/nc);
       g.time  = addM(cfg.startTime||'08:00', g.si*slotDur);
     });
-    rs += Math.ceil(firstRound.length / nc);
+    rs += Math.ceil(firstRound.filter(g => !g.isBye).length / nc);
+
     cs.ko.push(firstRound);
 
     let matches = firstRound.length / 2;

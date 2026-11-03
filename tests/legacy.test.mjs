@@ -5,6 +5,9 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import * as L from '../core/legacy.js';
 
+// Pre-wave-3 DEF_CAT_CFG: what categories created before 24.10 defaults still carry.
+const OLD_CFG = { courts: 2, gameDur: 30, breakDur: 0, numGroups: 2, advPerGroup: 2,
+  pointsToWin: 21, sets: 1, pointsThirdSet: 15, startTime: '08:00' };
 const teams = n => Array.from({ length: n }, (_, i) => `T${i + 1}`);
 const num = s => parseInt(String(s).replace(/\D/g, ''), 10);
 
@@ -74,7 +77,7 @@ describe('Firestore KO (de)serialization', () => {
 
 // ------------------------------------------------------------------ scoring
 describe('isValidScore / scoreError (1 set, pointsToWin 21)', () => {
-  const { api } = setup({ ...L.DEF_CAT_CFG }, 4);
+  const { api } = setup({ ...OLD_CFG }, 4);
   const v = (a, b, p) => api.isValidScore(a, b, 'c', p);
   const table = [
     [21, 19, true], [21, 0, true], [19, 21, true], [21, 20, false], [22, 21, false],
@@ -108,7 +111,7 @@ describe('isValidScore / scoreError (1 set, pointsToWin 21)', () => {
 });
 
 describe('isValidScore (sets: 3 → scores are SETS WON)', () => {
-  const { api } = setup({ ...L.DEF_CAT_CFG, sets: 3 }, 4);
+  const { api } = setup({ ...OLD_CFG, sets: 3 }, 4);
   const table = [[2, 1, true], [2, 0, true], [1, 2, true], [0, 2, true], [2, 2, false],
                  [1, 0, false], [3, 1, false], [21, 19, false]];
   for (const [a, b, ok] of table)
@@ -124,7 +127,7 @@ describe('isValidScore (sets: 3 → scores are SETS WON)', () => {
 
 describe('getRuleForGame', () => {
   test('per-stage defaults by distance from the final', () => {
-    const { api, cs } = setup({ ...L.DEF_CAT_CFG }, 4);
+    const { api, cs } = setup({ ...OLD_CFG }, 4);
     cs.ko = [[{}, {}, {}, {}, {}, {}, {}, {}], [{}, {}, {}, {}], [{}, {}], [{}]];
     assert.equal(api.getRuleForGame('c', { gi: 0 }, false).pts, 15);
     assert.equal(api.getRuleForGame('c', { gi: -1 }, false).pts, 15); // third
@@ -135,11 +138,11 @@ describe('getRuleForGame', () => {
     assert.equal(api.getRuleForGame('c', { ri: 3 }, true).change, 7);
   });
   test('koRules override merges per stage', () => {
-    const { api } = setup({ ...L.DEF_CAT_CFG, koRules: { pool: { pts: 11, change: 4 } } }, 4);
+    const { api } = setup({ ...OLD_CFG, koRules: { pool: { pts: 11, change: 4 } } }, 4);
     assert.deepEqual(api.getRuleForGame('c', { gi: 0 }, false), { pts: 11, change: 4 });
   });
   test('KNOWN BUG: cfg.pointsToWin is ignored — the per-stage rule (pool=15) always wins', () => {
-    const { api, cs } = setup({ ...L.DEF_CAT_CFG, pointsToWin: 21 }, 4);
+    const { api, cs } = setup({ ...OLD_CFG, pointsToWin: 21 }, 4);
     api.buildCategory('c');
     const g = cs.sched[0];
     [g.sa, g.sb] = ['15', '10']; // would be invalid to 21
@@ -202,7 +205,7 @@ describe('distributeGroups / snakeDistribute', () => {
 // ------------------------------------------------------------------ standings
 describe('getStandings', () => {
   function grp(results) {
-    const { api, cs } = setup({ ...L.DEF_CAT_CFG }, 0);
+    const { api, cs } = setup({ ...OLD_CFG }, 0);
     cs.groups = [{ name: 'A', teams: ['W', 'X', 'Y', 'Z'] }];
     cs.sched = results.map(([a, b, sa, sb]) => ({ gi: 0, a, b, sa: String(sa), sb: String(sb) }));
     return api.getStandings('c', 0);
@@ -236,7 +239,7 @@ describe('getStandings', () => {
     assert.deepEqual(st.map(t => [t.name, t.pts]), [['W', 2], ['Y', 2], ['X', 2], ['Z', 0]]);
   });
   test('invalid scores are ignored; names match through normName', () => {
-    const { api, cs } = setup({ ...L.DEF_CAT_CFG }, 0);
+    const { api, cs } = setup({ ...OLD_CFG }, 0);
     cs.groups = [{ name: 'A', teams: ['Tom / Muriel', 'Ann / Bo'] }];
     cs.sched = [{ gi: 0, a: 'tom muriel', b: 'Ann  /  Bo', sa: '15', sb: '12' },
                 { gi: 0, a: 'Tom / Muriel', b: 'Ann / Bo', sa: '15', sb: '14' }];
@@ -249,7 +252,7 @@ describe('getStandings', () => {
 const fmt = g => `${g.si}/${g.court}@${g.time} ${g.a}-${g.b}`;
 
 describe('generateScheduleForCat: 10 pairs, 2 groups, 2 courts (defaults)', () => {
-  const { api, cs } = setup({ ...L.DEF_CAT_CFG }, 10);
+  const { api, cs } = setup({ ...OLD_CFG }, 10);
   api.buildCategory('c');
   test('groups by contiguous blocks', () => {
     assert.deepEqual(cs.groups.map(g => g.teams), [teams(10).slice(0, 5), teams(10).slice(5)]);
@@ -294,7 +297,7 @@ describe('generateScheduleForCat: 10 pairs, 2 groups, 2 courts (defaults)', () =
     assert.equal(cs.sched.some(g => g.isThirdPlace), false, 'standard KO has no 3rd-place game');
   });
   test('resolvePoolSeed only once the whole group is played', () => {
-    const t = setup({ ...L.DEF_CAT_CFG }, 10); t.api.buildCategory('c');
+    const t = setup({ ...OLD_CFG }, 10); t.api.buildCategory('c');
     assert.deepEqual(t.api.resolvePoolSeed('c', 'A1'), { label: 'A1', known: false });
     playPools(t.api, t.cs);
     assert.deepEqual(t.api.resolvePoolSeed('c', 'A1'), { label: 'T1', known: true });
@@ -305,21 +308,23 @@ describe('generateScheduleForCat: 10 pairs, 2 groups, 2 courts (defaults)', () =
 });
 
 describe('generateScheduleForCat: 16 pairs, 4 groups, 4 courts, adv 2', () => {
-  const { api, cs } = setup({ ...L.DEF_CAT_CFG, courts: 4, numGroups: 4, advPerGroup: 2 }, 16);
+  const { api, cs } = setup({ ...OLD_CFG, courts: 4, numGroups: 4, advPerGroup: 2 }, 16);
   api.buildCategory('c');
   test('shape: 24 pool games in 6 slots, QF/SF/F', () => {
     assert.equal(cs.sched.length, 24);
     assert.equal(Math.max(...cs.sched.map(g => g.si)), 5);
     assert.deepEqual(cs.ko.map(r => r.length), [4, 2, 1]);
-    assert.deepEqual(cs.ko[0].map(g => `${g.a}-${g.b}`), ['A1-D2', 'B1-C2', 'C1-B2', 'D1-A2']);
+    // QF3/QF4 swapped so two pairs of one group can only meet in the final.
+    assert.deepEqual(cs.ko[0].map(g => `${g.a}-${g.b}`), ['A1-D2', 'B1-C2', 'D1-A2', 'C1-B2']);
     assert.deepEqual(cs.ko.map(r => r[0].time), ['11:00', '11:30', '12:00']);
   });
   test('QF→SF uses cross pairing (QF1×QF4, QF2×QF3)', () => {
     playPools(api, cs);
     cs.ko[0].forEach(g => { [g.sa, g.sb] = winScore(g, 18).map(String); });
     api.updateKOForCat('c');
-    // QF: T1-T14, T5-T10, T9-T6, T13-T2 → winners T1, T5, T6, T2 (lower number wins)
-    assert.deepEqual(cs.ko[1].map(g => [g.a, g.b]), [['T1', 'T2'], ['T5', 'T6']]);
+    // QF: T1-T14, T5-T10, T13-T2, T9-T6 → winners T1, T5, T2, T6 (lower number wins)
+    // SF: A1/D2 × C1/B2 and B1/C2 × D1/A2 — no group meets itself before the final.
+    assert.deepEqual(cs.ko[1].map(g => [g.a, g.b]), [['T1', 'T6'], ['T5', 'T2']]);
     assert.equal(api.koGameLabel('c', 0, 2), 'QF3');
     assert.equal(api.koGameLabel('c', 1, 1), 'SF2');
     assert.equal(api.koGameLabel('c', 2, 0), 'Final');
@@ -328,20 +333,19 @@ describe('generateScheduleForCat: 16 pairs, 4 groups, 4 courts, adv 2', () => {
 });
 
 describe('KNOWN BUGS in the standard bracket', () => {
-  test('KNOWN BUG: non-power-of-2 qualifiers (3 groups × 2) leave "TBD" opponents that never resolve', () => {
-    const { api, cs } = setup({ ...L.DEF_CAT_CFG, numGroups: 3, advPerGroup: 2 }, 12);
+  test('non-power-of-2 qualifiers (3 groups × 2): padding slots are byes that advance their seed', () => {
+    const { api, cs } = setup({ ...OLD_CFG, numGroups: 3, advPerGroup: 2 }, 12);
     api.buildCategory('c');
-    assert.deepEqual(cs.ko[0].map(g => `${g.a}-${g.b}`), ['A1-TBD', 'B1-TBD', 'C1-C2', 'A2-B2']);
+    assert.deepEqual(cs.ko[0].map(g => g.isBye ? `bye ${g.a}` : `${g.a}-${g.b}`), ['bye A1', 'bye B1', 'C1-C2', 'A2-B2']);
+    assert.equal(cs.ko[0][0].time, undefined, 'byes get no court/time');
     playPools(api, cs);
-    assert.equal(cs.ko[0][0].b, 'TBD');
-    // A1 should get a bye, but nothing ever advances it:
-    assert.equal(api.getKOWinner(cs.ko[0][0], 'c'), null);
-    assert.equal(cs.ko[1][0].a, 'A1/TBD');
-    // Also: two teams from the same group (C1, C2) meet in the first KO round.
+    assert.equal(api.getKOWinner(cs.ko[0][0], 'c'), 'T1');
+    assert.equal(cs.ko[1][0].a, 'T1');
+    // Still: two teams from the same group (C1, C2) meet in the first KO round.
     assert.deepEqual([cs.ko[0][2].a, cs.ko[0][2].b], ['T9', 'T10']);
   });
   test('KNOWN BUG: with 16 qualifiers, seeds 1 and 2 (A1, B1) meet already in the QF', () => {
-    const { api, cs } = setup({ ...L.DEF_CAT_CFG, courts: 4, numGroups: 4, advPerGroup: 4 }, 16);
+    const { api, cs } = setup({ ...OLD_CFG, courts: 4, numGroups: 4, advPerGroup: 4 }, 16);
     api.buildCategory('c');
     assert.deepEqual(cs.ko.map(r => r.length), [8, 4, 2, 1]);
     assert.deepEqual(cs.ko[0].slice(0, 2).map(g => `${g.a}-${g.b}`), ['A1-D4', 'B1-C4']);
@@ -349,7 +353,7 @@ describe('KNOWN BUGS in the standard bracket', () => {
     assert.deepEqual([cs.ko[1][0].a, cs.ko[1][0].b], ['A1/D4', 'B1/C4']);
   });
   test('adv < 1 → no KO', () => {
-    const { api, cs } = setup({ ...L.DEF_CAT_CFG, advPerGroup: 0 }, 6);
+    const { api, cs } = setup({ ...OLD_CFG, advPerGroup: 0 }, 6);
     api.buildCategory('c');
     assert.deepEqual(cs.ko, []);
   });
@@ -396,13 +400,14 @@ describe('QUEEN preset (admin.html createTournament)', () => {
   test('queen falls back to the standard bracket when groups !== 4', () => {
     const t = setup({ ...QUEEN_CFG, numGroups: 2 }, 8);
     t.api.buildCategory('c');
-    assert.equal(t.cs.ko[0].some(g => g.isBye), false);
+    // Standard bracket: 6 qualifiers padded to 8 → A1 and B1 get byes (not queen's R16 cross).
+    assert.deepEqual(t.cs.ko[0].map(g => g.isBye ? `bye ${g.seedA}` : `${g.seedA}-${g.seedB}`), ['bye A1', 'bye B1', 'A2-B3', 'B2-A3']);
   });
 });
 
 describe('assignSlotTimes with per-stage dur', () => {
   test('slot length follows koRules[stage].dur', () => {
-    const { api, cs } = setup({ ...L.DEF_CAT_CFG, gameDur: 15,
+    const { api, cs } = setup({ ...OLD_CFG, gameDur: 15,
       koRules: { qf: { pts: 18, change: 5, dur: 20 }, final: { pts: 21, change: 7, dur: 25 } },
       courts: 4, numGroups: 4, advPerGroup: 2 }, 16);
     api.buildCategory('c');
@@ -425,7 +430,7 @@ describe('coordinated multi-category scheduler', () => {
     return { ctx, api };
   }
   const allGames = ctx => Object.values(ctx.state).flatMap(cs => [...cs.sched, ...cs.ko.flat()]);
-  const base = { ...L.DEF_CAT_CFG, gameDur: 20, numGroups: 2, advPerGroup: 2 };
+  const base = { ...OLD_CFG, gameDur: 20, numGroups: 2, advPerGroup: 2 };
 
   test('no court/time collision; finale category plays last', () => {
     const { ctx } = coord([base, base]);
@@ -469,6 +474,19 @@ describe('coordinated multi-category scheduler', () => {
     const at = ctx.meta.breaks[0].atTime;
     const firstKO = ctx.state.k0.ko[0][0];
     assert.equal(L.t2m(firstKO.time), L.t2m(at) + 30);
+  });
+  test('a player in two categories never plays two games in the same round', () => {
+    const ctx = {
+      categories: [{ id: 'k0', cfg: base }, { id: 'k1', cfg: base }],
+      state: { k0: { roster: ['Dana / Ori', 'a1 / b1', 'a2 / b2', 'a3 / b3', 'a4 / b4'], groups: [], sched: [], ko: [] },
+               k1: { roster: ['dana / Lior', 'c1 / d1', 'c2 / d2', 'c3 / d3', 'c4 / d4'], groups: [], sched: [], ko: [] } },
+      meta: { coordinated: true, parallelCategories: true }, registrations: [],
+    };
+    const api = L.createLegacy(ctx);
+    api.buildCoordinatedGroups(); api.generateCoordinatedSchedule();
+    const dana = Object.values(ctx.state).flatMap(cs => cs.sched.filter(g => /dana/i.test(g.a + g.b)).map(g => g.si));
+    assert.equal(dana.length, 4);
+    assert.equal(new Set(dana).size, dana.length);
   });
   test('buildCoordinatedGroups pulls approved registrations when roster is empty', () => {
     const ctx = { categories: [{ id: 'k', cfg: base }], state: { k: { roster: [], groups: [], sched: [], ko: [] } },

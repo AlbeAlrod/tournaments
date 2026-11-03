@@ -4,6 +4,9 @@ import { computeStandings, matchesFromScores } from '../core/standings.js';
 import { validateResult } from '../core/scoring.js';
 import { PRESETS, legacyMatchFormat } from '../core/presets.js';
 import * as L from '../core/legacy.js';
+// Pre-wave-3 DEF_CAT_CFG: what categories created before 24.10 defaults still carry.
+const OLD_CFG = { courts: 2, gameDur: 30, breakDur: 0, numGroups: 2, advPerGroup: 2,
+  pointsToWin: 21, sets: 1, pointsThirdSet: 15, startTime: '08:00' };
 
 const PTS21 = { type: 'points', to: 15, winBy: 2, cap: null };
 const m = (a, b, sa, sb, fmt = PTS21) => ({ a, b, result: validateResult({ a: sa, b: sb }, fmt) });
@@ -88,11 +91,11 @@ describe('tiebreakers', () => {
 describe('legacy-beach standings agree with legacy getStandings', () => {
   const P = PRESETS['legacy-beach'];
   function check(groupTeams, results, seed) {
-    const ctx = { categories: [{ id: 'c', cfg: { ...L.DEF_CAT_CFG } }],
+    const ctx = { categories: [{ id: 'c', cfg: { ...OLD_CFG } }],
       state: { c: { roster: [], groups: [{ name: 'A', teams: groupTeams }], sched: [], ko: [] } }, meta: {}, registrations: [] };
     ctx.state.c.sched = results.map(([a, b, sa, sb]) => ({ gi: 0, a, b, sa: String(sa), sb: String(sb) }));
     const legacy = L.createLegacy(ctx).getStandings('c', 0);
-    const ms = matchesFromScores(ctx.state.c.sched, () => legacyMatchFormat(L.DEF_CAT_CFG, 'pool'), validateResult);
+    const ms = matchesFromScores(ctx.state.c.sched, () => legacyMatchFormat(OLD_CFG, 'pool'), validateResult);
     const rows = computeStandings(groupTeams, ms, P.standings);
     assert.deepEqual(rows.map(r => r.id), legacy.map(r => r.name), `seed ${seed}`);
     assert.deepEqual(rows.map(r => [r.wins, r.losses, r.points, r.unitsFor, r.unitsAgainst, r.unitDiff]),
