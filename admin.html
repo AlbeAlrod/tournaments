@@ -6,7 +6,7 @@
 <title>ניהול טורנירים</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700;800;900&display=swap" rel="stylesheet"/>
-<link rel="stylesheet" href="styles.css?v=61"/>
+<link rel="stylesheet" href="styles.css?v=69"/>
 <style>
 /* ── Shared overrides ── */
 .h { display: none !important; }
@@ -37,10 +37,8 @@
 .login-title h1 {
   font-family: 'Rubik', sans-serif;
   font-size: 24px;
-  font-weight: 900;
+  font-weight: 800;
   color: var(--text);
-  text-transform: uppercase;
-  letter-spacing: .5px;
 }
 .login-sub {
   font-size: 13px;
@@ -89,9 +87,9 @@
   font-size: 20px;
   font-weight: 800;
   color: var(--text);
-  letter-spacing: 1px;
 }
 .logout-btn {
+  min-height: var(--tap);
   padding: 8px 16px;
   background: transparent;
   color: var(--text3);
@@ -100,7 +98,6 @@
   font-family: 'Rubik', sans-serif;
   font-size: 14px;
   font-weight: 700;
-  letter-spacing: .5px;
   cursor: pointer;
   transition: all .2s;
 }
@@ -124,11 +121,10 @@
   font-family: 'Rubik', sans-serif;
   font-size: 26px;
   font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: .5px;
   color: var(--text);
 }
 .new-btn {
+  min-height: var(--tap);
   padding: 11px 22px;
   background: var(--primary);
   color: var(--on-primary);
@@ -137,8 +133,6 @@
   font-family: 'Rubik', sans-serif;
   font-size: 16px;
   font-weight: 800;
-  letter-spacing: 1px;
-  text-transform: uppercase;
   cursor: pointer;
   transition: opacity .18s;
   box-shadow: inset 0 0 0 1px rgba(0,0,0,0.10);
@@ -158,7 +152,7 @@
 }
 .t-table th {
   font-family: 'Rubik', sans-serif;
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 700;
   color: var(--text3);
   padding: 12px 14px;
@@ -202,19 +196,18 @@
 .status-pill {
   display: inline-block;
   font-family: 'Rubik', sans-serif;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
-  letter-spacing: .5px;
-  text-transform: uppercase;
   padding: 3px 10px;
   border-radius: 999px;
   white-space: nowrap;
 }
-.status-active  { background: rgba(5,150,105,.12); color: #059669; }
+.status-active  { background: rgba(5,150,105,.12); color: #047857; }
 .status-expired { background: rgba(220,38,38,.12);  color: #DC2626; }
 .status-expiring { background: rgba(180,83,9,.12); color: var(--amber); }
 .status-archived { background: var(--bg3); color: var(--text3); }
 .del-btn {
+  min-height: var(--tap);
   padding: 5px 12px;
   background: transparent;
   color: #DC2626;
@@ -228,6 +221,9 @@
 }
 .del-btn:hover { background: rgba(220,38,38,.08); }
 .refresh-btn {
+  min-height: var(--tap);
+  display: inline-flex;
+  align-items: center;
   padding: 5px 12px;
   background: transparent;
   color: var(--primary-text);
@@ -252,16 +248,15 @@
 .form-group { margin-bottom: 14px; }
 .form-label {
   display: block;
-  font-size: 10px;
-  font-weight: 700;
-  color: var(--text3);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text2);
   margin-bottom: 6px;
-  text-transform: uppercase;
-  letter-spacing: 1px;
 }
 .id-wrap { display: flex; gap: 8px; }
 .id-wrap .modal-input { flex: 1; font-family: monospace; font-size: 13px; }
 .regen-btn {
+  min-height: var(--tap);
   padding: 0 12px;
   background: var(--bg3);
   border: 1px solid var(--border2);
@@ -300,7 +295,7 @@
 }
 .adm-lmark span {
   font-family: 'Rubik', sans-serif;
-  font-weight: 900;
+  font-weight: 800;
   font-size: 18px;
   color: var(--on-primary);
 }
@@ -315,7 +310,7 @@
       <div class="adm-lmark"><span>T</span></div>
       <h1>ניהול טורנירים</h1>
     </div>
-    <p class="login-sub">הזינו את סיסמת מנהל העל כדי לנהל טורנירים.</p>
+    <p class="login-sub">הזינו את סיסמת מנהל המערכת כדי לנהל טורנירים.</p>
     <div class="form-row">
       <input class="form-input" type="password" autocomplete="current-password" id="adm-pw" placeholder="סיסמה"/>
     </div>
@@ -428,7 +423,7 @@
 
     <div class="actions" style="margin-bottom:6px">
       <a class="refresh-btn" id="ed-open" target="_blank" rel="noopener" style="text-decoration:none">פתיחת הטורניר ↗</a>
-      <button class="del-btn" id="ed-revert" onclick="revertPhase()">חזרה לשלב ההגדרה</button>
+      <button class="del-btn" id="ed-revert" onclick="revertPhase()">החזרה לשלב "נבנה" (פתיחת עריכה)</button>
     </div>
 
     <div id="ed-err" class="cr-err h"></div>
@@ -506,7 +501,7 @@
     </div>
 
     <div class="form-group">
-      <label class="form-label">מזהה <span style="font-weight:400;letter-spacing:0;text-transform:none;color:var(--text3)">— מופיע בכתובת (‎?t=…)</span></label>
+      <label class="form-label">מזהה <span style="font-weight:400;color:var(--text3)">— מופיע בכתובת (‎?t=…)</span></label>
       <div class="id-wrap">
         <input class="modal-input" id="cr-id" placeholder="נוצר אוטומטית"/>
         <button class="regen-btn" onclick="regenId('cr')" title="מזהה חדש">&#8635;</button>
@@ -547,12 +542,12 @@
     </div>
 
     <div class="form-group">
-      <label class="form-label">תוקף <span style="font-weight:400;letter-spacing:0;text-transform:none;color:var(--text3)">— לא חובה</span></label>
+      <label class="form-label">תוקף <span style="font-weight:400;color:var(--text3)">— לא חובה</span></label>
       <input class="modal-input" id="cr-expiry" type="datetime-local" style="width:100%"/>
     </div>
 
     <div class="form-group">
-      <label class="form-label">העתקה מ־ <span style="font-weight:400;letter-spacing:0;text-transform:none;color:var(--text3)">— מעתיק עיצוב (צבעים, לוגו, ספונסרים) והגדרות קטגוריות</span></label>
+      <label class="form-label">העתקה מ־ <span style="font-weight:400;color:var(--text3)">— מעתיק עיצוב (צבעים, לוגו, ספונסרים) והגדרות קטגוריות</span></label>
       <select class="modal-input" id="cr-template" style="width:100%" onchange="pickTemplate(this.value)"></select>
     </div>
 
@@ -574,7 +569,7 @@ import {
 
 const BASE_URL = new URL('./', location.href).href;
 const DAY = 864e5;
-const PHASES = { registration: 'הרשמה', built: 'בנוי', tournament: 'בטורניר' };
+const PHASES = { registration: 'הרשמה', built: 'נבנה, לפני התחלה', tournament: 'בעיצומו' };
 const STATUS = { active: 'פעיל', expiring: 'פג בקרוב', expired: 'פג תוקף' };
 
 let tournaments = [];
