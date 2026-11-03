@@ -1,108 +1,129 @@
 <!DOCTYPE html><html lang="he" dir="rtl"><head><meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>בראקט נוק-אאוט</title>
+<title>עץ הנוקאאוט</title>
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700;800;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700;800&display=swap');
 *{box-sizing:border-box;margin:0;padding:0}
-:root{--ink:#0a0a0a;--sec:#3a3a3a;--mut:#9a9a9a;--hair:#d7d7d7;--g:40px}
-html,body{font-family:"Heebo","Assistant","Arial Hebrew",system-ui,sans-serif;color:var(--ink);-webkit-font-smoothing:antialiased}
+:root{--ink:#0a0a0a;--sec:#3a3a3a;--mut:#666;--hair:#d7d7d7;--field:#8a8a8a;--g:40px}
+html,body{font-family:"Rubik","Arial Hebrew",system-ui,sans-serif;color:var(--ink);-webkit-font-smoothing:antialiased}
 body{background:#e7e7e7}
-.toolbar{width:297mm;margin:12px auto;padding:9px 14px;background:#fff;border:1px solid #ddd;border-radius:10px;display:flex;gap:10px;align-items:center}
-.toolbar b{color:#652d92} .toolbar .muted{color:#8a8a8a;font-size:12px}
-.toolbar button{font-family:inherit;font-size:14px;font-weight:700;padding:8px 15px;border:0;border-radius:8px;background:#652d92;color:#fff;cursor:pointer}
+.toolbar{max-width:297mm;margin:12px auto;padding:9px 14px;background:#fff;border:1px solid #ddd;border-radius:10px;display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.toolbar b{color:#652d92} .toolbar .muted{color:#666;font-size:12px}
+.toolbar button{font-family:inherit;font-size:14px;font-weight:700;min-height:44px;padding:8px 15px;border:0;border-radius:8px;background:#652d92;color:#fff;cursor:pointer}
+.noprint{flex-basis:100%;display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:10px 12px;border-radius:8px;background:#FEF3C7;color:#92400E;font-size:14px;font-weight:600}
+.noprint[hidden]{display:none}
+.empty{max-width:297mm;margin:40px auto;text-align:center;color:var(--mut);font-size:16px}
 
-.page{width:297mm;min-height:210mm;background:#fff;margin:10mm auto;padding:8mm 12mm 6mm;display:flex;flex-direction:column}
+.page{width:297mm;height:210mm;overflow:hidden;background:#fff;margin:10mm auto;padding:8mm 12mm 6mm;display:flex;flex-direction:column}
 .head{text-align:center;padding-bottom:8px;border-bottom:2.5px solid var(--ink)}
 .head img{height:38px;width:auto;object-fit:contain;display:block;margin:0 auto 6px;}
-.head .eyebrow{font-size:10.5px;font-weight:500;letter-spacing:7px;color:var(--mut);padding-right:7px}
-.head .title{font-size:24px;font-weight:800;letter-spacing:2px;margin-top:1px}
+.head .eyebrow{font-size:11px;font-weight:500;color:var(--mut)}
+.head .title{font-size:24px;font-weight:800;margin-top:1px}
 
-.bracket{display:flex;column-gap:var(--g);height:145mm;margin-top:10px}
+.bracket{display:flex;column-gap:var(--g);flex:1;min-height:0;margin-top:10px}
 .round{flex:1;display:flex;flex-direction:column;min-width:0}
 .rhd{flex:0 0 auto;text-align:center;height:26px}
-.rhd b{font-size:13.5px;font-weight:800;letter-spacing:3px}
+.rhd b{font-size:14px;font-weight:800}
 .matches{flex:1;display:flex;flex-direction:column;justify-content:space-around}
 .unit{flex:1;display:flex;align-items:center;min-height:0}
 
 .box{width:100%;border:1.4px solid var(--ink);border-radius:9px;overflow:hidden;background:#fff}
-.bh{font-size:9.5px;font-weight:700;letter-spacing:.4px;color:var(--sec);text-align:center;padding:3px 4px 2px;border-bottom:1px solid var(--hair)}
-.brow{display:grid;grid-template-columns:1fr 36px;min-height:26px}
+.bh{font-size:10px;font-weight:700;color:var(--sec);text-align:center;padding:3px 4px 2px;border-bottom:1px solid var(--hair)}
+.brow{display:grid;grid-template-columns:1fr repeat(var(--n,1),32px);min-height:26px}
 .brow + .brow{border-top:1px solid var(--hair)}
-.nm{display:flex;align-items:center;padding:5px 10px;min-height:26px}
-.nm .hint{font-size:11.5px;font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.15}
-.sc{border-right:1px solid var(--hair)}
+.nm{display:flex;align-items:center;padding:5px 10px;min-height:26px;min-width:0}
+.nm .hint{font-size:11.5px;font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.15;unicode-bidi:plaintext}
+.sc{border-right:1px solid var(--field)}
 
 .final .matches{display:flex;flex-direction:column;justify-content:center;gap:16px}
 .final .unit{flex:0 0 auto;display:block}
 .final .box{border-width:2px}
-.third-unit .cap{text-align:center;font-size:9px;font-weight:600;letter-spacing:1px;color:var(--mut);margin-top:5px}
+.third-unit .cap{text-align:center;font-size:10px;font-weight:600;color:var(--mut);margin-top:5px}
 
-.note{margin-top:8px;padding-top:7px;border-top:1px solid var(--hair);text-align:center;font-size:11px;font-weight:500;letter-spacing:2.5px;color:var(--mut)}
-.note b{color:var(--ink);font-weight:800}
+.note{margin-top:8px;padding-top:7px;border-top:1px solid var(--hair);text-align:center;font-size:11.5px;font-weight:500;color:var(--mut)}
 
 @page{size:A4 landscape;margin:0}
-@media print{ body{background:#fff} .toolbar{display:none!important} .page{margin:0} }
+@media print{
+  *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  body{background:#fff} .toolbar{display:none!important}
+  .page{margin:0;break-after:page} .page:last-child{break-after:auto}
+}
 </style></head>
 <body>
-<div class="toolbar"><b>בראקט נוק-אאוט</b> <span id="stat" class="muted">טוען…</span>
-  <button onclick="window.print()">הדפס / שמור PDF</button>
+<div class="toolbar"><b>עץ הנוקאאוט</b> <span id="stat" class="muted">טוען…</span>
+  <button onclick="doPrint()">הדפסה / שמירה כ־PDF</button>
   <span class="muted">A4 לרוחב · דף לכל קטגוריה</span>
+  <div id="noprint" class="noprint" hidden>ההדפסה לא נתמכת כאן — פתחו בכרום/ספארי ושם הדפיסו או שמרו כ־PDF
+    <button onclick="copyLink(this)">העתק קישור</button></div>
 </div>
 <div id="pages"></div>
 
 <script type="module">
 import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
 import { getFirestore, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
+import { tRound, tSlot } from './i18n.js?v=69';
 const cfg={apiKey:"AIzaSyA-rPlg0Oau16QcTjD20hDfkyveRSrD8I0",authDomain:"tournaments-33619.firebaseapp.com",projectId:"tournaments-33619",storageBucket:"tournaments-33619.firebasestorage.app",messagingSenderId:"409384565600",appId:"1:409384565600:web:61bd55676343d6035abc05"};
 const db=getFirestore(getApps().length?getApps()[0]:initializeApp(cfg));
 const tId=new URLSearchParams(location.search).get('t');
 const koFromFB=obj=>!obj?[]:Object.keys(obj).sort((a,b)=>parseInt(a.slice(1))-parseInt(b.slice(1))).map(k=>obj[k]);
-const esc=s=>String(s==null?'':s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
-function lbl(x){ if(!x) return ''; let m;
-  if(m=String(x).match(/^([A-D])(\d+)$/)){ const p=m[1],r=+m[2]; return r===1?`מנצח/ת · בית ${p}`:`מקום ${r} · בית ${p}`; }
-  if(m=String(x).match(/^([A-D]\d+)\s*\/\s*([A-D]\d+)$/)){ return `מנצח/ת ${m[1]}·${m[2]}`; }
-  x=String(x).replace(/Winner of Semifinals?\s*(\d)/i,'מנצח/ת חצי-גמר $1').replace(/Winner of Final/i,'מנצח/ת')
-             .replace(/Loser of (?:SF|Semifinals?)\s*(\d)/i,'מפסיד/ת חצי-גמר $1');
-  return x;
+const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const stat=document.getElementById('stat');
+
+let printed=false;
+addEventListener('beforeprint',()=>{printed=true;});
+window.doPrint=()=>{printed=false; window.print(); setTimeout(()=>{ if(!printed) document.getElementById('noprint').hidden=false; },500);};
+window.copyLink=async b=>{try{await navigator.clipboard.writeText(location.href); b.textContent='הקישור הועתק ✓';}catch(_){prompt('העתיקו את הקישור:',location.href);}};
+
+const seed=x=>{const m=String(x).match(/^([A-Z])(\d+)$/); return m&&`מקום ${m[2]} בבית ${m[1]}`;};
+function lbl(x){
+  if(!x||x==='TBD') return '';
+  if(x==='BYE') return 'עולה ישירות';
+  const m=String(x).match(/^([A-Z]\d+)\s*\/\s*([A-Z]\d+)$/);
+  if(m) return `המנצחים ב־${m[1]} נגד ${m[2]}`;
+  return seed(x)||tSlot(x);
 }
-const bh=g=>(g&&Number.isFinite(g.court)&&g.time)?`מגרש ${g.court} · ${g.time}`:'&nbsp;';
-const box=(g,extra='')=>`<div class="box${extra}"><div class="bh">${bh(g)}</div>`+
-  `<div class="brow"><div class="nm"><span class="hint">${esc(lbl(g.a))}</span></div><div class="sc"></div></div>`+
-  `<div class="brow"><div class="nm"><span class="hint">${esc(lbl(g.b))}</span></div><div class="sc"></div></div></div>`;
+const stageOf=fe=>fe===0?'final':fe===1?'sf':fe===2?'qf':'r16';
+const bh=g=>(g&&Number.isFinite(+g.court)&&+g.court>0&&g.time)?`מגרש ${+g.court} · ${esc(g.time)}`:'&nbsp;';
+const box=(g,n,extra='')=>{const sc='<div class="sc"></div>'.repeat(n);
+  return `<div class="box${extra}" style="--n:${n}"><div class="bh">${bh(g)}</div>`+
+  `<div class="brow"><div class="nm"><span class="hint">${esc(lbl(g.a))}</span></div>${sc}</div>`+
+  `<div class="brow"><div class="nm"><span class="hint">${esc(lbl(g.b))}</span></div>${sc}</div></div>`;};
 
 (async()=>{
  try{
-  if(!tId){document.getElementById('stat').textContent='חסר מזהה טורניר בכתובת (?t=…)';return;}
+  if(!tId){stat.textContent='חסר מזהה טורניר בכתובת (?t=…)';return;}
   const snap=await getDoc(doc(db,'tournaments',tId));
-  if(!snap.exists()){document.getElementById('stat').textContent='לא נמצא: '+tId;return;}
+  if(!snap.exists()){stat.textContent='לא נמצא: ⁦'+tId+'⁩';return;}
   const d=snap.data(), meta=d.meta||{}, tName=meta.name||tId;
   const wrap=document.getElementById('pages'); wrap.innerHTML=''; let made=0;
   (d.categories||[]).forEach(cat=>{
     const cs=(d.state||{})[cat.id]||{};
     const ko=koFromFB(cs.ko);
     if(!ko.length) return;
+    const rules=cat.cfg?.koRules||{}, setsOf=k=>rules[k]?.sets||1;
     const third=(cs.sched||[]).find(g=>g.isThirdPlace||g.gi===-1);
     const L=ko.length;
-    const rname=fe=>fe===0?'גמר':fe===1?'חצי גמר':fe===2?'רבע גמר':fe===3?'שמינית גמר':'סבב';
     let roundsHtml='';
     ko.forEach((round,ri)=>{
-      const fe=L-1-ri, isFinal=fe===0;
-      const units=(round||[]).filter(g=>g&&!g.isBye).map(g=>`<div class="unit">${box(g, isFinal?' ':'')}</div>`).join('');
-      let extra='';
-      if(isFinal && third) extra=`<div class="unit third-unit">${box(third)}<div class="cap">משחק מקום 3–4</div></div>`;
-      roundsHtml+=`<div class="round${isFinal?' final':''}"><div class="rhd"><b>${rname(fe)}</b></div><div class="matches">${units}${extra}</div></div>`;
+      const fe=L-1-ri, isFinal=fe===0, n=setsOf(stageOf(fe));
+      const units=(round||[]).filter(g=>g&&!g.isBye).map(g=>`<div class="unit">${box(g,n)}</div>`).join('');
+      const extra=isFinal&&third?`<div class="unit third-unit">${box(third,setsOf('third'))}<div class="cap">משחק על המקום השלישי</div></div>`:'';
+      roundsHtml+=`<div class="round${isFinal?' final':''}"><div class="rhd"><b>${esc(tRound(fe,(round||[]).length*2))}</b></div><div class="matches">${units}${extra}</div></div>`;
     });
+    const note=L>1?'המנצחים בכל משחק עולים לשלב הבא'+(third?' · המפסידים בחצי הגמר משחקים על המקום השלישי':''):'';
     const sec=document.createElement('section'); sec.className='page';
-    sec.innerHTML=`<div class="head"><img src="${esc(meta.logoUrl||'assets/volleylab-logo.png')}" alt=""/>`+
-      `<div class="eyebrow">${esc(tName)}</div><div class="title">${esc(cat.name||cat.id)} · נוק-אאוט</div></div>`+
+    sec.innerHTML=`<div class="head">${meta.logoUrl?`<img src="${esc(meta.logoUrl)}" alt=""/>`:''}`+
+      `<div class="eyebrow">${esc(tName)}</div><div class="title">${esc(cat.name||cat.id)} · נוקאאוט</div></div>`+
       `<div class="bracket">${roundsHtml}</div>`+
-      `<div class="note">מנצח/ת רבע-גמר עולה לחצי · מפסידי החצי משחקים על מקום <b>3</b></div>`;
+      (note?`<div class="note">${note}</div>`:'');
     wrap.appendChild(sec); made++;
   });
-  document.getElementById('stat').textContent=`${tName} · ${made} קטגוריות`;
-  document.title=`בראקט — ${tName}`;
+  if(!made) wrap.innerHTML='<p class="empty">עוד אין עץ נוקאאוט — יש לבנות את הטורניר קודם.</p>';
+  stat.textContent=`${tName} · ${made} קטגוריות`;
+  document.title=`עץ הנוקאאוט — ${tName}`;
+  await document.fonts.ready;
   window.__READY__=true;
- }catch(e){document.getElementById('stat').textContent='שגיאה: '+e.message;console.error(e);}
+ }catch(e){stat.textContent='שגיאה: '+e.message;console.error(e);}
 })();
 </script>
 </body></html>
