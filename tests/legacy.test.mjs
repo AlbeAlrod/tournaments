@@ -473,6 +473,19 @@ describe('coordinated multi-category scheduler', () => {
     const firstKO = ctx.state.k0.ko[0][0];
     assert.equal(L.t2m(firstKO.time), L.t2m(at) + 30);
   });
+  test('a player in two categories never plays two games in the same round', () => {
+    const ctx = {
+      categories: [{ id: 'k0', cfg: base }, { id: 'k1', cfg: base }],
+      state: { k0: { roster: ['Dana / Ori', 'a1 / b1', 'a2 / b2', 'a3 / b3', 'a4 / b4'], groups: [], sched: [], ko: [] },
+               k1: { roster: ['dana / Lior', 'c1 / d1', 'c2 / d2', 'c3 / d3', 'c4 / d4'], groups: [], sched: [], ko: [] } },
+      meta: { coordinated: true, parallelCategories: true }, registrations: [],
+    };
+    const api = L.createLegacy(ctx);
+    api.buildCoordinatedGroups(); api.generateCoordinatedSchedule();
+    const dana = Object.values(ctx.state).flatMap(cs => cs.sched.filter(g => /dana/i.test(g.a + g.b)).map(g => g.si));
+    assert.equal(dana.length, 4);
+    assert.equal(new Set(dana).size, dana.length);
+  });
   test('buildCoordinatedGroups pulls approved registrations when roster is empty', () => {
     const ctx = { categories: [{ id: 'k', cfg: base }], state: { k: { roster: [], groups: [], sched: [], ko: [] } },
       meta: {}, registrations: [

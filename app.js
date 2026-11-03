@@ -1464,7 +1464,9 @@ function generateCoordinatedSchedule(){
     const groups=state[cat.id].groups; const poolIds=[];
     groups.forEach((grp,gi)=>rr(grp.teams).forEach(([a,b])=>{
       const id=`${cat.id}:P:${gi}:${a}#${b}`; poolIds.push(id);
-      games.push({id,catId:cat.id,ci,kind:'pool',gi,gn:grp.name,a,b,teams:[`${cat.id}~${a}`,`${cat.id}~${b}`]});
+      // Conflicts and rest are tracked per PLAYER, so one player in two categories is never double-booked.
+      games.push({id,catId:cat.id,ci,kind:'pool',gi,gn:grp.name,a,b,teams:[a,b].flatMap(p=>p.split(' / ').map(normName))});
+
     }));
     const cfg=cat.cfg||DEF_CAT_CFG; const adv=cfg.advPerGroup||0, ng=groups.length;
     if(adv>=1 && ng>=1){
