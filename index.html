@@ -214,13 +214,14 @@
 </div><!-- /view-app -->
 
 <!-- LOGIN MODAL -->
-<div class="overlay h" id="pw-modal" onclick="if(event.target===this)closeLogin()">
+<div class="overlay h" id="pw-modal" role="dialog" aria-modal="true" aria-labelledby="pw-title" onclick="if(event.target===this)closeLogin()" onkeydown="if(event.key==='Escape')closeLogin()">
   <div class="modal">
-    <h3 data-i18n="admin.loginTitle">Login</h3>
+    <h3 id="pw-title" data-i18n="admin.loginTitle">כניסה</h3>
     <div class="modal-row" style="margin-bottom:14px;">
-      <button id="role-btn-admin"  onclick="selectLoginRole('admin')" data-i18n="admin.roleAdmin">Admin</button>
-      <button id="role-btn-master" onclick="selectLoginRole('master')" data-i18n="admin.roleMaster">Master</button>
+      <button id="role-btn-admin"  onclick="selectLoginRole('admin')" data-i18n="admin.roleAdmin">אדמין</button>
+      <button id="role-btn-master" onclick="selectLoginRole('master')" data-i18n="admin.roleMaster">מאסטר</button>
     </div>
+    <p class="role-hint" id="role-hint"></p>
     <div class="modal-row">
       <input class="modal-input" id="pw-inp" type="password" dir="ltr" autocomplete="current-password" data-i18n-ph="admin.pwPh" placeholder="Password"
         onkeydown="if(event.key==='Enter')tryLogin()"/>
@@ -234,9 +235,9 @@
 </div>
 
 <!-- START TOURNAMENT MODAL -->
-<div class="overlay h" id="start-modal" onclick="if(event.target===this)closeStartModal()">
+<div class="overlay h" id="start-modal" role="dialog" aria-modal="true" aria-labelledby="start-title" onclick="if(event.target===this)closeStartModal()" onkeydown="if(event.key==='Escape')closeStartModal()">
   <div class="modal">
-    <h3 data-i18n="build.startQ">Start Tournament?</h3>
+    <h3 id="start-title" data-i18n="build.startQ">Start Tournament?</h3>
     <p data-i18n="build.startBody" style="font-size:14px;line-height:1.6;color:var(--text);margin-bottom:6px">
       Are you sure you're ready to start? It's recommended to do this at the beginning of the tournament.
       Pairs and settings can no longer be changed.
@@ -249,7 +250,7 @@
 </div>
 
 <!-- EDIT TEAM MODAL -->
-<div class="overlay h" id="edit-modal" onclick="if(event.target===this)closeEdit()">
+<div class="overlay h" id="edit-modal" role="dialog" aria-modal="true" aria-labelledby="edit-modal-title" onclick="if(event.target===this)closeEdit()" onkeydown="if(event.key==='Escape')closeEdit()">
   <div class="modal">
     <h3 id="edit-modal-title" data-i18n="build.editPair">Edit Pair</h3>
     <div class="modal-row">
@@ -290,9 +291,9 @@
 <datalist id="player-datalist"></datalist>
 
 <!-- ADD PAIR MODAL (master) -->
-<div class="overlay h" id="addpair-modal" onclick="if(event.target===this)closeAddPair()">
+<div class="overlay h" id="addpair-modal" role="dialog" aria-modal="true" aria-labelledby="addpair-title" onclick="if(event.target===this)closeAddPair()" onkeydown="if(event.key==='Escape')closeAddPair()">
   <div class="modal">
-    <h3 data-i18n="build.addPairTitle">Add Pair Directly</h3>
+    <h3 id="addpair-title" data-i18n="build.addPairTitle">Add Pair Directly</h3>
     <div class="modal-row">
       <input class="modal-input" id="ap-p1" dir="auto" data-i18n-ph="common.player1" placeholder="Player 1" list="player-datalist" autocomplete="off"/>
     </div>

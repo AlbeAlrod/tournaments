@@ -512,6 +512,8 @@ function updateRoleButtons() {
     el?.classList.toggle('on', loginRole === role);
     el?.setAttribute('aria-pressed', loginRole === role);
   });
+  const hint = document.getElementById('role-hint');
+  if (hint) hint.textContent = t(loginRole === 'master' ? 'admin.roleMasterHint' : 'admin.roleAdminHint');
 }
 
 async function tryLogin() {
@@ -3008,7 +3010,7 @@ function renderBracketForCat(catId, container) {
   const info  = document.createElement('div');
   info.className='binfo';
   info.innerHTML = !total ? t('bracket.noPool')
-    : t('bracket.poolInfo', { progress: `<span class="num">${t('bracket.poolPlayed', { done, total })}</span>` });
+    : t('bracket.poolInfo', { progress: t('bracket.poolPlayed', { done, total }) });
   container.appendChild(info);
   if (!cs.ko.length) return;
 
