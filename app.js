@@ -132,10 +132,11 @@ function koFromFB(obj) {
   return Object.keys(obj).sort((a,b) => parseInt(a.slice(1)) - parseInt(b.slice(1))).map(k => obj[k]);
 }
 function catStateToFB(cs) {
-  return { roster: cs.roster||[], groups: cs.groups||[], sched: cs.sched||[], ko: koToFB(cs.ko||[]) };
+  return { ...cs, roster: cs.roster||[], groups: cs.groups||[], sched: cs.sched||[], ko: koToFB(cs.ko||[]) };
 }
 function catStateFromFB(data) {
   return {
+    ...data,
     roster: data.roster||[],
     groups: data.groups||[],
     sched:  data.sched||[],

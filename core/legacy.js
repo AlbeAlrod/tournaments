@@ -57,11 +57,12 @@ export function koFromFB(obj) {
 }
 // from app.js:117
 export function catStateToFB(cs) {
-  return { roster: cs.roster||[], groups: cs.groups||[], sched: cs.sched||[], ko: koToFB(cs.ko||[]) };
+  return { ...cs, roster: cs.roster||[], groups: cs.groups||[], sched: cs.sched||[], ko: koToFB(cs.ko||[]) };
 }
 // from app.js:120
 export function catStateFromFB(data) {
   return {
+    ...data,
     roster: data.roster||[],
     groups: data.groups||[],
     sched:  data.sched||[],
