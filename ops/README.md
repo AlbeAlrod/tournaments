@@ -24,5 +24,16 @@ or repair specific tournaments in Firestore by hand:
 - New seed/repair tools belong here too, and must not contain secrets — prompt for them at
   runtime instead.
 
+## Print to PDF without the browser dialog
+
+When printing fails (in-app browsers can't print), make the PDFs with headless Chrome. The pages
+set `window.__READY__` after data and fonts load; `--virtual-time-budget` waits for that.
+
+```sh
+T=<tournament-id>; U=https://albealrod.github.io/tournaments
+google-chrome --headless=new --virtual-time-budget=15000 --no-pdf-header-footer --print-to-pdf=courts.pdf "$U/print-courts.html?t=$T"
+google-chrome --headless=new --virtual-time-budget=15000 --no-pdf-header-footer --print-to-pdf=bracket.pdf "$U/bracket.html?t=$T"
+```
+
 `check-syntax.mjs` and `run-tests.mjs` in this folder are dev scripts used by `npm run check`
 and `npm test`; they are not part of the site either.
