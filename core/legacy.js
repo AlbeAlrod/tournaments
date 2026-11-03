@@ -577,17 +577,19 @@ export function createLegacy(ctx) {
   }
 
   // from app.js:1463
-  function isValidScore(sa, sb, catId, ptwOverride) {
+  function isValidScore(sa, sb, catId, rule, g) {
     const { categories } = ctx;
     if (isNaN(sa)||isNaN(sb)||sa===''||sb==='') return false;
     if (sa < 0 || sb < 0) return false;
+    if (g?.forced || g?.wo) return sa !== sb;
     const cat = categories.find(c=>c.id===catId);
     const cfg = cat?.cfg || DEF_CAT_CFG;
-    if (cfg.sets === 3) {
+    const r = rule && typeof rule === 'object' ? rule : { pts: rule };
+    if ((r.sets ?? cfg.sets) === 3) {
       const hi = Math.max(sa,sb), lo = Math.min(sa,sb);
       return (hi===2 && lo>=0 && lo<=1);
     }
-    const ptw = ptwOverride || cfg.pointsToWin || 21;
+    const ptw = r.pts || cfg.pointsToWin || 21;
     if (sa===sb) return false;
     const hi = Math.max(sa,sb), lo = Math.min(sa,sb);
     if (hi < ptw) return false;
@@ -596,21 +598,23 @@ export function createLegacy(ctx) {
   }
 
   // from app.js:1480
-  function scoreError(sa, sb, catId, ptwOverride) {
+  function scoreError(sa, sb, catId, rule, g) {
     const { categories } = ctx;
     if (sa===''||sb==='') return null;
     const a=parseInt(sa), b=parseInt(sb);
     if (isNaN(a)||isNaN(b)) return null;
     if (a < 0 || b < 0) return { key:'score.nonNegative' };
+    if (g?.forced || g?.wo) return a === b ? { key:'score.noDraw' } : null;
     const cat = categories.find(c=>c.id===catId);
     const cfg = cat?.cfg || DEF_CAT_CFG;
-    if (cfg.sets===3) {
+    const r = rule && typeof rule === 'object' ? rule : { pts: rule };
+    if ((r.sets ?? cfg.sets)===3) {
       const hi=Math.max(a,b), lo=Math.min(a,b);
       if (hi>2||lo<0) return { key:'score.setsFormat' };
       if (hi!==2) return { key:'score.setsWinner' };
       return null;
     }
-    const ptw = ptwOverride || cfg.pointsToWin||21;
+    const ptw = r.pts || cfg.pointsToWin||21;
     const hi=Math.max(a,b), lo=Math.min(a,b);
     if (hi===lo) return { key:'score.noDraw' };
     if (hi<ptw) return { key:'score.mustReachEg', params:{ n:ptw, lo } };
@@ -634,7 +638,7 @@ export function createLegacy(ctx) {
     const resolve = s => normMap[normName(s)] || s;
     cs.sched.filter(g=>g.gi===gi).forEach(g => {
       const sa=parseInt(g.sa), sb=parseInt(g.sb);
-      if (!isValidScore(sa, sb, catId, getRuleForGame(catId, g, false).pts)) return;
+      if (!isValidScore(sa, sb, catId, getRuleForGame(catId, g, false), g)) return;
       const a=resolve(g.a), b=resolve(g.b);
       if (rec[a]) { rec[a].scored+=sa; rec[a].against+=sb; }
       if (rec[b]) { rec[b].scored+=sb; rec[b].against+=sa; }
@@ -661,7 +665,7 @@ export function createLegacy(ctx) {
     if (gi<0||gi>=cs.groups.length) return { label:seed, known:false };
     const grp = cs.groups[gi];
     const totalGames = (grp.teams.length*(grp.teams.length-1))/2;
-    const done = cs.sched.filter(g=>g.gi===gi&&isValidScore(parseInt(g.sa),parseInt(g.sb),catId,getRuleForGame(catId,g,false).pts)).length;
+    const done = cs.sched.filter(g=>g.gi===gi&&isValidScore(parseInt(g.sa),parseInt(g.sb),catId,getRuleForGame(catId,g,false),g)).length;
     if (done!==totalGames) return { label:seed, known:false };
     const st = getStandings(catId, gi);
     if (!st[rank-1]) return { label:seed, known:false };
@@ -672,7 +676,7 @@ export function createLegacy(ctx) {
   function getKOLoser(game, catId) {
     if (!game || game.isBye) return null;
     const sa=parseInt(game.sa), sb=parseInt(game.sb);
-    if (isValidScore(sa,sb,catId,getRuleForGame(catId,game,true).pts)) return sa>sb ? game.b : game.a;
+    if (isValidScore(sa,sb,catId,getRuleForGame(catId,game,true),game)) return sa>sb ? game.b : game.a;
     return null;
   }
 
@@ -686,7 +690,7 @@ export function createLegacy(ctx) {
       return seed;
     }
     const sa=parseInt(game.sa), sb=parseInt(game.sb);
-    if (isValidScore(sa,sb,catId,getRuleForGame(catId,game,true).pts)) return sa>sb?game.a:game.b;
+    if (isValidScore(sa,sb,catId,getRuleForGame(catId,game,true),game)) return sa>sb?game.a:game.b;
     return null;
   }
 
@@ -700,6 +704,7 @@ export function createLegacy(ctx) {
 
     if (cs.ko[0]) {
       cs.ko[0].forEach(g => {
+      if (String(g.sa ?? '') !== '' || String(g.sb ?? '') !== '') return;
         const seedA = g.seedA || (g.isBye ? g.a : '');
         const seedB = g.seedB || '';
         if (seedA) { const r=resolvePoolSeed(catId,seedA); if(r.known||/^[A-Z]\d+$/.test(seedA)) g.a=r.known?r.label:seedA; }
@@ -712,7 +717,7 @@ export function createLegacy(ctx) {
       const rndName = getKORoundName(catId, ri-1);
       const isCross = prev.length === 4 && cs.ko[ri].filter(g=>!g.isThirdPlace).length === 2;
       cs.ko[ri].forEach((g, gi) => {
-        if (g.isThirdPlace) return;
+        if (g.isThirdPlace || String(g.sa ?? '') !== '' || String(g.sb ?? '') !== '') return;
         const idxA = isCross ? gi               : gi*2;
         const idxB = isCross ? prev.length-1-gi : gi*2+1;
         const seedLabel = src => {
@@ -730,7 +735,7 @@ export function createLegacy(ctx) {
     if (cs.ko.length >= 2) {
       const sfRound = cs.ko[cs.ko.length - 2];
       const thirdGame = cs.sched.find(g => g.isThirdPlace);
-      if (thirdGame && sfRound) {
+      if (thirdGame && sfRound && String(thirdGame.sa ?? '') === '' && String(thirdGame.sb ?? '') === '') {
         thirdGame.a = getKOLoser(sfRound[0], catId) || 'Loser of SF1';
         thirdGame.b = getKOLoser(sfRound[1], catId) || 'Loser of SF2';
       }

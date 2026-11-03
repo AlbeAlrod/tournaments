@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Tournaments</title>
+<title>טורנירים</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700;800&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="styles.css?v=69"/>
@@ -13,15 +13,15 @@
 <!-- EXPIRED -->
 <div id="view-expired" class="view h">
   <div class="no-t-wrap">
-    <h1 data-i18n="common.expiredH">Tournament Expired</h1>
-    <p data-i18n="common.expiredP">This tournament page is no longer active.</p>
+    <h1 data-i18n="common.expiredH">הטורניר הסתיים</h1>
+    <p data-i18n="common.expiredP">עמוד הטורניר הזה כבר לא פעיל.</p>
   </div>
 </div>
 
 <!-- NO TOURNAMENT -->
 <div id="view-none" class="view h">
   <div class="no-t-wrap">
-    <h1 data-i18n="common.noTournamentH">Tournaments</h1>
+    <h1 data-i18n="common.noTournamentH">טורנירים</h1>
     <p data-i18n-html="common.noTournamentP">No tournament specified. Add <code>?t=tournament-id</code> to the URL.</p>
   </div>
 </div>
@@ -29,14 +29,14 @@
 <!-- TOURNAMENT NOT FOUND -->
 <div id="view-notfound" class="view h">
   <div class="no-t-wrap">
-    <h1 data-i18n="common.notFoundH">Tournament not found</h1>
-    <p data-i18n="common.notFoundP">We couldn't find this tournament. Please check the link you received, or ask the organizer to send it again.</p>
+    <h1 data-i18n="common.notFoundH">הטורניר לא נמצא</h1>
+    <p data-i18n="common.notFoundP">לא מצאנו את הטורניר הזה. בדקו את הקישור שקיבלתם, או בקשו מהמארגנים לשלוח אותו שוב.</p>
   </div>
 </div>
 
 <!-- LOADING -->
 <div id="view-loading" class="view">
-  <div class="no-t-wrap"><div class="loader"></div><p data-i18n="common.loading">Loading…</p></div>
+  <div class="no-t-wrap"><div class="loader"></div><p data-i18n="common.loading">טוען…</p></div>
 </div>
 
 <!-- MAIN APP -->
@@ -46,10 +46,11 @@
 
   <div id="admin-bar" class="admin-bar">
     <div id="mode-bar" class="mode-bar mode-view">
-      <span id="mode-text" data-i18n="admin.modeHint">Tap Admin to manage</span>
-      <span id="sync-indicator" class="sync-dot sync-ok h"></span>
+      <span id="mode-text" data-i18n="admin.modeHint">לניהול — לחצו על "ניהול"</span>
+      <span id="sync-indicator" class="sync-dot sync-ok"></span>
+      <span id="sync-status" class="sync-status" role="status"></span>
     </div>
-    <button class="admin-toggle" id="abtn" onclick="adminClick()"><span id="adm-txt" data-i18n="admin.btn">Admin</span></button>
+    <button class="admin-toggle" id="abtn" onclick="adminClick()"><span id="adm-txt" data-i18n="admin.btn">ניהול</span></button>
   </div>
 
   <div id="sticky-block" class="sticky-block">
@@ -68,16 +69,16 @@
     </header>
     <nav id="main-nav" data-i18n-aria="common.nav.aria">
       <!-- Registration phase tabs -->
-      <button class="tab phase-reg" id="tab-register" onclick="goPage('register')" data-i18n="common.nav.register">Register</button>
-      <button class="tab phase-reg" id="tab-participants" onclick="goPage('participants')" data-i18n="common.nav.participants">Participants</button>
-      <button class="tab phase-reg admin-only" id="tab-registrations" onclick="goPage('registrations')" data-i18n="common.nav.registrations">Registrations</button>
-      <button class="tab phase-blt admin-only" id="tab-build" onclick="goPage('build')" data-i18n="common.nav.build">Build</button>
+      <button class="tab phase-reg" id="tab-register" onclick="goPage('register')" data-i18n="common.nav.register">הרשמה</button>
+      <button class="tab phase-reg" id="tab-participants" onclick="goPage('participants')" data-i18n="common.nav.participants">נרשמים</button>
+      <button class="tab h" id="tab-registrations" onclick="goPage('registrations')" data-i18n="common.nav.registrations">בקשות הרשמה</button>
+      <button class="tab phase-blt admin-only" id="tab-build" onclick="goPage('build')" data-i18n="common.nav.build">בניית הטורניר</button>
       <!-- Tournament phase tabs -->
-      <button class="tab phase-trn" id="tab-standings" onclick="goPage('standings')" data-i18n="common.nav.standings">Standings</button>
-      <button class="tab phase-trn" id="tab-schedule" onclick="goPage('schedule')" data-i18n="common.nav.schedule">Schedule</button>
-      <button class="tab phase-trn" id="tab-bracket" onclick="goPage('bracket')" data-i18n="common.nav.bracket">Bracket</button>
+      <button class="tab phase-trn" id="tab-standings" onclick="goPage('standings')" data-i18n="common.nav.standings">טבלאות</button>
+      <button class="tab phase-trn" id="tab-schedule" onclick="goPage('schedule')" data-i18n="common.nav.schedule">לוח משחקים</button>
+      <button class="tab phase-trn" id="tab-bracket" onclick="goPage('bracket')" data-i18n="common.nav.bracket">שלב הנוקאאוט</button>
       <!-- Shared master tabs -->
-      <button class="tab master-only" id="tab-settings" onclick="goPage('settings')" data-i18n="common.nav.settings">Settings</button>
+      <button class="tab master-only" id="tab-settings" onclick="goPage('settings')" data-i18n="common.nav.settings">הגדרות</button>
     </nav>
     <div id="sticky-cat" class="sticky-cat h"></div>
   </div>
@@ -87,41 +88,41 @@
     <!-- REGISTER page -->
     <div class="pg" id="page-register">
       <div class="page-header">
-        <h2 id="reg-title" data-i18n="reg.title">Register</h2>
+        <h2 id="reg-title" data-i18n="reg.title">הרשמה</h2>
         <p id="reg-subtitle"></p>
       </div>
       <div id="reg-info-card" class="d-info-card" style="display:none"></div>
       <div id="reg-mine" class="info-box d-reg-mine" style="display:none"></div>
-      <div id="reg-closed-msg" class="info-box h" data-i18n="reg.closed">Registration is currently closed.</div>
-      <div id="reg-soon-msg" class="info-box h" data-i18n="reg.soon">Registration opens soon.</div>
+      <div id="reg-closed-msg" class="info-box h" data-i18n="reg.closed">ההרשמה סגורה כרגע.</div>
+      <div id="reg-soon-msg" class="info-box h" data-i18n="reg.soon">ההרשמה תיפתח בקרוב.</div>
       <div id="reg-note" class="reg-note h"></div>
       <div id="reg-receipt" style="display:none"></div>
       <div id="reg-form-wrap">
         <div class="form-card">
           <div class="form-row">
-            <label for="frm-p1" data-i18n="reg.p1Label">Player 1 Name</label>
-            <input class="form-input" id="frm-p1" dir="auto" data-i18n-ph="reg.namePh" placeholder="Name" autocomplete="name" maxlength="30" required aria-describedby="frm-p1-err"/>
+            <label for="frm-p1" data-i18n="reg.p1Label">שם שחקן/ית 1</label>
+            <input class="form-input" id="frm-p1" dir="auto" data-i18n-ph="reg.namePh" placeholder="שם מלא" autocomplete="name" maxlength="30" required aria-describedby="frm-p1-err"/>
             <div id="frm-p1-err" class="fld-err h"></div>
           </div>
           <div class="form-row">
-            <label for="frm-p2" data-i18n="reg.p2Label">Player 2 Name</label>
-            <input class="form-input" id="frm-p2" dir="auto" data-i18n-ph="reg.namePh" placeholder="Name" autocomplete="off" maxlength="30" required aria-describedby="frm-p2-err"/>
+            <label for="frm-p2" data-i18n="reg.p2Label">שם שחקן/ית 2</label>
+            <input class="form-input" id="frm-p2" dir="auto" data-i18n-ph="reg.namePh" placeholder="שם מלא" autocomplete="off" maxlength="30" required aria-describedby="frm-p2-err"/>
             <div id="frm-p2-err" class="fld-err h"></div>
           </div>
           <div class="form-row">
-            <label for="frm-phone" data-i18n="reg.phoneLabel">Phone</label>
+            <label for="frm-phone" data-i18n="reg.phoneLabel">טלפון</label>
             <input class="form-input" id="frm-phone" type="tel" dir="ltr" inputmode="tel" placeholder="050-0000000" autocomplete="tel" required aria-describedby="frm-phone-err"/>
             <div id="frm-phone-err" class="fld-err h"></div>
           </div>
           <div class="form-row">
-            <label id="frm-cat-lbl" data-i18n="reg.catLabel">Category</label>
+            <label id="frm-cat-lbl" data-i18n="reg.catLabel">קטגוריה</label>
             <div id="frm-cat-wrap" class="cat-pills" role="group" aria-labelledby="frm-cat-lbl" aria-describedby="frm-cat-wrap-err"></div>
             <div id="frm-cat-single" class="d-cat-single" style="display:none"></div>
             <div id="frm-cat-wrap-err" class="fld-err h"></div>
           </div>
           <div id="frm-err" class="frm-err h" role="alert"></div>
-          <div id="frm-ok" class="frm-ok h" data-i18n="reg.ok">Registration submitted! You will be notified upon approval.</div>
-          <button class="submit-btn" id="frm-submit" type="button" onclick="submitRegistration()" data-i18n="reg.submit">Submit Registration</button>
+          <div id="frm-ok" class="frm-ok h" data-i18n="reg.ok">ההרשמה נשלחה! נעדכן אתכם כשהיא תאושר.</div>
+          <button class="submit-btn" id="frm-submit" type="button" onclick="submitRegistration()" data-i18n="reg.submit">שליחת הרשמה</button>
           <div id="reg-pay-wrap"></div>
         </div>
       </div>
@@ -130,33 +131,34 @@
     <!-- PARTICIPANTS page -->
     <div class="pg" id="page-participants">
       <div class="page-header">
-        <h2 data-i18n="parts.title">Registered Participants</h2>
-        <p id="participants-subtitle" data-i18n="parts.subtitle">Approved registrations</p>
+        <h2 data-i18n="parts.title">הזוגות הרשומים</h2>
+        <p id="participants-subtitle" data-i18n="parts.subtitle">הרשמות שאושרו</p>
       </div>
-      <div id="participants-hidden-msg" class="info-box h" data-i18n="parts.hidden">The participant list is not public yet.</div>
+      <div id="participants-hidden-msg" class="info-box h" data-i18n="parts.hidden">רשימת הנרשמים עדיין לא פורסמה.</div>
       <div id="participants-list"></div>
     </div>
 
     <!-- REGISTRATIONS (master) -->
     <div class="pg" id="page-registrations">
       <div class="page-header">
-        <h2 data-i18n="admin.regsTitle">Registrations</h2>
+        <h2 data-i18n="admin.regsTitle">בקשות הרשמה</h2>
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">
-          <button class="filter-btn on" id="rf-all" onclick="setRegFilter('all')" data-i18n="admin.filterAll">All</button>
-          <button class="filter-btn" id="rf-pending" onclick="setRegFilter('pending')" data-i18n="admin.filterPending">Pending</button>
-          <button class="filter-btn" id="rf-approved" onclick="setRegFilter('approved')" data-i18n="admin.filterApproved">Approved</button>
-          <button class="filter-btn" id="rf-rejected" onclick="setRegFilter('rejected')" data-i18n="admin.filterRejected">Rejected</button>
+          <button class="filter-btn on" id="rf-all" onclick="setRegFilter('all')" data-i18n="admin.filterAll">הכול</button>
+          <button class="filter-btn" id="rf-pending" onclick="setRegFilter('pending')" data-i18n="admin.filterPending">ממתינים</button>
+          <button class="filter-btn" id="rf-approved" onclick="setRegFilter('approved')" data-i18n="admin.filterApproved">אושרו</button>
+          <button class="filter-btn" id="rf-rejected" onclick="setRegFilter('rejected')" data-i18n="admin.filterRejected">נדחו</button>
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
-          <button class="filter-btn on" id="rpf-all" onclick="setRegPaidFilter('all')" data-i18n="admin.filterPaidAll">Paid + unpaid</button>
-          <button class="filter-btn" id="rpf-paid" onclick="setRegPaidFilter('paid')" data-i18n="admin.filterPaid">Paid</button>
-          <button class="filter-btn" id="rpf-unpaid" onclick="setRegPaidFilter('unpaid')" data-i18n="admin.filterUnpaid">Unpaid</button>
+          <button class="filter-btn on" id="rpf-all" onclick="setRegPaidFilter('all')" data-i18n="admin.filterPaidAll">כל התשלומים</button>
+          <button class="filter-btn" id="rpf-paid" onclick="setRegPaidFilter('paid')" data-i18n="admin.filterPaid">שולם</button>
+          <button class="filter-btn" id="rpf-unpaid" onclick="setRegPaidFilter('unpaid')" data-i18n="admin.filterUnpaid">לא שולם</button>
         </div>
         <div class="d-reg-tools">
           <input class="team-search-input" id="reg-search" type="search" dir="auto" data-i18n-ph="admin.searchPh" data-i18n-aria="admin.searchAria" placeholder="Search name or phone…" aria-label="Search registrations" oninput="setRegSearch(this.value)"/>
-          <button class="filter-btn" type="button" onclick="exportRegistrationsCSV()" data-i18n="admin.exportCsv">Export CSV</button>
+          <button class="filter-btn" type="button" onclick="exportRegistrationsCSV()" data-i18n="admin.exportCsv">ייצוא CSV</button>
         </div>
         <div id="reg-counts" class="d-reg-counts"></div>
+        <div id="regs-built-note" class="info-box h" data-i18n="admin.regsBuiltNote"></div>
       </div>
       <div id="registrations-list"></div>
     </div>
@@ -164,8 +166,8 @@
     <!-- BUILD (master) -->
     <div class="pg" id="page-build">
       <div class="page-header">
-        <h2 data-i18n="build.title">Build Tournament</h2>
-        <p data-i18n="build.subtitle">Drag pairs into order, then build the tournament.</p>
+        <h2 data-i18n="build.title">בניית הטורניר</h2>
+        <p data-i18n="build.subtitle">סדרו את הזוגות בגרירה, ואז בנו את הטורניר.</p>
       </div>
       <div id="build-cats"></div>
     </div>
@@ -173,21 +175,21 @@
     <!-- STANDINGS (tournament) -->
     <div class="pg" id="page-standings">
       <div class="page-header">
-        <h2 data-i18n="stand.title">Standings</h2>
+        <h2 data-i18n="stand.title">טבלאות</h2>
       </div>
       <div id="standings-grid"></div>
     </div>
 
     <!-- SCHEDULE (tournament) -->
     <div class="pg" id="page-schedule">
-      <h2 class="sr-only" data-i18n="common.nav.schedule">Schedule</h2>
+      <h2 class="sr-only" data-i18n="common.nav.schedule">לוח משחקים</h2>
       <div id="sched-info-card" class="d-info-card" style="display:none"></div>
       <div class="sched-search-box">
         <input class="team-search-input" id="sched-search" type="search" dir="auto" data-i18n-ph="sched.searchPh" data-i18n-aria="sched.searchAria" placeholder="Search team…" oninput="filterSchedule()"/>
       </div>
       <div class="master-only print-bar">
-        <button class="build-btn" onclick="open('print-courts.html'+location.search)" data-i18n="sched.printCourts">Print court sheets</button>
-        <button class="build-btn" onclick="open('bracket.html'+location.search)" data-i18n="sched.printBracket">Print bracket</button>
+        <a class="build-btn print-link" target="_blank" rel="noopener" href="print-courts.html" data-i18n="sched.printCourts">הדפסת דפי מגרשים</a>
+        <a class="build-btn print-link" target="_blank" rel="noopener" href="bracket.html" data-i18n="sched.printBracket">הדפסת עץ הנוקאאוט</a>
       </div>
       <div id="court-filter" class="court-filter"></div>
       <div id="schedule-content"></div>
@@ -198,13 +200,13 @@
 
     <!-- BRACKET (tournament) -->
     <div class="pg" id="page-bracket">
-      <div class="page-header"><h2 data-i18n="bracket.title">Knockout Bracket</h2></div>
+      <div class="page-header"><h2 data-i18n="bracket.title">שלב הנוקאאוט</h2></div>
       <div id="bracket-container"></div>
     </div>
 
     <!-- SETTINGS (master) -->
     <div class="pg" id="page-settings">
-      <div class="page-header"><h2 data-i18n="settings.title">Settings</h2></div>
+      <div class="page-header"><h2 data-i18n="settings.title">הגדרות</h2></div>
       <div id="settings-container"></div>
     </div>
 
@@ -212,58 +214,61 @@
 </div><!-- /view-app -->
 
 <!-- LOGIN MODAL -->
-<div class="overlay h" id="pw-modal" onclick="if(event.target===this)closeLogin()">
+<div class="overlay h" id="pw-modal" role="dialog" aria-modal="true" aria-labelledby="pw-title" onclick="if(event.target===this)closeLogin()" onkeydown="if(event.key==='Escape')closeLogin()">
   <div class="modal">
-    <h3 data-i18n="admin.loginTitle">Login</h3>
+    <h3 id="pw-title" data-i18n="admin.loginTitle">כניסה</h3>
     <div class="modal-row" style="margin-bottom:14px;">
-      <button id="role-btn-admin"  onclick="selectLoginRole('admin')" data-i18n="admin.roleAdmin">Admin</button>
-      <button id="role-btn-master" onclick="selectLoginRole('master')" data-i18n="admin.roleMaster">Master</button>
+      <button id="role-btn-admin"  onclick="selectLoginRole('admin')" data-i18n="admin.roleAdmin">אדמין</button>
+      <button id="role-btn-master" onclick="selectLoginRole('master')" data-i18n="admin.roleMaster">מאסטר</button>
     </div>
+    <p class="role-hint" id="role-hint"></p>
     <div class="modal-row">
-      <input class="modal-input" id="pw-inp" type="password" dir="ltr" autocomplete="current-password" data-i18n-ph="admin.pwPh" placeholder="Password"
+      <input class="modal-input" id="pw-inp" type="password" dir="ltr" autocomplete="current-password" data-i18n-ph="admin.pwPh" placeholder="סיסמה"
         onkeydown="if(event.key==='Enter')tryLogin()"/>
     </div>
-    <div id="pw-err" class="frm-err h" data-i18n="admin.pwWrong">Incorrect password.</div>
+    <div id="pw-err" class="frm-err h" data-i18n="admin.pwWrong">הסיסמה שגויה.</div>
     <div class="modal-btns">
-      <button class="mbtn mbtn-ok" onclick="tryLogin()" data-i18n="admin.loginBtn">Login</button>
-      <button class="mbtn mbtn-cancel" data-i18n="common.cancel" onclick="closeLogin()">Cancel</button>
+      <button class="mbtn mbtn-ok" onclick="tryLogin()" data-i18n="admin.loginBtn">כניסה</button>
+      <button class="mbtn mbtn-cancel" data-i18n="common.cancel" onclick="closeLogin()">ביטול</button>
     </div>
   </div>
 </div>
 
 <!-- START TOURNAMENT MODAL -->
-<div class="overlay h" id="start-modal" onclick="if(event.target===this)closeStartModal()">
+<div class="overlay h" id="start-modal" role="dialog" aria-modal="true" aria-labelledby="start-title" onclick="if(event.target===this)closeStartModal()" onkeydown="if(event.key==='Escape')closeStartModal()">
   <div class="modal">
-    <h3 data-i18n="build.startQ">Start Tournament?</h3>
-    <p data-i18n="build.startBody" style="font-size:14px;line-height:1.6;color:var(--text);margin-bottom:6px">
-      Are you sure you're ready to start? It's recommended to do this at the beginning of the tournament.
-      Pairs and settings can no longer be changed.
-    </p>
+    <h3 id="start-title" data-i18n="build.startQ">להתחיל את הטורניר?</h3>
+    <p data-i18n="build.startBody" style="font-size:14px;line-height:1.6;color:var(--text);margin-bottom:6px">מומלץ ממש בתחילת התחרות. אחרי ההתחלה עוברים להזנת תוצאות; שינוי זוגות והגדרות — במצב מאסטר.</p>
     <div class="modal-btns">
-      <button class="mbtn mbtn-ok" onclick="confirmStartTournament()" data-i18n="common.confirm">Confirm</button>
-      <button class="mbtn mbtn-cancel" data-i18n="common.cancel" onclick="closeStartModal()">Cancel</button>
+      <button class="mbtn mbtn-ok" onclick="confirmStartTournament()" data-i18n="common.confirm">אישור</button>
+      <button class="mbtn mbtn-cancel" data-i18n="common.cancel" onclick="closeStartModal()">ביטול</button>
     </div>
   </div>
 </div>
 
 <!-- EDIT TEAM MODAL -->
-<div class="overlay h" id="edit-modal" onclick="if(event.target===this)closeEdit()">
+<div class="overlay h" id="edit-modal" role="dialog" aria-modal="true" aria-labelledby="edit-modal-title" onclick="if(event.target===this)closeEdit()" onkeydown="if(event.key==='Escape')closeEdit()">
   <div class="modal">
-    <h3 id="edit-modal-title" data-i18n="build.editPair">Edit Pair</h3>
+    <h3 id="edit-modal-title" data-i18n="build.editPair">עריכת זוג</h3>
     <div class="modal-row">
-      <input class="modal-input" id="edit-p1" dir="auto" data-i18n-ph="common.player1" placeholder="Player 1"/>
+      <input class="modal-input" id="edit-p1" dir="auto" data-i18n-ph="common.player1" placeholder="שחקן/ית 1"/>
     </div>
     <div class="modal-row">
-      <input class="modal-input" id="edit-p2" dir="auto" data-i18n-ph="common.player2" placeholder="Player 2"/>
+      <input class="modal-input" id="edit-p2" dir="auto" data-i18n-ph="common.player2" placeholder="שחקן/ית 2"/>
     </div>
     <div class="modal-row h" id="edit-cat-row">
       <select class="modal-input" id="edit-cat"></select>
     </div>
     <div class="modal-btns">
-      <button class="mbtn mbtn-ok" onclick="saveEdit()" data-i18n="common.save">Save</button>
-      <button class="mbtn mbtn-cancel" data-i18n="common.cancel" onclick="closeEdit()">Cancel</button>
+      <button class="mbtn mbtn-ok" onclick="saveEdit()" data-i18n="common.save">שמירה</button>
+      <button class="mbtn mbtn-cancel" data-i18n="common.cancel" onclick="closeEdit()">ביטול</button>
     </div>
   </div>
+</div>
+
+<!-- LIVE-OPS SHEET (move game, delay, late pair) -->
+<div class="overlay sheet-overlay h" id="sheet-modal" role="dialog" aria-modal="true" aria-labelledby="sheet-title" onclick="if(event.target===this)closeSheet()">
+  <div class="sheet" id="sheet-body"></div>
 </div>
 
 <!-- CONFIRM DIALOG (askConfirm in app.js) -->
@@ -271,8 +276,8 @@
   <div class="modal">
     <p id="confirm-msg" class="confirm-msg"></p>
     <div class="modal-btns">
-      <button class="mbtn mbtn-ok" id="confirm-ok" data-i18n="common.confirm">Confirm</button>
-      <button class="mbtn mbtn-cancel" id="confirm-cancel" data-i18n="common.back">Back</button>
+      <button class="mbtn mbtn-ok" id="confirm-ok" data-i18n="common.confirm">אישור</button>
+      <button class="mbtn mbtn-cancel" id="confirm-cancel" data-i18n="common.back">חזרה</button>
     </div>
   </div>
 </div>
@@ -283,21 +288,21 @@
 <datalist id="player-datalist"></datalist>
 
 <!-- ADD PAIR MODAL (master) -->
-<div class="overlay h" id="addpair-modal" onclick="if(event.target===this)closeAddPair()">
+<div class="overlay h" id="addpair-modal" role="dialog" aria-modal="true" aria-labelledby="addpair-title" onclick="if(event.target===this)closeAddPair()" onkeydown="if(event.key==='Escape')closeAddPair()">
   <div class="modal">
-    <h3 data-i18n="build.addPairTitle">Add Pair Directly</h3>
+    <h3 id="addpair-title" data-i18n="build.addPairTitle">הוספת זוג ישירות</h3>
     <div class="modal-row">
-      <input class="modal-input" id="ap-p1" dir="auto" data-i18n-ph="common.player1" placeholder="Player 1" list="player-datalist" autocomplete="off"/>
+      <input class="modal-input" id="ap-p1" dir="auto" data-i18n-ph="common.player1" placeholder="שחקן/ית 1" list="player-datalist" autocomplete="off"/>
     </div>
     <div class="modal-row">
-      <input class="modal-input" id="ap-p2" dir="auto" data-i18n-ph="common.player2" placeholder="Player 2" list="player-datalist" autocomplete="off"/>
+      <input class="modal-input" id="ap-p2" dir="auto" data-i18n-ph="common.player2" placeholder="שחקן/ית 2" list="player-datalist" autocomplete="off"/>
     </div>
     <div class="modal-row">
       <select class="modal-input" id="ap-cat"></select>
     </div>
     <div class="modal-btns">
-      <button class="mbtn mbtn-ok" onclick="saveAddPair()" data-i18n="common.add">Add</button>
-      <button class="mbtn mbtn-cancel" data-i18n="common.cancel" onclick="closeAddPair()">Cancel</button>
+      <button class="mbtn mbtn-ok" onclick="saveAddPair()" data-i18n="common.add">הוספה</button>
+      <button class="mbtn mbtn-cancel" data-i18n="common.cancel" onclick="closeAddPair()">ביטול</button>
     </div>
   </div>
 </div>

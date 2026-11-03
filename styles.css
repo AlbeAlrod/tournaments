@@ -441,6 +441,7 @@ main { position: relative; z-index: 5; max-width: 980px; margin: 0 auto; padding
   padding: 4px 8px; border-radius: 999px; white-space: nowrap; }
 /* Court pill on a game row: a tint of the group colour (--gc), so it never
    looks like the solid "done" score pill. applyGroupColors() sets --gc per .giN. */
+button.pill { border: 0; font-family: inherit; cursor: pointer; min-height: var(--tap); }
 .gc > .pill { font-size: var(--fs-sm);
   background: color-mix(in srgb, var(--gc, var(--primary)) 14%, #fff);
   color: color-mix(in srgb, var(--gc, var(--primary)) 50%, #000);

@@ -116,13 +116,17 @@ const DEF_CAT_CFG = {
 };
 
 // ============ SYNC ============
-let syncOk = true;
+let syncOk = true, lastSync = null;
 function setSyncStatus(ok = syncOk) {
   syncOk = ok;
-  const el = document.getElementById('sync-indicator');
+  const el = document.getElementById('sync-indicator'), st = document.getElementById('sync-status');
   if (!el) return;
-  el.className = 'sync-dot ' + (ok && navigator.onLine ? 'sync-ok' : 'sync-err');
-  el.title = unsavedGames.size ? t('sync.unsaved', { n: unsavedGames.size }) : '';
+  const off = !ok || !navigator.onLine, n = unsavedGames.size;
+  el.className = 'sync-dot ' + (off ? 'sync-offline' : n ? 'sync-pending' : 'sync-ok');
+  if (!st) return;
+  st.textContent = n ? t('sync.unsaved', { n }) : off && admin ? t('sync.offline')
+    : lastSync ? t('sync.updated', { time: lastSync.toTimeString().slice(0, 5) }) : '';
+  st.classList.toggle('offline', off);
 }
 
 // ============ FIRESTORE HELPERS ============
@@ -218,7 +222,7 @@ async function loadTournament() {
     console.error('Load error', e);
     const p = document.querySelector('#view-loading p');
     if (p) {
-      p.textContent = t('sync.noConnection');
+      p.textContent = t('sync.loadFailed');
       const b = document.createElement('button');
       b.className = 'add-cat-btn'; b.textContent = t('sync.retry');
       b.onclick = () => location.reload();
@@ -227,6 +231,7 @@ async function loadTournament() {
     window.addEventListener('online', () => location.reload(), { once: true });
     return false;
   }
+  lastSync = new Date();
   if (!snap.exists()) {
     // Unknown id (typo / deleted): never create a doc from a public link —
     // tournaments are created in admin.html. Show a friendly not-found view.
@@ -283,6 +288,7 @@ async function loadTournament() {
       if (!state[cat.id]) state[cat.id] = { roster:[], groups:[], sched:[], ko:[] };
     });
     applyingRemote = false;
+    if (!snap.metadata.fromCache) lastSync = new Date();
     // Remote update: refresh header/theme/phase, then only the page on screen
     // (renderAll rebuilt every page on every score from every phone).
     const _f = _focusSnapshot();
@@ -506,6 +512,8 @@ function updateRoleButtons() {
     el?.classList.toggle('on', loginRole === role);
     el?.setAttribute('aria-pressed', loginRole === role);
   });
+  const hint = document.getElementById('role-hint');
+  if (hint) hint.textContent = t(loginRole === 'master' ? 'admin.roleMasterHint' : 'admin.roleAdminHint');
 }
 
 async function tryLogin() {
@@ -577,8 +585,6 @@ function refreshAdmin() {
   const mtxt = document.getElementById('mode-text');
   if (txt) txt.textContent = t(adminLevel===2 ? 'admin.btnMasterOn' : adminLevel===1 ? 'admin.btnAdminOn' : 'admin.btn');
   if (btn) btn.classList.toggle('on', admin);
-  const syncDot = document.getElementById('sync-indicator');
-  if (syncDot) syncDot.classList.toggle('h', !admin);
   if (bar) bar.className = 'mode-bar ' + (admin ? 'mode-admin' : 'mode-view');
   const adminBar = document.getElementById('admin-bar');
   if (adminBar) adminBar.classList.toggle('mode-admin', admin);
@@ -591,6 +597,7 @@ function refreshAdmin() {
   // Hide Register tab when admin is logged in (registration phase)
   const regTab = document.getElementById('tab-register');
   if (regTab) regTab.classList.toggle('h', regManager);
+  document.getElementById('tab-registrations')?.classList.toggle('h', !admin);
   // Hide Settings tab in tournament phase (even from master)
   const settingsTab = document.getElementById('tab-settings');
   if (settingsTab) settingsTab.classList.toggle('h', !superAdmin || meta.phase === 'tournament');
@@ -598,16 +605,8 @@ function refreshAdmin() {
   if (regManager && document.getElementById('page-register')?.classList.contains('on')) {
     goPage('registrations');
   }
-  if (builtManager) {
-    const onRegOnlyPage = ['register','registrations'].some(p =>
-      document.getElementById('page-'+p)?.classList.contains('on'));
-    if (onRegOnlyPage) goPage('standings');
-  }
-  if (admin && meta.phase === 'tournament') {
-    const onRegPage = ['registrations','build'].some(p =>
-      document.getElementById('page-'+p)?.classList.contains('on'));
-    if (onRegPage) goPage('standings');
-  }
+  if (builtManager && document.getElementById('page-register')?.classList.contains('on')) goPage('standings');
+  if (admin && meta.phase === 'tournament' && document.getElementById('page-build')?.classList.contains('on')) goPage('standings');
   updateNavFade();
 }
 
@@ -656,10 +655,11 @@ const pairKey = (a, b) => [normName(a), normName(b)].sort().join('|');
 // Existing registration that clashes with this one (same pair or same phone, same category).
 function findDuplicateReg(p1, p2, phone, catId) {
   const key = pairKey(p1, p2);
-  return registrations.find(r => r.category === catId && (
+  return registrations.find(r => r.category === catId && r.status !== 'rejected' && (
     pairKey(r.p1, r.p2) === key || (phone && normPhone(r.phone) === phone)));
 }
 const statusTxt = st => t('admin.status.' + st);
+const regAccepting = () => !!meta.regOpen && meta.phase === 'registration';
 
 // "My registrations" — every pair registered from this browser, per tournament.
 // Older builds stored one {regId} under luz.myReg.<tId>; it is folded into the list.
@@ -787,7 +787,7 @@ async function submitRegistration() {
   if (regErrors.form) return;
   // meta is kept live by onSnapshot — the organizer may have closed registration
   // while this form was open.
-  if (!meta.regOpen) { regErrors = { form: () => t('reg.closed') }; renderRegisterPage(); return; }
+  if (!regAccepting()) { regErrors = { form: () => t('reg.closed') }; renderRegisterPage(); return; }
   const btn = document.getElementById('frm-submit');
   if (btn?.disabled) return;           // double tap while a write is in flight
   const btnTxt = btn ? btn.textContent : '';
@@ -819,7 +819,7 @@ async function submitRegistration() {
 
 // status: 'approved' | 'pending' | 'rejected' (soft, stays listed) | 'deleted' (hard delete).
 async function setRegStatus(id, status) {
-  if (!admin) return;
+  if (!admin || meta.phase !== 'registration') return;
   try {
     if (status === 'deleted') {
       if (!await askConfirm(t('admin.confirmDelete'), t('common.delete'))) return;
@@ -890,8 +890,8 @@ async function softRemoveReg(catId, name) {
   const reg = registrations.find(r => r.category === catId && r.status === 'approved' && normName(regPairName(r)) === normName(name));
   if (!reg) return;
   try {
-    await updateDoc(doc(db, 'tournaments', tId, 'registrations', reg.id), { status: 'rejected' });
-    reg.status = 'rejected'; // soft-reject: stays in Firestore, visible in Registrations
+    await updateDoc(doc(db, 'tournaments', tId, 'registrations', reg.id), { status: 'pending' });
+    reg.status = 'pending'; // stays listed; can be approved again
   } catch(e) { console.error('Could not update registration status', e); }
 }
 
@@ -992,6 +992,8 @@ function renderRegistrations() {
   const el = document.getElementById('registrations-list');
   if (!el) return;
   renderRegCounts();
+  const regPhase = meta.phase === 'registration';
+  document.getElementById('regs-built-note')?.classList.toggle('h', regPhase);
   const list = filteredRegs();
   if (!list.length) {
     el.innerHTML = `<div class="empty"><h3>${t('admin.noRegs')}</h3></div>`;
@@ -1012,12 +1014,12 @@ function renderRegistrations() {
       </div>
       <span class="status-badge badge-${escH(r.status)}">${escH(statusTxt(r.status))}</span>
       <label class="d-paid-toggle"><input type="checkbox" ${r.paid ? 'checked' : ''} aria-label="${escH(t('admin.paidFor', { pair: regPairName(r) }))}" onchange="setRegPaid('${r.id}',this.checked)"/> <span aria-hidden="true">${t('admin.paid')}</span></label>
-      <div class="reg-actions">
+      ${regPhase ? `<div class="reg-actions">
         ${r.status !== 'approved' ? `<button class="reg-btn approve" onclick="setRegStatus('${r.id}','approved')">${t('admin.approve')}</button>` : ''}
         ${r.status === 'approved'  ? `<button class="reg-btn" onclick="setRegStatus('${r.id}','pending')">${t('admin.undo')}</button>` : ''}
         ${r.status !== 'rejected'  ? `<button class="reg-btn reject" onclick="setRegStatus('${r.id}','rejected')">${t('admin.reject')}</button>` : ''}
         <button class="reg-btn reject" onclick="setRegStatus('${r.id}','deleted')" title="${t('admin.deleteTitle')}">${t('admin.delete')}</button>
-      </div>
+      </div>` : ''}
     </div>`;
   }).join('');
 }
@@ -1104,10 +1106,11 @@ function renderRegisterPage() {
   const sub       = document.getElementById('reg-subtitle');
   const soonMsg   = document.getElementById('reg-soon-msg');
   const noCats    = !categories.length;
+  const open      = regAccepting();
   // Closed wins over "opens soon"; with no categories there is nothing to register for.
-  closedMsg?.classList.toggle('h', !!meta.regOpen);
-  soonMsg?.classList.toggle('h', !meta.regOpen || !noCats);
-  if (formWrap) formWrap.style.display = (meta.regOpen && !noCats && !lastReceipt) ? '' : 'none';
+  closedMsg?.classList.toggle('h', open);
+  soonMsg?.classList.toggle('h', !open || !noCats);
+  if (formWrap) formWrap.style.display = (open && !noCats && !lastReceipt) ? '' : 'none';
   renderMyReg();
   renderReceipt();
   if (sub) sub.innerHTML = meta.name ? t('reg.subtitle', { name: `<bdi>${escH(meta.name)}</bdi>` }) : '';
@@ -1645,10 +1648,12 @@ async function buildTournament(catId) {
   const rebuild = meta.phase === 'built';
   if (rebuild) {
     const games = cids.flatMap(id => state[id] ? allGamesOf(state[id]) : []);
-    const msg = t('build.confirmRebuild') + ' ' + t('build.rebuildCounts', { games: games.length, scored: games.filter(hasScore).length });
+    const msg = t('build.confirmRebuild') + '\n' + t('build.confirmCounts', { cats: cids.length,
+      pairs: cids.reduce((n, id) => n + (state[id]?.roster.length || 0), 0),
+      scores: games.filter(hasScore).length, manual: games.filter(g => g.manual).length });
     if (!await askConfirm(msg, t(coord ? 'build.rebuildAll' : 'build.rebuild'))) return;
   }
-  const prev = { phase: meta.phase, breaks: meta.breaks ?? null };
+  const prev = { phase: meta.phase, breaks: meta.breaks ?? null, regOpen: !!meta.regOpen };
   let backup;
   const ok = await commitState(cids, () => {
     backup = Object.fromEntries(cids.map(id => [id, catStateToFB(structuredClone(state[id]))]));
@@ -1658,11 +1663,12 @@ async function buildTournament(catId) {
     carryOver(cids, old);
     const extra = { lastBuild: { at: serverTimestamp(), ...prev, state: backup } };
     if (meta.breakBeforeKO) extra['meta.breaks'] = meta.breaks;
-    if (!rebuild) extra['meta.phase'] = 'built';
+    if (!rebuild) { extra['meta.phase'] = 'built'; extra['meta.regOpen'] = false; }
     return extra;
   });
   if (!ok) return;
   lastBuild = { at: { seconds: Date.now() / 1000 }, ...prev, state: backup };
+  if (!rebuild) meta.regOpen = false;
 
   // First build → 'built' phase so the tournament tabs become visible
   if (!rebuild) { meta.phase = 'built'; renderAll(); goPage('standings'); }
@@ -1673,14 +1679,15 @@ async function undoLastBuild() {
   const lb = lastBuild;
   if (!superAdmin || !lb?.state || meta.phase === 'tournament') return;
   const at = lb.at?.seconds ? new Date(lb.at.seconds * 1000).toTimeString().slice(0, 5) : '';
-  if (!await askConfirm(t('build.confirmUndo', { time: at }), t('build.undoLast'))) return;
+  if (!await askConfirm(t('build.confirmUndo', { at }), t('build.undoLast'))) return;
   const cids = Object.keys(lb.state).filter(id => categories.some(c => c.id === id));
   const ok = await commitState(cids, () => {
     cids.forEach(id => { state[id] = catStateFromFB(structuredClone(lb.state[id])); });
-    return { 'meta.phase': lb.phase, 'meta.breaks': lb.breaks ?? deleteField(), lastBuild: deleteField() };
+    return { 'meta.phase': lb.phase, 'meta.breaks': lb.breaks ?? deleteField(), 'meta.regOpen': lb.regOpen ?? !!meta.regOpen, lastBuild: deleteField() };
   });
   if (!ok) return;
   meta.phase = lb.phase;
+  if (lb.regOpen !== undefined) meta.regOpen = lb.regOpen;
   if (lb.breaks) meta.breaks = lb.breaks; else delete meta.breaks;
   lastBuild = null;
   renderAll(); goPage('build');
@@ -1992,16 +1999,18 @@ function buildQueenKO(catId, cfg, nc, slotDur, startTime, rs) {
 }
 
 // ============ SCORE VALIDATION ============
-function isValidScore(sa, sb, catId, ptwOverride) {
+function isValidScore(sa, sb, catId, rule, g) {
   if (isNaN(sa)||isNaN(sb)||sa===''||sb==='') return false;
   if (sa < 0 || sb < 0) return false;
+  if (g?.forced || g?.wo) return sa !== sb;
   const cat = categories.find(c=>c.id===catId);
   const cfg = cat?.cfg || DEF_CAT_CFG;
-  if (cfg.sets === 3) {
+  const r = rule && typeof rule === 'object' ? rule : { pts: rule };
+  if ((r.sets ?? cfg.sets) === 3) {
     const hi = Math.max(sa,sb), lo = Math.min(sa,sb);
     return (hi===2 && lo>=0 && lo<=1);
   }
-  const ptw = ptwOverride || cfg.pointsToWin || 21;
+  const ptw = r.pts || cfg.pointsToWin || 21;
   if (sa===sb) return false;
   const hi = Math.max(sa,sb), lo = Math.min(sa,sb);
   if (hi < ptw) return false;
@@ -2009,20 +2018,22 @@ function isValidScore(sa, sb, catId, ptwOverride) {
   return hi-lo===2;
 }
 
-function scoreError(sa, sb, catId, ptwOverride) {
+function scoreError(sa, sb, catId, rule, g) {
   if (sa===''||sb==='') return null;
   const a=parseInt(sa), b=parseInt(sb);
   if (isNaN(a)||isNaN(b)) return null;
   if (a < 0 || b < 0) return { key:'score.nonNegative' };
+  if (g?.forced || g?.wo) return a === b ? { key:'score.noDraw' } : null;
   const cat = categories.find(c=>c.id===catId);
   const cfg = cat?.cfg || DEF_CAT_CFG;
-  if (cfg.sets===3) {
+  const r = rule && typeof rule === 'object' ? rule : { pts: rule };
+  if ((r.sets ?? cfg.sets)===3) {
     const hi=Math.max(a,b), lo=Math.min(a,b);
     if (hi>2||lo<0) return { key:'score.setsFormat' };
     if (hi!==2) return { key:'score.setsWinner' };
     return null;
   }
-  const ptw = ptwOverride || cfg.pointsToWin||21;
+  const ptw = r.pts || cfg.pointsToWin||21;
   const hi=Math.max(a,b), lo=Math.min(a,b);
   if (hi===lo) return { key:'score.noDraw' };
   if (hi<ptw) return { key:'score.mustReachEg', params:{ n:ptw, lo } };
@@ -2049,7 +2060,7 @@ function getStandings(catId, gi) {
   const resolve = s => normMap[normName(s)] || s;
   cs.sched.filter(g=>g.gi===gi).forEach(g => {
     const sa=parseInt(g.sa), sb=parseInt(g.sb);
-    if (!isValidScore(sa, sb, catId, getRuleForGame(catId, g, false).pts)) return;
+    if (!isValidScore(sa, sb, catId, getRuleForGame(catId, g, false), g)) return;
     const a=resolve(g.a), b=resolve(g.b);
     if (rec[a]) { rec[a].scored+=sa; rec[a].against+=sb; }
     if (rec[b]) { rec[b].scored+=sb; rec[b].against+=sa; }
@@ -2071,7 +2082,7 @@ function makeStandingsCard(catId, grp, gi, catIdx) {
   const adv = cfg.advPerGroup||1;
   const st  = getStandings(catId, gi);
   const totalGames = (grp.teams.length*(grp.teams.length-1))/2;
-  const played = cs.sched.filter(g=>g.gi===gi && isValidScore(parseInt(g.sa),parseInt(g.sb),catId,getRuleForGame(catId,g,false).pts)).length;
+  const played = cs.sched.filter(g=>g.gi===gi && isValidScore(parseInt(g.sa),parseInt(g.sb),catId,getRuleForGame(catId,g,false),g)).length;
   const poolDone = played===totalGames && totalGames>0;
   const card = document.createElement('div');
   card.className = 'scard';
@@ -2090,7 +2101,8 @@ function makeStandingsCard(catId, grp, gi, catIdx) {
     const canDelete = superAdmin && (meta.phase === 'registration' || meta.phase === 'built');
     const adminCtrls = canEdit
       ? `<td><button class="gedit-btn" onclick="openEditTeam('${catId}',${gi},${ti})" title="${t('stand.editAria')}" aria-label="${t('stand.editAria')}">✎</button>${
-          canDelete?`<button class="team-del" onclick="deleteTeam('${catId}',${gi},${ti})" title="${t('stand.removeAria')}" aria-label="${t('stand.removeAria')}">✕</button>`:''}</td>` : '';
+          canDelete?`<button class="team-del" onclick="deleteTeam('${catId}',${gi},${ti})" title="${t('stand.removeAria')}" aria-label="${t('stand.removeAria')}">✕</button>`:''}${
+          meta.phase === 'tournament'?`<button class="gedit-btn" onclick="withdrawTeam('${catId}',${gi},${ti})">${t('stand.withdraw')}</button>`:''}</td>` : '';
     return `<tr class="${isWinner?'winner':''}">
       <td><span class="rnk num">#${i+1}</span>${dnH(row.name)}</td>
       <td>${row.w}</td><td>${row.l}</td>
@@ -2126,6 +2138,12 @@ function renderStandings() {
     sub.className = 'stnds-subgrid';
     cs.groups.forEach((grp, gi) => sub.appendChild(makeStandingsCard(cat.id, grp, gi, catIdx)));
     grid.appendChild(sub);
+    if (superAdmin && meta.phase !== 'registration') {
+      const b = document.createElement('button');
+      b.className = 'build-add-pair'; b.textContent = t('stand.addLate');
+      b.onclick = () => openLatePair(cat.id);
+      grid.appendChild(b);
+    }
   });
   if (!grid.children.length) {
     grid.innerHTML = `<div class="empty"><h3>${t('stand.emptyH')}</h3><p>${t('common.buildFirst')}</p></div>`;
@@ -2150,13 +2168,7 @@ function openEditTeam(catId, gi, ti) {
   document.getElementById('edit-p1').value = p1||'';
   document.getElementById('edit-p2').value = p2||'';
   document.getElementById('edit-modal-title').textContent = t('stand.editTitle', { name: state[catId].groups[gi].name });
-  // Show category selector in tournament phase too
-  const catRow = document.getElementById('edit-cat-row');
-  const catSel = document.getElementById('edit-cat');
-  if (catRow && catSel) {
-    catSel.innerHTML = categories.map(c => `<option value="${escH(c.id)}"${c.id===catId?' selected':''}>${escH(c.name)}</option>`).join('');
-    catRow.classList.remove('h');
-  }
+  document.getElementById('edit-cat-row')?.classList.add('h');
   document.getElementById('edit-modal').classList.remove('h');
   document.getElementById('edit-p1').focus();
 }
@@ -2217,6 +2229,11 @@ async function saveEdit() {
   if (name === old) { closeEdit(); return; }
   if (pairTaken(catId, name, old)) { toast(t('errors.dupName', { name: fsi(name) })); return; }
   if (!await commitState(catId, cs => renamePair(cs, old, name))) return;
+  const reg = registrations.find(r => r.category === catId && normName(regPairName(r)) === normName(old));
+  if (reg) {
+    updateDoc(doc(db,'tournaments',tId,'registrations',reg.id), { p1, p2 }).catch(e => console.error(e));
+    reg.p1 = p1; reg.p2 = p2;
+  }
   closeEdit(); renderStandings(); renderScheduleContent(); renderBracket();
 }
 // Before the start: the pair leaves its group; only its unplayed games are dropped.
@@ -2281,7 +2298,7 @@ function applyUnsaved() {
     const idx = e.ri == null ? state[e.cid].sched.indexOf(g) : e.idx;
     if (idx !== e.idx) { unsavedGames.delete(gk); e.idx = idx; unsavedGames.set(gameKey(e.cid, idx), e); }
   });
-  if (lost) { mirrorUnsaved(); toast(t('score.dropped', { n: lost })); }
+  if (lost) { mirrorUnsaved(); toast(t('sync.unsavedDropped')); }
 }
 // A score with only one side filled is never saved.
 const isHalf = g => !String(g.sa ?? '') !== !String(g.sb ?? '');
@@ -2289,7 +2306,7 @@ function scoreMsg(e) {
   const g = gameRef(e);
   if (!g) return '';
   if (isHalf(g)) return t('score.bothSides');
-  const err = scoreError(String(g.sa ?? ''), String(g.sb ?? ''), e.cid, getRuleForGame(e.cid, g, e.ri != null).pts);
+  const err = scoreError(String(g.sa ?? ''), String(g.sb ?? ''), e.cid, getRuleForGame(e.cid, g, e.ri != null), g);
   return err ? t(err.key, err.params) : '';
 }
 const gameReady = e => !!gameRef(e) && !scoreMsg(e);
@@ -2331,6 +2348,7 @@ async function flushScoreWrites() {
         // Someone else saved a different score for this game since we started typing.
         if (!g || (e.base && !sameScore(g, e.base) && !sameScore(g, { sa, sb }))) { skipped.push({ e, g }); return; }
         Object.assign(g, { sa, sb });
+        delete g.wo; delete g.forced;
       });
       const args = [];
       Object.entries(cats).forEach(([cid, cs]) => {
@@ -2348,7 +2366,7 @@ async function flushScoreWrites() {
       markGameRow(gk);
     });
     skipped.forEach(({ e, g }) => { const mine = gameRef(e); if (mine && g) Object.assign(mine, { sa: g.sa, sb: g.sb }); });
-    if (skipped.length) { toast(t('score.conflict', { n: skipped.length })); rerender(); }
+    if (skipped.length) { toast(t('sync.conflict')); rerender(); }
     setSyncStatus(true);
     mirrorUnsaved();
   } catch(e) {
@@ -2375,6 +2393,7 @@ function setGS(catId, idx, k, v, commit) {
   const gk = gameKey(catId, idx);
   const ref = { cid: catId, idx, id: gameId(g, false), base: unsavedGames.has(gk) ? null : { sa: g.sa ?? '', sb: g.sb ?? '' } };
   g[k] = v;
+  delete g.wo; delete g.forced;
   scoreChanged(gk, ref, g, commit);
   renderStandings();
 }
@@ -2384,6 +2403,7 @@ function setKS(catId, ri, gi, k, v, commit) {
   const gk = gameKey(catId, null, ri, gi);
   const ref = { cid: catId, ri, gi, id: gameId(g, true), base: unsavedGames.has(gk) ? null : { sa: g.sa ?? '', sb: g.sb ?? '' } };
   g[k] = v;
+  delete g.wo; delete g.forced;
   g.ri = ri;
   scoreChanged(gk, ref, g, commit);
 }
@@ -2398,7 +2418,7 @@ function resolvePoolSeed(catId, seed) {
   if (gi<0||gi>=cs.groups.length) return { label:seed, known:false };
   const grp = cs.groups[gi];
   const totalGames = (grp.teams.length*(grp.teams.length-1))/2;
-  const done = cs.sched.filter(g=>g.gi===gi&&isValidScore(parseInt(g.sa),parseInt(g.sb),catId,getRuleForGame(catId,g,false).pts)).length;
+  const done = cs.sched.filter(g=>g.gi===gi&&isValidScore(parseInt(g.sa),parseInt(g.sb),catId,getRuleForGame(catId,g,false),g)).length;
   if (done!==totalGames) return { label:seed, known:false };
   const st = getStandings(catId, gi);
   if (!st[rank-1]) return { label:seed, known:false };
@@ -2408,7 +2428,7 @@ function resolvePoolSeed(catId, seed) {
 function getKOLoser(game, catId) {
   if (!game || game.isBye) return null;
   const sa=parseInt(game.sa), sb=parseInt(game.sb);
-  if (isValidScore(sa,sb,catId,getRuleForGame(catId,game,true).pts)) return sa>sb ? game.b : game.a;
+  if (isValidScore(sa,sb,catId,getRuleForGame(catId,game,true),game)) return sa>sb ? game.b : game.a;
   return null;
 }
 
@@ -2422,7 +2442,7 @@ function getKOWinner(game, catId) {
     return seed;
   }
   const sa=parseInt(game.sa), sb=parseInt(game.sb);
-  if (isValidScore(sa,sb,catId,getRuleForGame(catId,game,true).pts)) return sa>sb?game.a:game.b;
+  if (isValidScore(sa,sb,catId,getRuleForGame(catId,game,true),game)) return sa>sb?game.a:game.b;
   return null;
 }
 
@@ -2436,6 +2456,7 @@ function updateKOForCat(catId) {
   // r0: resolve pool seeds; byes just resolve their single seed
   if (cs.ko[0]) {
     cs.ko[0].forEach(g => {
+      if (String(g.sa ?? '') !== '' || String(g.sb ?? '') !== '') return;
       const seedA = g.seedA || (g.isBye ? g.a : '');
       const seedB = g.seedB || '';
       if (seedA) { const r=resolvePoolSeed(catId,seedA); if(r.known||/^[A-Z]\d+$/.test(seedA)) g.a=r.known?r.label:seedA; }
@@ -2449,7 +2470,7 @@ function updateKOForCat(catId) {
     // Cross pairing when 4 QF games reduce to 2 SF games (QF1×QF4, QF2×QF3)
     const isCross = prev.length === 4 && cs.ko[ri].filter(g=>!g.isThirdPlace).length === 2;
     cs.ko[ri].forEach((g, gi) => {
-      if (g.isThirdPlace) return;
+      if (g.isThirdPlace || String(g.sa ?? '') !== '' || String(g.sb ?? '') !== '') return;
       const idxA = isCross ? gi               : gi*2;
       const idxB = isCross ? prev.length-1-gi : gi*2+1;
       const seedLabel = src => {
@@ -2468,7 +2489,7 @@ function updateKOForCat(catId) {
   if (cs.ko.length >= 2) {
     const sfRound = cs.ko[cs.ko.length - 2];
     const thirdGame = cs.sched.find(g => g.isThirdPlace);
-    if (thirdGame && sfRound) {
+    if (thirdGame && sfRound && String(thirdGame.sa ?? '') === '' && String(thirdGame.sb ?? '') === '') {
       thirdGame.a = getKOLoser(sfRound[0], catId) || 'Loser of SF1';
       thirdGame.b = getKOLoser(sfRound[1], catId) || 'Loser of SF2';
     }
@@ -2507,10 +2528,9 @@ function renderStats() {
     const poolG = cs.sched.filter(g=>g.gi>=0);          // real pool games
     const thirdG = cs.sched.filter(g=>g.gi===-1);       // 3rd-place game lives in sched
     totalPool += poolG.length;
-    donePool  += poolG.filter(g=>isValidScore(parseInt(g.sa),parseInt(g.sb),cat.id,getRuleForGame(cat.id,g,false).pts)).length;
+    donePool  += poolG.filter(g=>isValidScore(parseInt(g.sa),parseInt(g.sb),cat.id,getRuleForGame(cat.id,g,false),g)).length;
     totalKO   += cs.ko.reduce((s,r)=>s+r.filter(g=>!g.isBye).length, 0) + thirdG.length;
-    const last = cs.ko.length ? cs.ko[cs.ko.length-1][0] : cs.sched[cs.sched.length-1];
-    if (last?.time && t2m(last.time)>t2m(lastTime)) { lastTime=last.time; lastDur=cat.cfg?.gameDur||30; }
+    allGamesOf(cs).forEach(g => { if (g.time && t2m(g.time) > t2m(lastTime)) { lastTime = g.time; lastDur = cat.cfg?.gameDur||30; } });
   });
   if (!totalPool) { el.innerHTML=''; return; }
   // "Scheduled end", not "Est. End": this is the last game's planned slot, so it
@@ -2524,7 +2544,7 @@ function renderStats() {
 
 function buildGameRow(catId, g, idx, isKO) {
   const rule = getRuleForGame(catId, g, isKO);
-  const done = isValidScore(parseInt(g.sa), parseInt(g.sb), catId, rule.pts);
+  const done = isValidScore(parseInt(g.sa), parseInt(g.sb), catId, rule, g);
   // Color pill by group index for pool; by court→group for KO (dynamic group colors).
   // The 3rd-place game lives in sched with gi === -1, which produced the
   // non-existent class "gi-1" and left its court pill unpainted — colour it by
@@ -2541,11 +2561,17 @@ function buildGameRow(catId, g, idx, isKO) {
   const setter = k => isKO ? `setKS('${catId}',${g.ri},${g.gi},'${k}',this.value` : `setGS('${catId}',${idx},'${k}',this.value`;
   // Stable ids let the focus-preserving re-render put the caret back.
   const sid = k => isKO ? `si-${catId}-k${g.ri}-${g.gi}-${k}` : `si-${catId}-${idx}-${k}`;
-  const gtag = !isKO&&g.gn?`<span class="gtag">${escH(g.gn)}</span>`:'';
-  const pill = `<span class="pill ${pc}">${t('sched.courtShort', { n: g.court })}</span>${koLbl?`<span class="ko-lbl">${koLbl}</span>`:''}`;
+  const gtag = (!isKO&&g.gn?`<span class="gtag">${escH(g.gn)}</span>`:'')
+    + (superAdmin && g.manual ? `<span class="tag-manual" title="${t('game.tagManualTitle')}">${t('game.tagManual')}</span>` : '')
+    + (g.wo ? `<span class="tag-wo">${t('game.tagWo')}</span>` : g.forced ? `<span class="tag-forced">${t('game.tagForced')}</span>` : '');
+  const court = t('sched.courtShort', { n: g.court || '—' });
+  const pill = (superAdmin && meta.phase !== 'registration'
+    ? `<button type="button" class="pill ${pc}" onclick="openGameSheet('${catId}',${isKO ? `null,${g.ri},${g.gi}` : idx})" aria-label="${t('move.aria')}">${court} ⇄</button>`
+    : `<span class="pill ${pc}">${court}</span>`) + (koLbl?`<span class="ko-lbl">${koLbl}</span>`:'');
   if (admin && meta.phase === 'tournament') {
     // Each input sits next to its own team; on a phone the row stacks as "team – score".
-    const inp = (k, team) => `<input class="si" id="${sid(k)}" type="number" min="0" inputmode="numeric" placeholder="—"
+    const bo3 = (rule.sets ?? categories.find(c => c.id === catId)?.cfg?.sets) === 3;
+    const inp = (k, team) => `<input class="si" id="${sid(k)}" type="number" min="0"${bo3 ? ' max="2"' : ''} inputmode="numeric" placeholder="—"
       aria-label="${escH(t('sched.scoreFor', { team: dn(tSlot(team)) }))}" value="${escH(String(g[k] ?? ''))}"
       oninput="${setter(k)})" onchange="${setter(k)},true)"/>`;
     row.classList.add('edit');
@@ -2601,8 +2627,16 @@ function renderScheduleContent() {
   }
 
   const byTime = {};
-  filtered.forEach(g => { const k=g.time||'00:00'; if(!byTime[k])byTime[k]=[]; byTime[k].push(g); });
+  filtered.filter(g => g.time).forEach(g => { const k=g.time; if(!byTime[k])byTime[k]=[]; byTime[k].push(g); });
   el.innerHTML = '';
+  const unsched = filtered.filter(g => !g.time);
+  if (unsched.length) {
+    const ub = document.createElement('div');
+    ub.className = 'unsched-block';
+    ub.innerHTML = `<h4>${t('sched.unscheduled')}</h4><p>${t('sched.unscheduledHint')}</p>`;
+    unsched.forEach(g => ub.appendChild(buildGameRow(g._catId, g, g._idx, g._isKO)));
+    el.appendChild(ub);
+  }
   // Global breaks (e.g. Friday-dinner) shown as their own marker block, in time order.
   const brs = (meta.breaks||[]).map(b=>({at:t2m(b.atTime), min:b.minutes||0, done:false})).sort((a,b)=>a.at-b.at);
   const dinnerNote = meta.dinnerBreakNote || t('sched.breakDefault');
@@ -2634,7 +2668,8 @@ function renderScheduleContent() {
       subGroups.get(key).games.push(g);
     });
     const needSubHeaders = subGroups.size > 1 || [...subGroups.values()].some(s=>s.label);
-    block.innerHTML=`<div class="thdr"><span class="tlbl">${time}</span><div class="tline"></div></div>`;
+    block.innerHTML=`<div class="thdr"><span class="tlbl">${time}</span><div class="tline"></div>${superAdmin && meta.phase !== 'registration'
+      ? `<button type="button" class="gact" onclick="openDelay('${time}')" aria-label="${escH(t('delay.aria', { time }))}">⏱</button>` : ''}</div>`;
     subGroups.forEach(({label, games: sg}) => {
       if (needSubHeaders && label) {
         const sh = document.createElement('div');
@@ -2652,6 +2687,287 @@ function renderScheduleContent() {
 }
 
 function filterSchedule() { renderScheduleContent(); }
+
+// ============ LIVE OPS (master) ============
+const isSlot = s => !s || /^(TBD$|BYE$|Winner of |Loser of |[A-Z]\d+(\/[A-Z]\d+)?$)/.test(s);
+const playersOf = g => [g.a, g.b].filter(s => !isSlot(s)).flatMap(s => s.split('/').map(normName));
+function liveGames() {
+  return categories.flatMap(c => {
+    const cs = state[c.id];
+    if (!cs) return [];
+    return [...cs.sched.map((g, idx) => ({ cid: c.id, g, idx, id: gameId(g, false) })),
+      ...cs.ko.flatMap((r, ri) => r.map((g, gi) => ({ cid: c.id, g, ri, gi, id: gameId(g, true) }))).filter(x => !x.g.isBye)];
+  });
+}
+const gameDurOf = x => getRuleForGame(x.cid, x.g, x.ri != null).dur || categories.find(c => c.id === x.cid)?.cfg?.gameDur || 30;
+// Games overlapping x if it were played at court/time: same court, or a shared player.
+function clashesAt(x, court, time, skip = []) {
+  const s = t2m(time), e = s + gameDurOf(x), pl = playersOf(x.g);
+  return liveGames().filter(y => y.g !== x.g && !skip.includes(y.g) && y.g.time
+    && t2m(y.g.time) < e && s < t2m(y.g.time) + gameDurOf(y)
+    && (+y.g.court === +court || playersOf(y.g).some(p => pl.includes(p))));
+}
+
+function openSheet(html) {
+  const m = document.getElementById('sheet-modal');
+  document.getElementById('sheet-body').innerHTML = html;
+  m.classList.remove('h');
+  m.onkeydown = e => { if (e.key === 'Escape') closeSheet(); };
+  m.querySelector('input,select,button')?.focus();
+}
+function closeSheet() { document.getElementById('sheet-modal')?.classList.add('h'); }
+
+let sheetRef = null;   // {cid, idx | ri+gi, id} of the game the sheet is about
+function openGameSheet(cid, idx, ri, gi) {
+  if (!superAdmin) return;
+  const x = liveGames().find(y => y.cid === cid && (ri == null ? y.idx === idx : y.ri === ri && y.gi === gi));
+  if (!x) return;
+  sheetRef = { cid, idx: x.idx, ri: x.ri, gi: x.gi, id: x.id };
+  const g = x.g, scored = hasScore(g);
+  const courts = Math.max(coordBuild() ? coordCfg().COURTS : categories.find(c => c.id === cid)?.cfg?.courts || 2, +g.court || 0);
+  openSheet(`<h3 id="sheet-title">${t('move.title')}</h3>
+    <p class="sheet-sub">${dnH(tSlot(g.a))} ${t('sched.vs')} ${dnH(tSlot(g.b))}</p>
+    ${scored ? `<p class="sheet-msg warn">${t('move.scored')}</p>` : `<div class="sheet-grid">
+      <label>${t('move.court')}<select id="mv-court">${Array.from({ length: courts }, (_, i) =>
+        `<option value="${i+1}"${+g.court === i+1 ? ' selected' : ''}>${i+1}</option>`).join('')}</select></label>
+      <label>${t('move.time')}<input id="mv-time" type="time" value="${escH(g.time || '')}"/></label>
+    </div>`}
+    <p class="sheet-msg err" id="mv-msg" role="alert"></p>
+    <div class="modal-btns">
+      ${scored ? '' : `<button class="mbtn mbtn-ok" onclick="saveMove()">${t('move.save')}</button>`}
+      <button class="mbtn mbtn-cancel" onclick="closeSheet()">${t('common.cancel')}</button>
+    </div>
+    <div class="sheet-links">
+      ${['a', 'b'].filter(k => !isSlot(g[k])).map(k => `<button type="button" onclick="editPairFromSheet('${k}')">✎ ${dnH(g[k])}</button>`).join('')}
+      ${meta.phase === 'tournament' && !scored && !isSlot(g.a) && !isSlot(g.b) ? ['a', 'b'].map(k =>
+        `<button type="button" class="danger-link" onclick="techLoss('${k}')">${t('game.wo')}: ${dnH(g[k])}</button>`).join('') : ''}
+      ${meta.phase === 'tournament' && String(g.sa ?? '') !== '' && String(g.sb ?? '') !== '' && +g.sa !== +g.sb && !g.forced
+        ? `<button type="button" onclick="forceSave()">${t('game.forced')} ${escH(g.sa)}:${escH(g.sb)}</button>` : ''}
+    </div>`);
+}
+
+// Volleylab rules: a technical loss is recorded as pointsToWin : 12 (2:0 in a best-of-3 stage).
+function woScore(cid, g, isKO) {
+  const r = getRuleForGame(cid, g, isKO), cfg = categories.find(c => c.id === cid)?.cfg || DEF_CAT_CFG;
+  return (r.sets ?? cfg.sets) === 3 ? [2, 0] : [r.pts || cfg.pointsToWin || 21, 12];
+}
+const dropUnsaved = r => { unsavedGames.delete(r.ri == null ? gameKey(r.cid, r.idx) : gameKey(r.cid, null, r.ri, r.gi)); mirrorUnsaved(); };
+
+async function techLoss(k) {
+  const r = sheetRef, g = r && gameRef(r);
+  if (!superAdmin || !g || hasScore(g)) return;
+  const [w, l] = woScore(r.cid, g, r.ri != null);
+  const score = k === 'a' ? `${l}:${w}` : `${w}:${l}`;
+  if (!await askConfirm(t('game.confirmWo', { name: dn(g[k]), score }), t('game.wo'))) return;
+  const ok = await commitState(r.cid, () => {
+    const x = gameRef(r);
+    if (!x || hasScore(x)) return false;
+    [x.sa, x.sb] = k === 'a' ? [l, w] : [w, l];
+    x.wo = true;
+    updateKOForCat(r.cid);
+  });
+  if (!ok) return;
+  dropUnsaved(r); closeSheet(); rerender();
+}
+
+async function forceSave() {
+  const r = sheetRef, g = r && gameRef(r);
+  if (!superAdmin || !g) return;
+  const sa = parseInt(g.sa), sb = parseInt(g.sb);
+  if (isNaN(sa) || isNaN(sb) || sa === sb || sa < 0 || sb < 0) return;
+  if (!await askConfirm(t('game.confirmForced', { sa, sb }), t('game.forced'))) return;
+  const ok = await commitState(r.cid, () => {
+    const x = gameRef(r);
+    if (!x) return false;
+    Object.assign(x, { sa, sb, forced: true });
+    delete x.wo;
+    updateKOForCat(r.cid);
+  });
+  if (!ok) return;
+  dropUnsaved(r); closeSheet(); rerender();
+}
+
+// The pair stays in the table; every unscored game of theirs becomes a technical loss.
+async function withdrawTeam(catId, gi, ti) {
+  const name = state[catId]?.groups[gi]?.teams[ti];
+  if (!superAdmin || meta.phase !== 'tournament' || !name) return;
+  if (!await askConfirm(t('stand.confirmWithdraw', { name: dn(name) }), t('stand.withdraw'))) return;
+  const is = s => normName(s) === normName(name);
+  const ok = await commitState(catId, cs => {
+    let n = 0;
+    cs.sched.forEach(g => {
+      if (hasScore(g) || !(is(g.a) || is(g.b)) || isSlot(g.a) || isSlot(g.b)) return;
+      const [w, l] = woScore(catId, g, false);
+      [g.sa, g.sb] = is(g.a) ? [l, w] : [w, l];
+      g.wo = true; n++;
+    });
+    cs.ko.forEach(rd => rd.forEach(g => {
+      if (g.isBye || hasScore(g) || !(is(g.a) || is(g.b)) || isSlot(g.a) || isSlot(g.b)) return;
+      const [w, l] = woScore(catId, g, true);
+      [g.sa, g.sb] = is(g.a) ? [l, w] : [w, l];
+      g.wo = true; n++;
+    }));
+    if (!n) return false;
+    updateKOForCat(catId);
+  });
+  if (ok) renderAll();
+}
+
+async function saveMove() {
+  const r = sheetRef, g = r && gameRef(r), msg = document.getElementById('mv-msg');
+  if (!g) return closeSheet();
+  if (hasScore(g)) { msg.textContent = t('move.scored'); return; }
+  const court = +document.getElementById('mv-court').value, time = document.getElementById('mv-time').value;
+  if (!time) return;
+  const hits = clashesAt({ ...r, g }, court, time);
+  const y = hits[0];
+  const swap = hits.length === 1 && +y.g.court === court && y.g.time === time && !hasScore(y.g) ? y : null;
+  if (hits.length && !swap) {
+    const c = hits.find(h => +h.g.court === court);
+    if (c) { msg.textContent = t('move.collision', { court, time: c.g.time }); return; }
+    const p = [g.a, g.b].find(s => !isSlot(s) && s.split('/').map(normName).some(n => playersOf(y.g).includes(n)));
+    msg.textContent = t('move.collisionPlayer', { name: dn(p || ''), time: y.g.time });
+    return;
+  }
+  if (swap && g.time && clashesAt(swap, g.court, g.time, [g]).length) { msg.textContent = t('move.collision', { court: g.court, time: g.time }); return; }
+  if (swap && !await askConfirm(t('move.swapQ', { game: `${dn(tSlot(y.g.a))} – ${dn(tSlot(y.g.b))}` }), t('move.swap'))) return;
+  const sr = swap && { cid: y.cid, idx: y.idx, ri: y.ri, gi: y.gi, id: y.id };
+  const ok = await commitState([...new Set([r.cid, sr && sr.cid].filter(Boolean))], () => {
+    const a = gameRef(r), b = sr && gameRef(sr);
+    if (!a || hasScore(a) || (sr && (!b || hasScore(b)))) return false;
+    const from = { court: a.court, time: a.time };
+    Object.assign(a, { court, time, manual: true });
+    if (b) Object.assign(b, from, { manual: true });
+  });
+  if (!ok) return;
+  closeSheet();
+  toast(t(sr ? 'move.swapped' : 'move.moved'));
+  rerender();
+}
+
+// Late pair after the build: joins a group, its games go into free court/time slots
+// (never before the last scored game); what doesn't fit stays unscheduled for ⇄.
+function openLatePair(cid) {
+  const cs = state[cid];
+  if (!superAdmin || !cs?.groups.length) return;
+  const small = cs.groups.reduce((m, g, i) => g.teams.length < cs.groups[m].teams.length ? i : m, 0);
+  openSheet(`<h3 id="sheet-title">${t('late.title')} · <bdi>${escH(categories.find(c => c.id === cid)?.name || '')}</bdi></h3>
+    <div class="sheet-grid">
+      <label>${t('common.player1')}<input id="lp-p1" dir="auto" list="player-datalist" autocomplete="off"/></label>
+      <label>${t('common.player2')}<input id="lp-p2" dir="auto" list="player-datalist" autocomplete="off"/></label>
+      <label>${t('late.group')}<select id="lp-group">${cs.groups.map((g, i) =>
+        `<option value="${i}"${i === small ? ' selected' : ''}>${escH(g.name)} (${g.teams.length})</option>`).join('')}</select></label>
+    </div>
+    <details><summary>${t('late.bulk')}</summary><textarea id="lp-bulk" class="bulk-input" dir="auto" placeholder="${t('late.bulkPh')}"></textarea></details>
+    <p class="sheet-msg err" id="lp-msg" role="alert"></p>
+    <div class="modal-btns">
+      <button class="mbtn mbtn-ok" onclick="saveLatePair('${cid}')">${t('common.add')}</button>
+      <button class="mbtn mbtn-cancel" onclick="closeSheet()">${t('common.cancel')}</button>
+    </div>`);
+}
+
+function placeLateGames(cid, games) {
+  const all = liveGames(), courts = coordBuild() ? coordCfg().COURTS : categories.find(c => c.id === cid)?.cfg?.courts || 2;
+  const floor = Math.max(0, ...all.filter(x => hasScore(x.g) && x.g.time).map(x => t2m(x.g.time)));
+  const times = [...new Set(all.map(x => x.g.time).filter(s => s && t2m(s) >= floor))].sort((a, b) => t2m(a) - t2m(b));
+  let unplaced = 0;
+  games.forEach(g => {
+    const x = { cid, g };
+    const slot = times.flatMap(time => Array.from({ length: courts }, (_, i) => [i + 1, time]))
+      .find(([court, time]) => !clashesAt(x, court, time).length);
+    if (slot) [g.court, g.time] = slot; else unplaced++;
+  });
+  return unplaced;
+}
+
+async function saveLatePair(cid) {
+  const msg = document.getElementById('lp-msg');
+  const bulk = document.getElementById('lp-bulk').value.split('\n').map(cleanName).filter(Boolean);
+  const one = [cleanName(document.getElementById('lp-p1').value), cleanName(document.getElementById('lp-p2').value)];
+  let pairs;
+  if (bulk.length) {
+    const bad = bulk.findIndex(l => l.split('/').length !== 2 || l.split('/').some(s => !cleanName(s)));
+    if (bad >= 0) { msg.textContent = t('late.badLine', { n: bad + 1 }); return; }
+    pairs = bulk.map(l => l.split('/').map(cleanName));
+  } else pairs = [one];
+  for (const [p1, p2] of pairs) {
+    const err = nameError(p1, 'common.player1') || nameError(p2, 'common.player2');
+    if (err) { msg.textContent = err(); return; }
+  }
+  const names = pairs.map(([p1, p2]) => `${p1} / ${p2}`);
+  const dup = names.find((n, i) => pairTaken(cid, n) || names.findIndex(m => normName(m) === normName(n)) !== i);
+  if (dup) { msg.textContent = t('errors.dupName', { name: dn(dup) }); return; }
+  const pick = bulk.length ? null : +document.getElementById('lp-group').value;
+  let unplaced = 0;
+  const ok = await commitState(cid, cs => {
+    if (!cs.groups.length || names.some(n => cs.roster.some(m => normName(m) === normName(n)))) return false;
+    unplaced = 0;
+    names.forEach(name => {
+      const gi = pick ?? cs.groups.reduce((m, g, i) => g.teams.length < cs.groups[m].teams.length ? i : m, 0);
+      const grp = cs.groups[gi];
+      const games = grp.teams.map(b => ({ catId: cid, gi, gn: grp.name, a: name, b, sa: '', sb: '', court: '', time: '' }));
+      grp.teams.push(name);
+      cs.roster.push(name);
+      cs.sched.push(...games);
+      unplaced += placeLateGames(cid, games);
+    });
+    updateKOForCat(cid);
+  });
+  if (!ok) return;
+  for (const [p1, p2] of pairs) {
+    try { await addDoc(REGS_REF, { p1, p2, phone: '', category: cid, status: 'approved', paid: false, createdAt: serverTimestamp() }); } catch(e) { console.error(e); }
+    addPlayerToDB(p1, ''); addPlayerToDB(p2, '');
+  }
+  closeSheet();
+  toast(t('late.added', { n: names.length }) + (unplaced ? ' · ' + t('late.unplaced', { n: unplaced }) : ''));
+  renderAll();
+}
+
+function openDelay(time) {
+  if (!superAdmin) return;
+  openSheet(`<h3 id="sheet-title">${t('delay.title', { time })}</h3>
+    <p class="sheet-sub">${t('delay.desc')}</p>
+    <div class="sheet-chips">${[-10, 5, 10, 15].map(d =>
+      `<button type="button" onclick="shiftFrom('${time}',${d})">${d > 0 ? '+' : '−'}${t('delay.min', { d: Math.abs(d) })}</button>`).join('')}</div>
+    <div class="modal-btns"><button class="mbtn mbtn-cancel" onclick="closeSheet()">${t('common.cancel')}</button></div>`);
+}
+
+// Shift every unscored game at/after `time` (current category + court filter) by d minutes.
+// A pair with a scored game in the shifted window, or one playing right now, keeps its games.
+async function shiftFrom(time, d) {
+  const from = t2m(time), now = new Date(), nowM = now.getHours() * 60 + now.getMinutes();
+  const inView = x => (!activeCat || x.cid === activeCat) && (activeCourt === 'all' || x.g.court === activeCourt);
+  const pick = () => {
+    const all = liveGames().filter(x => x.g.time && t2m(x.g.time) >= Math.min(from, from + d));
+    const busy = new Set(all.filter(x => hasScore(x.g) || (t2m(x.g.time) <= nowM && nowM < t2m(x.g.time) + gameDurOf(x)))
+      .flatMap(x => playersOf(x.g)));
+    const cand = all.filter(x => inView(x) && t2m(x.g.time) >= from && !hasScore(x.g));
+    const moved = cand.filter(x => !playersOf(x.g).some(p => busy.has(p)));
+    return { moved, skipped: cand.length - moved.length };
+  };
+  const { moved, skipped } = pick();
+  if (!moved.length) { toast(t('delay.none')); return; }
+  const cids = [...new Set(moved.map(x => x.cid))];
+  let res;
+  const ok = await commitState(cids, () => {
+    res = pick();
+    res.moved.forEach(x => { x.g.time = m2t(t2m(x.g.time) + d); });
+    if (!res.moved.length) return false;
+  });
+  if (!ok) return;
+  closeSheet();
+  toast(t('delay.done', { n: res.moved.length, d }) + (res.skipped ? ' · ' + t('delay.skipped', { n: res.skipped }) : ''));
+  rerender();
+}
+
+function editPairFromSheet(k) {
+  const r = sheetRef, g = r && gameRef(r), cs = r && state[r.cid];
+  if (!g) return;
+  const gi = cs.groups.findIndex(grp => grp.teams.some(n => normName(n) === normName(g[k])));
+  if (gi < 0) return;
+  closeSheet();
+  openEditTeam(r.cid, gi, cs.groups[gi].teams.findIndex(n => normName(n) === normName(g[k])));
+}
 
 function renderCourtFilter() {
   const el = document.getElementById('court-filter');
@@ -2688,12 +3004,12 @@ function renderBracketForCat(catId, container) {
   updateKOForCat(catId);
 
   const poolGames = cs.sched.filter(g=>g.gi>=0);   // exclude the 3rd-place game (gi=-1)
-  const done  = poolGames.filter(g=>isValidScore(parseInt(g.sa),parseInt(g.sb),catId,getRuleForGame(catId,g,false).pts)).length;
+  const done  = poolGames.filter(g=>isValidScore(parseInt(g.sa),parseInt(g.sb),catId,getRuleForGame(catId,g,false),g)).length;
   const total = poolGames.length;
   const info  = document.createElement('div');
   info.className='binfo';
   info.innerHTML = !total ? t('bracket.noPool')
-    : t('bracket.poolInfo', { progress: `<span class="num">${t('bracket.poolPlayed', { done, total })}</span>` });
+    : t('bracket.poolInfo', { progress: t('bracket.poolPlayed', { done, total }) });
   container.appendChild(info);
   if (!cs.ko.length) return;
 
@@ -2725,7 +3041,7 @@ function renderBracketForCat(catId, container) {
       return box;
     }
     const sa=parseInt(g.sa), sb=parseInt(g.sb);
-    const hs=isValidScore(sa,sb,catId,getRuleForGame(catId,g,true).pts);
+    const hs=isValidScore(sa,sb,catId,getRuleForGame(catId,g,true),g);
     const wa=hs&&sa>sb, wb=hs&&sb>sa;
     let labelA=g.a||'TBD', labelB=g.b||'TBD', codeA='', codeB='', knownA=false, knownB=false;
     if (ri===0) {
@@ -2826,7 +3142,7 @@ function renderBracketForCat(catId, container) {
     const lastCol = tree.querySelector('.bround:last-child');
     if (lastCol) {
       const sa3=parseInt(thirdGame.sa), sb3=parseInt(thirdGame.sb);
-      const hs3=isValidScore(sa3,sb3,catId,getRuleForGame(catId,thirdGame,false).pts);
+      const hs3=isValidScore(sa3,sb3,catId,getRuleForGame(catId,thirdGame,false),thirdGame);
       const wa3=hs3&&sa3>sb3, wb3=hs3&&sb3>sa3;
       const isSeed3=s=>!s||s.startsWith('Loser')||/^[A-Z]\d+(\/[A-Z]\d+)?$/.test(s);
       const lA3=dnH(tSlot(thirdGame.a)), lB3=dnH(tSlot(thirdGame.b));
@@ -2849,7 +3165,7 @@ function renderBracketForCat(catId, container) {
   const fin=cs.ko[cs.ko.length-1][0];
   if (fin) {
     const fsa=parseInt(fin.sa),fsb=parseInt(fin.sb);
-    if (isValidScore(fsa,fsb,catId,getRuleForGame(catId,fin,true).pts)) {
+    if (isValidScore(fsa,fsb,catId,getRuleForGame(catId,fin,true),fin)) {
       const w=fsa>fsb?fin.a:fin.b;
       const champEl=document.createElement('div');
       champEl.innerHTML=`<div class="champ-wrap"><div class="ci">${t('bracket.champion')}</div><div class="champ-name">${dnH(w)}</div></div>`;
@@ -3322,10 +3638,7 @@ function applyGroupColors() {
   const style = document.getElementById('grp-color-style') || (() => {
     const s=document.createElement('style'); s.id='grp-color-style'; document.head.appendChild(s); return s;
   })();
-  style.textContent = colors.map((c,i) => {
-    const oc = onColor(c);
-    return `.gi${i}{background:${c};color:${oc}}`;
-  }).join('');
+  style.textContent = colors.map((c,i) => `.gi${i}{--gc:${c}}`).join('');
 }
 
 // ── Site colors ──────────────────────────────────────────────────
@@ -3371,15 +3684,20 @@ async function moveTeam(catId, fromGi, teamIdx, toGi) {
   if (fromGi === toGi) return;
   const team = state[catId]?.groups[fromGi]?.teams[teamIdx];
   if (!team || !state[catId].groups[toGi]) return;
+  const scored = cs => cs.sched.some(g => (g.gi === fromGi || g.gi === toGi) && hasScore(g));
+  if (scored(state[catId])) { toast(t('move.scored')); renderSettings(); return; }
   await commitState(catId, cs => {
     const from = cs.groups[fromGi], to = cs.groups[toGi];
     const i = from?.teams.indexOf(team) ?? -1;
-    if (i < 0 || !to) return false;
+    if (i < 0 || !to || scored(cs)) return false;
     from.teams.splice(i, 1);
+    cs.sched = cs.sched.filter(g => !(g.gi === fromGi && (g.a === team || g.b === team)));
+    if (cs.sched.length) {
+      const games = to.teams.map(b => ({ catId, gi: toGi, gn: to.name, a: team, b, sa: '', sb: '', court: '', time: '' }));
+      cs.sched.push(...games);
+      placeLateGames(catId, games);
+    }
     to.teams.push(team);
-    cs.sched.forEach(g => {
-      if ((g.a === team || g.b === team) && g.gi === fromGi) { g.gi = toGi; g.gn = to.name; }
-    });
   });
   renderStandings();
   renderSettings();
@@ -3654,7 +3972,7 @@ async function resetAllScores() {
 
 // ============ NAV ============
 function goPage(p) {
-  if (p==='registrations' && (!admin || meta.phase !== 'registration')) return;
+  if (p==='registrations' && !admin) return;
   if (p==='build' && (!admin || (meta.phase !== 'registration' && meta.phase !== 'built'))) return;
   if (p==='settings' && (!superAdmin || meta.phase === 'tournament')) return;
   document.querySelectorAll('.pg').forEach(e=>e.classList.remove('on'));
@@ -3789,6 +4107,8 @@ Object.assign(window, {
   openEditTeam, closeEdit, saveEdit, deleteTeam,
   editBuildItem, deleteBuildItem,
   setGS, setKS, filterSchedule,
+  openGameSheet, closeSheet, saveMove, editPairFromSheet, techLoss, forceSave, withdrawTeam, saveLatePair,
+  openDelay, shiftFrom,
   updateMeta, updateCatName, updateCatCfg, adjCatCfg,
   addCategory, deleteCategory, resetAllScores,
   updateSponsorLogo, removeSponsorLogo, addSponsorLogo, uploadSponsorLogo, removeLogo, renderSettings,
@@ -3918,6 +4238,7 @@ document.getElementById('main-nav')?.addEventListener('scroll', updateNavFade, {
 window.addEventListener('load', async () => {
   initLang();
   applyStatic();
+  document.querySelectorAll('.print-link').forEach(a => a.href = a.getAttribute('href').split('?')[0] + location.search);
   const ok = await loadTournament();
   if (!ok) return;
   initLang(meta.lang);
