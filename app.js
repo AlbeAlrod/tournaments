@@ -2666,7 +2666,8 @@ function renderScheduleContent() {
       subGroups.get(key).games.push(g);
     });
     const needSubHeaders = subGroups.size > 1 || [...subGroups.values()].some(s=>s.label);
-    block.innerHTML=`<div class="thdr"><span class="tlbl">${time}</span><div class="tline"></div></div>`;
+    block.innerHTML=`<div class="thdr"><span class="tlbl">${time}</span><div class="tline"></div>${superAdmin && meta.phase !== 'registration'
+      ? `<button type="button" class="gact" onclick="openDelay('${time}')" aria-label="${escH(t('delay.aria', { time }))}">⏱</button>` : ''}</div>`;
     subGroups.forEach(({label, games: sg}) => {
       if (needSubHeaders && label) {
         const sh = document.createElement('div');
@@ -2918,6 +2919,43 @@ async function saveLatePair(cid) {
   closeSheet();
   toast(t('late.added', { n: names.length }) + (unplaced ? ' · ' + t('late.unplaced', { n: unplaced }) : ''));
   renderAll();
+}
+
+function openDelay(time) {
+  if (!superAdmin) return;
+  openSheet(`<h3 id="sheet-title">${t('delay.title', { time })}</h3>
+    <p class="sheet-sub">${t('delay.desc')}</p>
+    <div class="sheet-chips">${[-10, 5, 10, 15].map(d =>
+      `<button type="button" onclick="shiftFrom('${time}',${d})">${d > 0 ? '+' : '−'}${t('delay.min', { d: Math.abs(d) })}</button>`).join('')}</div>
+    <div class="modal-btns"><button class="mbtn mbtn-cancel" onclick="closeSheet()">${t('common.cancel')}</button></div>`);
+}
+
+// Shift every unscored game at/after `time` (current category + court filter) by d minutes.
+// A pair with a scored game in the shifted window, or one playing right now, keeps its games.
+async function shiftFrom(time, d) {
+  const from = t2m(time), now = new Date(), nowM = now.getHours() * 60 + now.getMinutes();
+  const inView = x => (!activeCat || x.cid === activeCat) && (activeCourt === 'all' || x.g.court === activeCourt);
+  const pick = () => {
+    const all = liveGames().filter(x => x.g.time && t2m(x.g.time) >= Math.min(from, from + d));
+    const busy = new Set(all.filter(x => hasScore(x.g) || (t2m(x.g.time) <= nowM && nowM < t2m(x.g.time) + gameDurOf(x)))
+      .flatMap(x => playersOf(x.g)));
+    const cand = all.filter(x => inView(x) && t2m(x.g.time) >= from && !hasScore(x.g));
+    const moved = cand.filter(x => !playersOf(x.g).some(p => busy.has(p)));
+    return { moved, skipped: cand.length - moved.length };
+  };
+  const { moved, skipped } = pick();
+  if (!moved.length) { toast(t('delay.none')); return; }
+  const cids = [...new Set(moved.map(x => x.cid))];
+  let res;
+  const ok = await commitState(cids, () => {
+    res = pick();
+    res.moved.forEach(x => { x.g.time = m2t(t2m(x.g.time) + d); });
+    if (!res.moved.length) return false;
+  });
+  if (!ok) return;
+  closeSheet();
+  toast(t('delay.done', { n: res.moved.length, d }) + (res.skipped ? ' · ' + t('delay.skipped', { n: res.skipped }) : ''));
+  rerender();
 }
 
 function editPairFromSheet(k) {
@@ -4063,6 +4101,7 @@ Object.assign(window, {
   editBuildItem, deleteBuildItem,
   setGS, setKS, filterSchedule,
   openGameSheet, closeSheet, saveMove, editPairFromSheet, techLoss, forceSave, withdrawTeam, saveLatePair,
+  openDelay, shiftFrom,
   updateMeta, updateCatName, updateCatCfg, adjCatCfg,
   addCategory, deleteCategory, resetAllScores,
   updateSponsorLogo, removeSponsorLogo, addSponsorLogo, uploadSponsorLogo, removeLogo, renderSettings,
