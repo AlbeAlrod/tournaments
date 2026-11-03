@@ -2550,8 +2550,12 @@ function buildGameRow(catId, g, idx, isKO) {
   const setter = k => isKO ? `setKS('${catId}',${g.ri},${g.gi},'${k}',this.value` : `setGS('${catId}',${idx},'${k}',this.value`;
   // Stable ids let the focus-preserving re-render put the caret back.
   const sid = k => isKO ? `si-${catId}-k${g.ri}-${g.gi}-${k}` : `si-${catId}-${idx}-${k}`;
-  const gtag = !isKO&&g.gn?`<span class="gtag">${escH(g.gn)}</span>`:'';
-  const pill = `<span class="pill ${pc}">${t('sched.courtShort', { n: g.court })}</span>${koLbl?`<span class="ko-lbl">${koLbl}</span>`:''}`;
+  const gtag = (!isKO&&g.gn?`<span class="gtag">${escH(g.gn)}</span>`:'')
+    + (superAdmin && g.manual ? `<span class="tag-manual" title="${t('game.tagManualTitle')}">${t('game.tagManual')}</span>` : '');
+  const court = t('sched.courtShort', { n: g.court || '—' });
+  const pill = (superAdmin && meta.phase !== 'registration'
+    ? `<button type="button" class="pill ${pc}" onclick="openGameSheet('${catId}',${isKO ? `null,${g.ri},${g.gi}` : idx})" aria-label="${t('move.aria')}">${court} ⇄</button>`
+    : `<span class="pill ${pc}">${court}</span>`) + (koLbl?`<span class="ko-lbl">${koLbl}</span>`:'');
   if (admin && meta.phase === 'tournament') {
     // Each input sits next to its own team; on a phone the row stacks as "team – score".
     const inp = (k, team) => `<input class="si" id="${sid(k)}" type="number" min="0" inputmode="numeric" placeholder="—"
@@ -2661,6 +2665,101 @@ function renderScheduleContent() {
 }
 
 function filterSchedule() { renderScheduleContent(); }
+
+// ============ LIVE OPS (master) ============
+const isSlot = s => !s || /^(TBD$|BYE$|Winner of |Loser of |[A-Z]\d+(\/[A-Z]\d+)?$)/.test(s);
+const playersOf = g => [g.a, g.b].filter(s => !isSlot(s)).flatMap(s => s.split('/').map(normName));
+function liveGames() {
+  return categories.flatMap(c => {
+    const cs = state[c.id];
+    if (!cs) return [];
+    return [...cs.sched.map((g, idx) => ({ cid: c.id, g, idx, id: gameId(g, false) })),
+      ...cs.ko.flatMap((r, ri) => r.map((g, gi) => ({ cid: c.id, g, ri, gi, id: gameId(g, true) }))).filter(x => !x.g.isBye)];
+  });
+}
+const gameDurOf = x => getRuleForGame(x.cid, x.g, x.ri != null).dur || categories.find(c => c.id === x.cid)?.cfg?.gameDur || 30;
+// Games overlapping x if it were played at court/time: same court, or a shared player.
+function clashesAt(x, court, time, skip = []) {
+  const s = t2m(time), e = s + gameDurOf(x), pl = playersOf(x.g);
+  return liveGames().filter(y => y.g !== x.g && !skip.includes(y.g) && y.g.time
+    && t2m(y.g.time) < e && s < t2m(y.g.time) + gameDurOf(y)
+    && (+y.g.court === +court || playersOf(y.g).some(p => pl.includes(p))));
+}
+
+function openSheet(html) {
+  const m = document.getElementById('sheet-modal');
+  document.getElementById('sheet-body').innerHTML = html;
+  m.classList.remove('h');
+  m.onkeydown = e => { if (e.key === 'Escape') closeSheet(); };
+  m.querySelector('input,select,button')?.focus();
+}
+function closeSheet() { document.getElementById('sheet-modal')?.classList.add('h'); }
+
+let sheetRef = null;   // {cid, idx | ri+gi, id} of the game the sheet is about
+function openGameSheet(cid, idx, ri, gi) {
+  if (!superAdmin) return;
+  const x = liveGames().find(y => y.cid === cid && (ri == null ? y.idx === idx : y.ri === ri && y.gi === gi));
+  if (!x) return;
+  sheetRef = { cid, idx: x.idx, ri: x.ri, gi: x.gi, id: x.id };
+  const g = x.g, scored = hasScore(g);
+  const courts = Math.max(coordBuild() ? coordCfg().COURTS : categories.find(c => c.id === cid)?.cfg?.courts || 2, +g.court || 0);
+  openSheet(`<h3 id="sheet-title">${t('move.title')}</h3>
+    <p class="sheet-sub">${dnH(tSlot(g.a))} ${t('sched.vs')} ${dnH(tSlot(g.b))}</p>
+    ${scored ? `<p class="sheet-msg warn">${t('move.scored')}</p>` : `<div class="sheet-grid">
+      <label>${t('move.court')}<select id="mv-court">${Array.from({ length: courts }, (_, i) =>
+        `<option value="${i+1}"${+g.court === i+1 ? ' selected' : ''}>${i+1}</option>`).join('')}</select></label>
+      <label>${t('move.time')}<input id="mv-time" type="time" value="${escH(g.time || '')}"/></label>
+    </div>`}
+    <p class="sheet-msg err" id="mv-msg" role="alert"></p>
+    <div class="modal-btns">
+      ${scored ? '' : `<button class="mbtn mbtn-ok" onclick="saveMove()">${t('move.save')}</button>`}
+      <button class="mbtn mbtn-cancel" onclick="closeSheet()">${t('common.cancel')}</button>
+    </div>
+    <div class="sheet-links">
+      ${['a', 'b'].filter(k => !isSlot(g[k])).map(k => `<button type="button" onclick="editPairFromSheet('${k}')">✎ ${dnH(g[k])}</button>`).join('')}
+    </div>`);
+}
+
+async function saveMove() {
+  const r = sheetRef, g = r && gameRef(r), msg = document.getElementById('mv-msg');
+  if (!g) return closeSheet();
+  if (hasScore(g)) { msg.textContent = t('move.scored'); return; }
+  const court = +document.getElementById('mv-court').value, time = document.getElementById('mv-time').value;
+  if (!time) return;
+  const hits = clashesAt({ ...r, g }, court, time);
+  const y = hits[0];
+  const swap = hits.length === 1 && +y.g.court === court && y.g.time === time && !hasScore(y.g) ? y : null;
+  if (hits.length && !swap) {
+    const c = hits.find(h => +h.g.court === court);
+    if (c) { msg.textContent = t('move.collision', { court, time: c.g.time }); return; }
+    const p = [g.a, g.b].find(s => !isSlot(s) && s.split('/').map(normName).some(n => playersOf(y.g).includes(n)));
+    msg.textContent = t('move.collisionPlayer', { name: dn(p || ''), time: y.g.time });
+    return;
+  }
+  if (swap && g.time && clashesAt(swap, g.court, g.time, [g]).length) { msg.textContent = t('move.collision', { court: g.court, time: g.time }); return; }
+  if (swap && !await askConfirm(t('move.swapQ', { game: `${dn(tSlot(y.g.a))} – ${dn(tSlot(y.g.b))}` }), t('move.swap'))) return;
+  const sr = swap && { cid: y.cid, idx: y.idx, ri: y.ri, gi: y.gi, id: y.id };
+  const ok = await commitState([...new Set([r.cid, sr && sr.cid].filter(Boolean))], () => {
+    const a = gameRef(r), b = sr && gameRef(sr);
+    if (!a || hasScore(a) || (sr && (!b || hasScore(b)))) return false;
+    const from = { court: a.court, time: a.time };
+    Object.assign(a, { court, time, manual: true });
+    if (b) Object.assign(b, from, { manual: true });
+  });
+  if (!ok) return;
+  closeSheet();
+  toast(t(sr ? 'move.swapped' : 'move.moved'));
+  rerender();
+}
+
+function editPairFromSheet(k) {
+  const r = sheetRef, g = r && gameRef(r), cs = r && state[r.cid];
+  if (!g) return;
+  const gi = cs.groups.findIndex(grp => grp.teams.some(n => normName(n) === normName(g[k])));
+  if (gi < 0) return;
+  closeSheet();
+  openEditTeam(r.cid, gi, cs.groups[gi].teams.findIndex(n => normName(n) === normName(g[k])));
+}
 
 function renderCourtFilter() {
   const el = document.getElementById('court-filter');
@@ -3795,6 +3894,7 @@ Object.assign(window, {
   openEditTeam, closeEdit, saveEdit, deleteTeam,
   editBuildItem, deleteBuildItem,
   setGS, setKS, filterSchedule,
+  openGameSheet, closeSheet, saveMove, editPairFromSheet,
   updateMeta, updateCatName, updateCatCfg, adjCatCfg,
   addCategory, deleteCategory, resetAllScores,
   updateSponsorLogo, removeSponsorLogo, addSponsorLogo, uploadSponsorLogo, removeLogo, renderSettings,
