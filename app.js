@@ -3477,6 +3477,7 @@ function renderCatItem(cat, ci, live) {
       ${coord ? '' : catNumField(t('settings.courts'), ci, 'courts', cfg.courts, 1, 8)}
       ${catNumField(t('settings.numGroups'), ci, 'numGroups', cfg.numGroups, 2, 16)}
       ${catNumField(t('settings.advPerGroup'), ci, 'advPerGroup', cfg.advPerGroup, 1, 8)}
+      ${(n => n > 1 ? `<span class="sett-desc" style="grid-column:1/-1">${t('settings.koHint', { n, round: tRound(Math.ceil(Math.log2(n)) - 1, 2 ** Math.ceil(Math.log2(n))) })}</span>` : '')((cfg.numGroups||0) * (cfg.advPerGroup||0))}
       ${coord ? '' : catNumField(t('settings.gameDur'), ci, 'gameDur', cfg.gameDur, 5, 120)}
       ${coord ? '' : catNumField(t('settings.breakDur'), ci, 'breakDur', cfg.breakDur, 0, 60)}
       <div class="cat-sett-field">
