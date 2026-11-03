@@ -1572,7 +1572,8 @@ function generateCoordinatedSchedule(){
   categories.forEach(c=>{ if(state[c.id]) updateKOForCat(c.id); });
 }
 
-const coordBuild = () => !!meta.coordinated;
+// More than one category always shares one court grid (separate grids double-book courts).
+const coordBuild = () => !!meta.coordinated || categories.length > 1;
 const allGamesOf = cs => [...cs.sched, ...cs.ko.flat().filter(g => !g.isBye)];
 
 // A rebuild keeps scores (and manual court/time) of games that still exist with the
