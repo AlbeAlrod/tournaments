@@ -133,6 +133,12 @@ export function roundName(count) {
 // from app.js:1504
 // Normalize name for matching: "תום / מוריאל" ↔ "תום מוריאל" → same key
 export const normName = s => (s||'').replace(/\s*\/\s*/g,' ').replace(/\s+/g,' ').trim().toLowerCase();
+// from app.js:655
+export const pairKey = (a, b) => [normName(a), normName(b)].sort().join('|');
+// from app.js:873
+export const hasScore = g => String(g.sa ?? '') !== '' || String(g.sb ?? '') !== '';
+// from app.js:1611
+export const koKey = (cid, cs, ri, gi) => `${cid}|K|${cs.ko.length}|${ri}|${cs.ko[ri].length}|${gi}`;
 
 // ============ STATEFUL (factory over app.js globals) ============
 //
@@ -747,10 +753,44 @@ export function createLegacy(ctx) {
     return `G${num}`;
   }
 
+  // from app.js:1612
+  function gameIndex(cids) {
+    const { state } = ctx;
+    const m = new Map();
+    cids.forEach(cid => {
+      const cs = state[cid]; if (!cs) return;
+      cs.sched.forEach(g => m.set(g.gi < 0 ? `${cid}|3P` : `${cid}|${pairKey(g.a, g.b)}`, g));
+      cs.ko.forEach((r, ri) => r.forEach((g, gi) => m.set(koKey(cid, cs, ri, gi), g)));
+    });
+    return m;
+  }
+  // from app.js:1621
+  function carryOver(cids, old) {
+    const { state } = ctx;
+    const same = (g, o) => normName(g.a) === normName(o.a) && normName(g.b) === normName(o.b);
+    const take = (g, o, swap) => {
+      if (!hasScore(o)) return;
+      [g.sa, g.sb] = swap ? [o.sb, o.sa] : [o.sa, o.sb];
+      ['wo', 'forced'].forEach(k => { if (o[k]) g[k] = o[k]; });
+    };
+    cids.forEach(cid => {
+      const cs = state[cid];
+      if (!cs) return;
+      cs.sched.forEach(g => { const o = g.gi >= 0 && old.get(`${cid}|${pairKey(g.a, g.b)}`); if (o) take(g, o, !same(g, o)); });
+      updateKOForCat(cid);
+      cs.ko.forEach((r, ri) => {
+        r.forEach((g, gi) => { const o = old.get(koKey(cid, cs, ri, gi)); if (o && same(g, o)) take(g, o); });
+        updateKOForCat(cid);
+      });
+      const g3 = cs.sched.find(g => g.gi < 0), o3 = old.get(`${cid}|3P`);
+      if (g3 && o3 && same(g3, o3)) take(g3, o3);
+    });
+  }
+
   return {
     getRuleForGame, coordCfg, buildCoordinatedGroups, generateCoordinatedSchedule,
     buildCategory, getKORoundName, assignSlotTimes, genPoolSched, generateScheduleForCat,
     buildQueenKO, isValidScore, scoreError, getStandings, resolvePoolSeed,
-    getKOLoser, getKOWinner, updateKOForCat, koGameLabel,
+    getKOLoser, getKOWinner, updateKOForCat, koGameLabel, gameIndex, carryOver,
   };
 }
