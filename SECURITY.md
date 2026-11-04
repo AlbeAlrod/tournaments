@@ -12,6 +12,8 @@
     `registrations/{id}/private/contact`, readable by that tournament's managers only.
   - `firestore.rules` gates every write on the token's claims; approval is super-admin only.
   - Tests: `cd functions && npm test` (Firebase emulator; also runs in CI).
+  - Club panel: `club.html` (club owners, branch managers, super-admin): create secure tournaments
+    (pending until the super-admin approves), branches, and manager invites.
   - First super-admin: `node functions/scripts/set-superadmin.mjs <email>` with project credentials.
 
 

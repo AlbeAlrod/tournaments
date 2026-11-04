@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>ניהול מועדון</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="styles.css?v=75"/>
+<style>
+.h { display: none !important; }
+body { background: var(--bg); color: var(--text); font-family: 'Rubik', sans-serif; margin: 0; }
+.wrap { max-width: 760px; margin: 0 auto; padding: 16px; }
+.box { background: var(--bg2); border: 1px solid var(--border); border-radius: 14px; padding: 20px; margin-bottom: 16px; }
+.box h2 { font-size: 18px; margin: 0 0 12px; }
+#screen-login { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 16px; }
+#screen-login .box { width: 100%; max-width: 380px; }
+.top { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 16px; }
+.top h1 { font-size: 22px; margin: 0; }
+.muted { color: var(--text3); font-size: 13px; }
+.err { color: var(--red, #c62828); font-size: 13px; margin-top: 8px; }
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.grid .full { grid-column: 1 / -1; }
+@media (max-width: 560px) { .grid { grid-template-columns: 1fr; } }
+label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+.card { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 12px 0; border-top: 1px solid var(--border); }
+.card:first-child { border-top: none; }
+.btns { display: flex; gap: 6px; flex-wrap: wrap; }
+.mini { min-height: 36px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--border2); background: var(--bg2);
+  color: var(--text2); font: inherit; font-size: 13px; cursor: pointer; display: inline-flex; align-items: center; text-decoration: none; }
+.mini.ok { background: var(--primary); border-color: var(--primary); color: var(--on-primary); }
+.row-btn { display: block; width: 100%; text-align: start; padding: 12px; margin-bottom: 6px; border: 1px solid var(--border);
+  border-radius: 10px; background: var(--bg2); font: inherit; color: var(--text); cursor: pointer; }
+.chip { display: inline-block; padding: 4px 10px; margin: 0 0 6px 6px; border-radius: 999px; background: var(--bg3); font-size: 13px; }
+.badge { font-size: 12px; padding: 2px 8px; border-radius: 999px; margin-inline-start: 6px; background: var(--bg3); }
+.badge.approved { background: #e5f4e4; color: #1b5e20; }
+.badge.pending { background: #f9eeda; color: #7a4b00; }
+.badge.rejected { background: #fbebeb; color: #8e1b1b; }
+.inline { display: flex; gap: 8px; flex-wrap: wrap; }
+.inline .form-input { flex: 1; min-width: 140px; }
+.inline .mini { min-height: 44px; }
+textarea.form-input { min-height: 90px; font: inherit; }
+.link-btn { background: none; border: none; color: var(--primary-text); font: inherit; font-size: 13px; cursor: pointer; padding: 8px 0 0; }
+</style>
+</head>
+<body>
+
+<div id="screen-login">
+  <div class="box">
+    <h2>ניהול מועדון</h2>
+    <p class="muted">כניסה למנהלי מועדונים וסניפים.</p>
+    <div class="form-row"><input class="form-input" id="lg-email" type="email" dir="ltr" autocomplete="username" placeholder="מייל"/></div>
+    <div class="form-row"><input class="form-input" id="lg-pw" type="password" dir="ltr" autocomplete="current-password" placeholder="סיסמה"
+      onkeydown="if(event.key==='Enter')login()"/></div>
+    <button class="submit-btn" onclick="login()">כניסה</button>
+    <button class="link-btn" onclick="resetPw()">שכחתי סיסמה</button>
+    <div id="lg-err" class="err h" role="alert"></div>
+  </div>
+</div>
+
+<div id="screen-app" class="h">
+  <div class="wrap">
+    <div class="top">
+      <div><h1>ניהול טורנירים</h1><div class="muted" id="who"></div></div>
+      <button class="mini" onclick="logout()">יציאה</button>
+    </div>
+
+    <div id="sec-super" class="h">
+      <div class="box">
+        <h2>ממתינים לאישור</h2>
+        <div id="pending-list"></div>
+      </div>
+      <div class="box">
+        <h2>מועדונים</h2>
+        <div id="club-list"></div>
+        <div class="inline" style="margin-top:10px">
+          <input class="form-input" id="nc-name" placeholder="שם המועדון"/>
+          <input class="form-input" id="nc-id" dir="ltr" placeholder="mentor" aria-label="מזהה באנגלית"/>
+          <button class="mini ok" onclick="createClub()">הוספה</button>
+        </div>
+        <div id="nc-err" class="err h"></div>
+      </div>
+    </div>
+
+    <div id="sec-club" class="h">
+      <div class="box">
+        <h2 id="club-name"></h2>
+        <div id="branch-list"></div>
+        <div class="inline" id="branch-add">
+          <input class="form-input" id="nb-name" placeholder="שם סניף"/>
+          <input class="form-input" id="nb-id" dir="ltr" placeholder="yafo" aria-label="מזהה באנגלית"/>
+          <button class="mini ok" onclick="addBranch()">הוספת סניף</button>
+        </div>
+      </div>
+
+      <div class="box">
+        <h2>טורנירים</h2>
+        <div id="t-list"></div>
+      </div>
+
+      <div class="box">
+        <h2>טורניר חדש</h2>
+        <p class="muted">טורניר חדש מתפרסם ונפתח להרשמה אחרי אישור מנהל המערכת.</p>
+        <div class="grid">
+          <div class="full"><label for="nt-name">שם הטורניר</label><input class="form-input" id="nt-name"/></div>
+          <div><label for="nt-branch">סניף</label><select class="form-input" id="nt-branch"></select></div>
+          <div><label for="nt-date">תאריך</label><input class="form-input" id="nt-date" type="date"/></div>
+          <div class="full"><label for="nt-cats">קטגוריות (מופרדות בפסיק)</label><input class="form-input" id="nt-cats" value="גברים, נשים, מעורב"/></div>
+          <div><label for="nt-price">מחיר לזוג</label><input class="form-input" id="nt-price" inputmode="numeric"/></div>
+          <div><label for="nt-pay">קישור תשלום (Arbox)</label><input class="form-input" id="nt-pay" dir="ltr" type="url"/></div>
+        </div>
+        <button class="submit-btn" style="margin-top:14px" onclick="createTournament()">יצירה</button>
+        <div id="nt-err" class="err h" role="alert"></div>
+      </div>
+
+      <div class="box">
+        <h2>הזמנת מנהל</h2>
+        <div class="grid">
+          <div class="full"><label for="inv-email">מייל</label><input class="form-input" id="inv-email" type="email" dir="ltr"/></div>
+          <div id="inv-role-wrap"><label for="inv-role">תפקיד</label>
+            <select class="form-input" id="inv-role">
+              <option value="branch">מנהל סניף</option>
+              <option value="owner">בעל מועדון</option>
+            </select></div>
+          <div><label for="inv-branch">סניף</label><select class="form-input" id="inv-branch"></select></div>
+        </div>
+        <button class="submit-btn" style="margin-top:14px" onclick="invite()">יצירת הזמנה</button>
+        <div id="inv-err" class="err h" role="alert"></div>
+        <div id="inv-out" class="h" style="margin-top:14px">
+          <p class="muted">שלחו למנהל את ההודעה. הקישור מאפשר לו לקבוע סיסמה.</p>
+          <textarea class="form-input" id="inv-link" readonly dir="auto"></textarea>
+          <div class="btns" style="margin-top:8px">
+            <button class="mini" onclick="copyText(document.getElementById('inv-link').value)">העתקה</button>
+            <a class="mini ok" id="inv-wa" target="_blank" rel="noopener">שליחה בוואטסאפ</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast h" id="toast" role="status"></div>
+<script type="module" src="club.js?v=1"></script>
+</body>
+</html>
