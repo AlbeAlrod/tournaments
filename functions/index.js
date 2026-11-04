@@ -165,3 +165,4 @@ export const onRegistrationDeleted = onDocumentDeleted('tournaments/{tId}/regist
     tx.update(idxRef, { [phone]: left.length ? left : FieldValue.delete() });
   });
 });
+export * from './mail.js';

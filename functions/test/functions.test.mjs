@@ -122,3 +122,29 @@ test('login attempts are rate limited', async () => {
   for (let i = 0; i < 12; i++) last = await code(call('tournamentLogin', { tId: 'sec', role: 'master', password: 'wrong' }));
   assert.equal(last, 'functions/resource-exhausted');
 });
+
+const mailTo = async (to, kind) => {
+  for (let i = 0; i < 50; i++) {
+    const q = await adb.collection('mailLog').where('to', '==', to).where('kind', '==', kind).get();
+    if (!q.empty) return q.docs[0].data();
+    await new Promise(res => setTimeout(res, 200));
+  }
+  return null;
+};
+
+test('emails follow the registration: received, approved with deadline, paid', async () => {
+  await signOut(auth);
+  const email = 'mail@test.co';
+  const { id } = await call('registerPair', { ...pair, tId: 'sec', phone: '0533333333', email });
+  const got = await mailTo(email, 'received');
+  assert.ok(got && got.subject.includes('קיבלנו') && got.sent === false);
+  await adb.doc(`tournaments/sec/registrations/${id}`).update({ status: 'approved', payDeadline: Date.now() + 864e5 });
+  assert.ok(await mailTo(email, 'approved'));
+  await adb.doc(`tournaments/sec/registrations/${id}`).update({ paid: true });
+  assert.ok(await mailTo(email, 'paid'));
+});
+
+test('a new pending secure tournament emails the super-admin', async () => {
+  await adb.doc('tournaments/newone').set({ ...T, approval: 'pending' });
+  assert.ok(await mailTo('super@test.co', 'pendingTournament'));
+});
