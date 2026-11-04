@@ -7,9 +7,9 @@ import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import nodemailer from 'nodemailer';
 
 const SMTP_URL = defineSecret('SMTP_URL');
-const MAIL_FROM = defineString('MAIL_FROM', { default: '' });
+const MAIL_FROM = defineString('MAIL_FROM', { default: 'auto' });
 const SITE_URL = defineString('SITE_URL', { default: 'https://albealrod.github.io/tournaments' });
-const SUPER_EMAIL = defineString('SUPER_EMAIL', { default: '' });
+const SUPER_EMAIL = defineString('SUPER_EMAIL', { default: 'none' });
 
 let transport;
 export async function sendMail(to, subject, html, meta) {
@@ -17,7 +17,7 @@ export async function sendMail(to, subject, html, meta) {
   const live = /^smtps?:\/\//.test(url);
   if (live) {
     transport ??= nodemailer.createTransport(url);
-    await transport.sendMail({ from: MAIL_FROM.value() || undefined, to, subject, html });
+    await transport.sendMail({ from: MAIL_FROM.value().includes('@') ? MAIL_FROM.value() : undefined, to, subject, html });
   }
   await getFirestore().collection('mailLog').add({ to, subject, ...meta, sent: live, at: FieldValue.serverTimestamp() });
 }
@@ -96,7 +96,7 @@ export const mailOnRegistrationUpdated = onDocumentUpdated(opts, ev => mailForRe
 // A new secure tournament waits for the super-admin: tell them.
 export const mailOnTournamentCreated = onDocumentCreated({ document: 'tournaments/{tId}', secrets: [SMTP_URL] }, async ev => {
   const t = ev.data?.data();
-  if (t?.secure !== true || t.approval !== 'pending' || !SUPER_EMAIL.value()) return;
+  if (t?.secure !== true || t.approval !== 'pending' || !SUPER_EMAIL.value().includes('@')) return;
   const club = (await getFirestore().doc(`clubs/${t.clubId}`).get()).data();
   const html = mailHtml(t, club, [`טורניר חדש של ${esc(club?.name || t.clubId)} ממתין לאישור שלך.`],
     { url: `${SITE_URL.value().replace(/\/$/, '')}/club.html`, label: 'לאישור בפאנל' });
