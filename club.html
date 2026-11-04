@@ -124,6 +124,8 @@ input[type=color].form-input { padding: 4px; height: 44px; }
           <div class="full"><label for="nt-cats">קטגוריות (מופרדות בפסיק)</label><input class="form-input" id="nt-cats" value="גברים, נשים, מעורב"/></div>
           <div><label for="nt-price">מחיר לזוג</label><input class="form-input" id="nt-price" inputmode="numeric"/></div>
           <div><label for="nt-pay">קישור תשלום (Arbox)</label><input class="form-input" id="nt-pay" dir="ltr" type="url"/></div>
+          <div><label for="nt-cap">מקומות בכל קטגוריה (זוגות)</label><input class="form-input" id="nt-cap" type="number" inputmode="numeric" min="0" placeholder="ללא הגבלה"/></div>
+          <div><label for="nt-hours">זמן לתשלום אחרי אישור (שעות)</label><input class="form-input" id="nt-hours" type="number" inputmode="numeric" min="1" value="24"/></div>
         </div>
         <button class="submit-btn" style="margin-top:14px" onclick="createTournament()">יצירה</button>
         <div id="nt-err" class="err h" role="alert"></div>

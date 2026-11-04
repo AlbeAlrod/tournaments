@@ -1143,3 +1143,10 @@ body:lang(he) { letter-spacing: 0; }
 
 /* Login role hint under the role buttons */
 .role-hint { font-size: var(--fs-xs); color: var(--text2); margin: -4px 0 12px; line-height: 1.4; }
+
+/* Secure tournaments: waitlist + needs attention */
+.badge-waitlist { background: rgba(37,99,235,.10); color: #1E40AF; }
+.reg-row.status-waitlist { border-inline-start: 3px solid #2563EB; }
+.d-overdue { color: var(--red); font-weight: 600; }
+.d-attention { border: 1px solid var(--amber); background: rgba(180,83,9,.06); border-radius: var(--rs); padding: 12px 14px; margin-bottom: 14px; display: flex; flex-direction: column; gap: 8px; }
+.d-att-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }

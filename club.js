@@ -192,17 +192,18 @@ async function createTournament() {
       meta: {
         name, eventDate: date, venue: branches.find(b => b.id === branchId)?.name || '',
         price: $('nt-price').value.trim(), paymentLink: $('nt-pay').value.trim(), paymentLinkLabel: '',
+        payDeadlineHours: Math.max(1, parseInt($('nt-hours').value) || 24),
         sport: 'footvolley', lang: 'he', phase: 'registration', regOpen: true, showRegistered: true,
         coordinated: true, parallelCategories: true, allPoolsBeforeKO: true,
         primaryColor: brand.primary || '#652d92', secondaryColor: brand.secondary || '#7a3fb0', bgColor: '',
         logoUrl: brand.logo || '', fonts: brand.fonts || [], neutralText: !!brand.neutralText,
         groupColors: [], sponsorLogos: [], regNote: '', paymentLink2: '', paymentLink2Label: ''
       },
-      categories: cats.map((n, i) => ({ id: 'c' + (i + 1), name: n, cfg: structuredClone(DEF_CAT_CFG) })),
+      categories: cats.map((n, i) => ({ id: 'c' + (i + 1), name: n, cfg: { ...structuredClone(DEF_CAT_CFG), maxPairs: Math.max(0, parseInt($('nt-cap').value) || 0) } })),
       state: {},
       updatedAt: serverTimestamp()
     });
-    for (const f of ['nt-name', 'nt-date', 'nt-price', 'nt-pay']) $(f).value = '';
+    for (const f of ['nt-name', 'nt-date', 'nt-price', 'nt-pay', 'nt-cap']) $(f).value = '';
     showErr('nt-err', '');
     toast(approval === 'approved' ? 'הטורניר נוצר ופורסם' : 'הטורניר נוצר ונשלח לאישור');
     await loadTournaments();

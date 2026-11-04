@@ -57,10 +57,20 @@ test('registerPair stores contact details privately and blocks duplicates', asyn
   assert.equal(await code(call('registerPair', { ...pair, email: 'nope' })), 'functions/invalid-argument');
 });
 
+test('a full category puts new pairs on the waitlist', async () => {
+  await adb.doc('tournaments/cap').set({ ...T, categories: [{ id: 'c1', name: 'BC', cfg: { maxPairs: 1 } }] });
+  const first = await call('registerPair', { ...pair, tId: 'cap', phone: '0521111111' });
+  assert.equal(first.status, 'pending');
+  await adb.doc(`tournaments/cap/registrations/${first.id}`).update({ status: 'approved' });
+  const second = await call('registerPair', { ...pair, tId: 'cap', phone: '0522222222' });
+  assert.equal(second.status, 'waitlist');
+  assert.ok((await adb.doc(`tournaments/cap/registrations/${second.id}`).get()).data().waitAt > 0);
+});
+
 test('checkRegistration returns status without contact details', async () => {
   const { registrations } = await call('checkRegistration', { tId: 'sec', phone: '+972501234567' });
   assert.equal(registrations.length, 2);
-  assert.deepEqual(Object.keys(registrations[0]).sort(), ['category', 'id', 'p1', 'p2', 'paid', 'status']);
+  assert.deepEqual(Object.keys(registrations[0]).sort(), ['category', 'id', 'p1', 'p2', 'paid', 'payDeadline', 'status']);
   assert.equal((await call('checkRegistration', { tId: 'sec', phone: '0529999999' })).registrations.length, 0);
 });
 

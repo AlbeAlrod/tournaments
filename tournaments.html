@@ -4,7 +4,7 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>טורנירים</title>
-<link rel="modulepreload" href="hub.js?v=1"/>
+<link rel="modulepreload" href="hub.js?v=2"/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700;800&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="styles.css?v=75"/>
@@ -35,6 +35,7 @@ h1 { font-size: clamp(28px, 6vw, 40px); font-weight: 800; margin: 0; line-height
 .st::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--text3); }
 .st.open::before { background: #2e7d32; }
 .st.live::before { background: #c62828; }
+.st.wait::before { background: #2563EB; }
 .cta { min-height: 44px; padding: 0 22px; border-radius: 10px; background: var(--primary); color: var(--on-primary);
   font-weight: 700; display: inline-flex; align-items: center; text-decoration: none; }
 .cta:focus-visible, .pill:focus-visible, .link:focus-visible { outline: 3px solid var(--text); outline-offset: 2px; }
@@ -56,6 +57,6 @@ h1 { font-size: clamp(28px, 6vw, 40px); font-weight: 800; margin: 0; line-height
   <div id="list" aria-live="polite"><p class="empty">טוען…</p></div>
   <button type="button" class="link" id="past-btn" onclick="togglePast()">טורנירים קודמים</button>
 </div>
-<script type="module" src="hub.js?v=1"></script>
+<script type="module" src="hub.js?v=2"></script>
 </body>
 </html>

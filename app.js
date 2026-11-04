@@ -776,7 +776,9 @@ function renderMyReg() {
       <div>
         <div>${dnH(regPairName(r))}${cat ? ` · <bdi>${escH(cat.name)}</bdi>` : ''}</div>
         <span class="status-badge badge-${escH(r.status)}">${escH(statusTxt(r.status))}</span>
-        ${r.status !== 'rejected' ? `<span class="paid-badge${r.paid ? '' : ' no'}">${t(r.paid ? 'reg.paidBadge' : 'reg.unpaidBadge')}</span>` : ''}
+        ${r.status !== 'rejected' && (!secure || r.status === 'approved') ? `<span class="paid-badge${r.paid ? '' : ' no'}">${t(r.paid ? 'reg.paidBadge' : 'reg.unpaidBadge')}</span>` : ''}
+        ${r.status === 'waitlist' ? `<div class="d-muted">${t('reg.waitPos', { n: waitlistOf(r.category).indexOf(r) + 1 })}</div>` : ''}
+        ${secure && r.status === 'approved' && !r.paid && r.payDeadline ? `<div class="d-muted">${t('reg.payBy', { at: fmtDeadline(r.payDeadline) })}</div>` : ''}
       </div>
       ${r.status === 'pending' && !secure
         ? `<button type="button" class="reg-btn reject" onclick="cancelMyRegistration('${escH(r.id)}')">${t('common.cancel')}</button>`
@@ -785,7 +787,8 @@ function renderMyReg() {
   }).join('') + '<div id="mine-pay-wrap"></div>';
   // The form and the receipt carry their own pay buttons.
   const formShown = document.getElementById('reg-form-wrap')?.style.display !== 'none';
-  if (!formShown && !lastReceipt && mine.some(r => !r.paid && r.status !== 'rejected')) renderPayLink('mine-pay-wrap');
+  // Secure tournaments pay only here, once approved.
+  if ((secure || (!formShown && !lastReceipt)) && mine.some(r => !r.paid && (secure ? r.status === 'approved' : r.status !== 'rejected'))) renderPayLink('mine-pay-wrap');
 }
 
 async function cancelMyRegistration(id) {
@@ -812,12 +815,13 @@ function renderReceipt() {
       <h3 class="d-receipt-title">${t('reg.receiptTitle')}</h3>
       <div class="d-receipt-line"><span class="d-muted">${t('reg.receiptPair')}</span> <strong>${dnH(lastReceipt.p1 + ' / ' + lastReceipt.p2)}</strong></div>
       <div class="d-receipt-line"><span class="d-muted">${t('reg.catLabel')}</span> <strong><bdi>${escH(cat ? cat.name : '')}</bdi></strong></div>
-      <div class="d-receipt-line"><span class="d-muted">${t('reg.receiptStatus')}</span> <strong>${t('reg.pendingApproval')}</strong></div>
+      <div class="d-receipt-line"><span class="d-muted">${t('reg.receiptStatus')}</span> <strong>${t(lastReceipt.status === 'waitlist' ? 'reg.waitlisted' : 'reg.pendingApproval')}</strong></div>
+      ${secure ? `<p class="d-muted">${t(lastReceipt.status === 'waitlist' ? 'reg.waitlistNote' : 'reg.approvalNote')}</p>` : ''}
       <div id="receipt-pay-wrap"></div>
       <p id="receipt-pay-note" class="d-muted" style="display:none">${t('reg.payNote')}</p>
       <button type="button" class="submit-btn" onclick="registerAnother()">${t('reg.another')}</button>
     </div>`;
-  renderPayLink('receipt-pay-wrap');
+  if (!secure) renderPayLink('receipt-pay-wrap');
   const hasPay = !document.getElementById('receipt-pay-wrap')?.classList.contains('h');
   const note = document.getElementById('receipt-pay-note');
   if (note) note.style.display = hasPay ? '' : 'none';
@@ -896,7 +900,7 @@ async function submitRegistration() {
       document.querySelectorAll('#frm-cat-wrap .cat-pill').forEach(b => { b.classList.remove('on'); b.setAttribute('aria-pressed', 'false'); });
     unlock();
     regErrors = {};
-    lastReceipt = { p1, p2, catId };
+    lastReceipt = { p1, p2, catId, status: ref.status };
     renderRegisterPage();
     document.getElementById('reg-receipt')?.scrollIntoView({ block: 'nearest' });
   } catch(e) {
@@ -924,10 +928,12 @@ async function setRegStatus(id, status) {
       registrations = registrations.filter(r => r.id !== id);
     } else {
       const r = registrations.find(r => r.id === id);
-      await updateDoc(doc(db, 'tournaments', tId, 'registrations', id), { status });
+      if (status === 'approved' && r && r.status !== 'approved' && catFull(r.category)) { toast(t('admin.catFull')); return; }
+      const fields = statusFields(status);
+      await updateDoc(doc(db, 'tournaments', tId, 'registrations', id), fields);
       if (r) {
         const wasApproved = r.status === 'approved';
-        r.status = status;
+        Object.entries(fields).forEach(([k, v]) => { r[k] = k === 'payDeadline' && status !== 'approved' ? undefined : v; });
         // Any approval → make sure the pair is in its category's build roster.
         if (status === 'approved') await commitState(r.category, () => addRegToRoster(r));
         if (wasApproved && status !== 'approved') await commitState(r.category, cs => withdrawPair(r.category, cs, regPairName(r)));
@@ -958,6 +964,21 @@ function addRegToRoster(r) {
   return true;
 }
 const approvedNames = catId => registrations.filter(r => r.status === 'approved' && r.category === catId).map(regPairName);
+// Secure tournaments: a category may cap its pairs (cfg.maxPairs). Approved pairs hold the seats,
+// paid or not; the rest wait. An approved pair must pay within meta.payDeadlineHours.
+const capOf = catId => secure ? Number(categories.find(c => c.id === catId)?.cfg?.maxPairs) || 0 : 0;
+const seatsTaken = catId => registrations.filter(r => r.status === 'approved' && r.category === catId).length;
+const catFull = catId => capOf(catId) > 0 && seatsTaken(catId) >= capOf(catId);
+const waitOrder = r => r.waitAt || (r.createdAt?.seconds ?? 9e12) * 1000;
+const waitlistOf = catId => registrations.filter(r => r.status === 'waitlist' && r.category === catId).sort((a, b) => waitOrder(a) - waitOrder(b));
+const overdue = r => secure && r.status === 'approved' && !r.paid && r.payDeadline && r.payDeadline < Date.now();
+function statusFields(status) {
+  if (!secure) return { status };
+  if (status === 'approved') return { status, approvedAt: Date.now(), payDeadline: Date.now() + (Number(meta.payDeadlineHours) || 24) * 3600e3 };
+  if (status === 'waitlist') return { status, waitAt: Date.now(), payDeadline: deleteField() };
+  return { status, payDeadline: deleteField() };
+}
+const fmtDeadline = ms => new Date(ms).toLocaleString(getLang() === 'he' ? 'he-IL' : 'en-GB', { day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' });
 // The Build page shows approved registrations while the stored roster is still empty.
 const seedRoster = (cs, catId) => { if (!cs.roster.length) cs.roster = approvedNames(catId); };
 const hasScore = g => String(g.sa ?? '') !== '' || String(g.sb ?? '') !== '';
@@ -1003,7 +1024,7 @@ function selectRegCat(btn) {
 
 function setRegFilter(f) {
   regFilter = f;
-  ['all','pending','approved','rejected'].forEach(k => {
+  ['all','pending','approved','waitlist','rejected'].forEach(k => {
     document.getElementById('rf-' + k)?.classList.toggle('on', k === f);
   });
   renderRegistrations();
@@ -1031,7 +1052,9 @@ function renderRegCounts() {
     const appr = rs.filter(r => r.status === 'approved').length;
     const pend = rs.filter(r => r.status === 'pending').length;
     const paid = rs.filter(r => r.paid).length;
-    return `<span class="d-reg-count"><strong><bdi>${escH(c.name)}</bdi></strong> ${t('admin.counts', { total: rs.length, appr, pend, paid })}</span>`;
+    const wait = rs.filter(r => r.status === 'waitlist').length;
+    const extra = capOf(c.id) ? ' · ' + t('admin.capCount', { appr, cap: capOf(c.id), wait }) : '';
+    return `<span class="d-reg-count"><strong><bdi>${escH(c.name)}</bdi></strong> ${t('admin.counts', { total: rs.length, appr, pend, paid })}${extra}</span>`;
   });
   el.innerHTML = rows.join('');
 }
@@ -1090,7 +1113,7 @@ function renderRegistrations() {
     return;
   }
   const toApprove = meta.phase === 'registration' ? list.filter(r => r.status !== 'approved').length : 0;
-  el.innerHTML = (toApprove > 1 ? `<button type="button" class="filter-btn" style="margin-bottom:12px" onclick="approveAllShown()">${t('admin.approveAllShown', { n: toApprove })}</button>` : '')
+  el.innerHTML = renderNeedsAttention() + (toApprove > 1 ? `<button type="button" class="filter-btn" style="margin-bottom:12px" onclick="approveAllShown()">${t('admin.approveAllShown', { n: toApprove })}</button>` : '')
     + list.map(r => {
     const cat = categories.find(c => c.id === r.category);
     const catName = cat ? cat.name : r.category;
@@ -1103,6 +1126,8 @@ function renderRegistrations() {
         <div class="reg-name">${escH(regPairName(r))}</div>
         <div class="reg-meta"><bdi>${escH(catName)}</bdi> · <span class="num">${fmtDate(r.createdAt)}</span></div>
         <div class="reg-phone">${phoneHtml}</div>
+        ${secure && r.status === 'approved' && !r.paid && r.payDeadline ? `<div class="reg-meta${overdue(r) ? ' d-overdue' : ''}">${t('admin.payBy', { at: fmtDeadline(r.payDeadline) })}</div>` : ''}
+        ${r.status === 'waitlist' ? `<div class="reg-meta">${t('reg.waitPos', { n: waitlistOf(r.category).indexOf(r) + 1 })}</div>` : ''}
       </div>
       <span class="status-badge badge-${escH(r.status)}">${escH(statusTxt(r.status))}</span>
       <label class="d-paid-toggle"><input type="checkbox" ${r.paid ? 'checked' : ''} aria-label="${escH(t('admin.paidFor', { pair: regPairName(r) }))}" onchange="setRegPaid('${r.id}',this.checked)"/> <span aria-hidden="true">${t('admin.paid')}</span></label>
@@ -1110,11 +1135,34 @@ function renderRegistrations() {
         <button class="reg-btn" onclick="openEditReg('${r.id}')" title="${t('admin.editReg')}" aria-label="${t('admin.editReg')}">✎</button>
         ${regPhase ? `${r.status !== 'approved' ? `<button class="reg-btn approve" onclick="setRegStatus('${r.id}','approved')">${t('admin.approve')}</button>` : ''}
         ${r.status === 'approved'  ? `<button class="reg-btn" onclick="setRegStatus('${r.id}','pending')">${t('admin.undo')}</button>` : ''}
+        ${secure && !['waitlist', 'rejected'].includes(r.status) ? `<button class="reg-btn" onclick="setRegStatus('${r.id}','waitlist')">${t('admin.toWaitlist')}</button>` : ''}
         ${r.status !== 'rejected'  ? `<button class="reg-btn reject" onclick="setRegStatus('${r.id}','rejected')">${t('admin.reject')}</button>` : ''}
         <button class="reg-btn reject" onclick="setRegStatus('${r.id}','deleted')" title="${t('admin.deleteTitle')}">${t('admin.delete')}</button>` : ''}
       </div>
     </div>`;
   }).join('');
+}
+
+// Secure tournaments: unpaid pairs past their deadline, and the next waiting pair wherever a seat is free.
+function renderNeedsAttention() {
+  if (!secure || meta.phase !== 'registration') return '';
+  const late = registrations.filter(overdue);
+  const next = categories.filter(c => capOf(c.id) && !catFull(c.id)).map(c => waitlistOf(c.id)[0]).filter(Boolean);
+  if (!late.length && !next.length) return '';
+  const catName = r => escH(categories.find(c => c.id === r.category)?.name || '');
+  const wa = (r, key) => waLink(r.phone) ? `<a class="reg-btn" target="_blank" rel="noopener" href="${escH(waLink(r.phone) + '?text=' + encodeURIComponent(t(key, { name: meta.name, link: payUrl(meta.paymentLink) })))}">${t('admin.waSend')}</a>` : '';
+  return `<div class="d-attention" role="region" aria-label="${t('admin.attention')}">
+    <strong>${t('admin.attention')}</strong>
+    ${late.map(r => `<div class="d-att-row"><span>${escH(regPairName(r))} · <bdi>${catName(r)}</bdi> · ${t('admin.overdue')}</span>
+      <span class="reg-actions">
+        <button class="reg-btn approve" onclick="setRegPaid('${r.id}',true)">${t('admin.markPaid')}</button>
+        <button class="reg-btn" onclick="setRegStatus('${r.id}','waitlist')">${t('admin.toWaitlist')}</button>
+        ${wa(r, 'admin.waReminder')}</span></div>`).join('')}
+    ${next.map(r => `<div class="d-att-row"><span>${t('admin.seatFree', { cat: catName(r) })}: ${escH(regPairName(r))}</span>
+      <span class="reg-actions">
+        <button class="reg-btn approve" onclick="setRegStatus('${r.id}','approved')">${t('admin.approve')}</button>
+        ${wa(r, 'admin.waApproved')}</span></div>`).join('')}
+  </div>`;
 }
 
 function renderParticipants() {
@@ -1251,7 +1299,7 @@ function renderRegisterPage() {
     // Live snapshots re-render this page: keep the category the user already picked.
     const prevSel = catWrap.querySelector('.cat-pill.on')?.dataset.value || '';
     catWrap.innerHTML = categories.map(c =>
-      `<button type="button" class="cat-pill${c.id === prevSel ? ' on' : ''}" aria-pressed="${c.id === prevSel}" data-value="${escH(c.id)}" onclick="selectRegCat(this)">${escH(c.name)}</button>`
+      `<button type="button" class="cat-pill${c.id === prevSel ? ' on' : ''}" aria-pressed="${c.id === prevSel}" data-value="${escH(c.id)}" onclick="selectRegCat(this)">${escH(c.name)}${catFull(c.id) ? ` <small>· ${t('reg.catFullTag')}</small>` : ''}</button>`
     ).join('');
     if (categories.length === 1) { const b = catWrap.querySelector('.cat-pill'); b?.classList.add('on'); b?.setAttribute('aria-pressed', 'true'); }
     // One option: keep the (selected) pill hidden but tell the user which category it is.
@@ -1262,7 +1310,7 @@ function renderRegisterPage() {
     const singleEl = document.getElementById('frm-cat-single');
     if (singleEl) {
       singleEl.style.display = single ? '' : 'none';
-      singleEl.textContent = single ? categories[0].name : '';
+      singleEl.textContent = single ? categories[0].name + (catFull(categories[0].id) ? ' · ' + t('reg.catFullTag') : '') : '';
     }
   }
   const noteEl = document.getElementById('reg-note');
@@ -1272,7 +1320,7 @@ function renderRegisterPage() {
     noteEl.innerHTML = has ? mdNote(meta.regNote, t('reg.rulesSummary')) : '';
     if (open && has) noteEl.querySelector('details').open = true;
   }
-  renderPayLink('reg-pay-wrap');
+  if (secure) document.getElementById('reg-pay-wrap')?.classList.add('h'); else renderPayLink('reg-pay-wrap');
   renderRegErrors();
 }
 
@@ -2376,12 +2424,15 @@ async function saveEditReg(p1, p2) {
 
 async function approveAllShown() {
   if (!admin || meta.phase !== 'registration') return;
-  const list = filteredRegs().filter(r => r.status !== 'approved');
-  if (!list.length || !await askConfirm(t('admin.confirmApproveAll', { n: list.length }), t('admin.approve'))) return;
+  const free = Object.fromEntries(categories.map(c => [c.id, capOf(c.id) ? capOf(c.id) - seatsTaken(c.id) : Infinity]));
+  const list = filteredRegs().filter(r => r.status !== 'approved' && free[r.category]-- > 0);
+  if (!list.length) { toast(t('admin.catFull')); return; }
+  if (!await askConfirm(t('admin.confirmApproveAll', { n: list.length }), t('admin.approve'))) return;
+  const fields = statusFields('approved');
   try {
-    await Promise.all(list.map(r => updateDoc(doc(db, 'tournaments', tId, 'registrations', r.id), { status: 'approved' })));
+    await Promise.all(list.map(r => updateDoc(doc(db, 'tournaments', tId, 'registrations', r.id), fields)));
   } catch(e) { alert(t('errors.statusUpdate')); return; }
-  list.forEach(r => { r.status = 'approved'; });
+  list.forEach(r => Object.assign(r, fields));
   await commitState([...new Set(list.map(r => r.category))].filter(id => categories.some(c => c.id === id)),
     () => list.forEach(addRegToRoster));
   renderRegistrations(); renderParticipants(); renderBuildPage();
@@ -4057,6 +4108,11 @@ function renderCatItem(cat, ci, live) {
       </div>
       <button class="team-del" onclick="deleteCategory(${ci})" title="${t('settings.deleteCategory')}" aria-label="${t('settings.deleteCategory')}">✕</button>`}
     </div>
+    ${secure ? `<div class="cat-sett-field" style="margin-bottom:8px">
+      <span class="cat-sett-label">${t('settings.maxPairs')}</span>
+      <div class="cat-sett-ctrl"><input class="text-inp" type="number" inputmode="numeric" min="0" max="128" style="width:80px"
+        value="${cfg.maxPairs || ''}" placeholder="—" aria-label="${escH(cat.name)} · ${t('settings.maxPairs')}"
+        onchange="updateCatCfg(${ci},'maxPairs',Math.max(0,parseInt(this.value)||0))"/></div></div>` : ''}
     ${live ? (coord ? '' : `<div class="cat-settings-grid">${catNumField(t('settings.gameDur'), ci, 'gameDur', cfg.gameDur, 5, 120)}</div>`) : `<div class="cat-settings-grid">
       ${coord ? '' : catNumField(t('settings.courts'), ci, 'courts', cfg.courts, 1, 8)}
       ${catNumField(t('settings.numGroups'), ci, 'numGroups', cfg.numGroups, 2, 16)}
@@ -4464,7 +4520,11 @@ function renderSecurePwSection(container) {
   if (adminLevel !== 2) return;
   const sec = document.createElement('div');
   sec.className = 'sett-section';
-  sec.innerHTML = `<div class="sett-section-title">${t('settings.securePw')}</div>
+  sec.innerHTML = `<div class="sett-section-title">${t('settings.payDeadline')}</div>
+    <div class="sett-row"><div class="sett-label"><span class="sett-name">${t('settings.payDeadlineHours')}</span></div>
+      <div class="sett-ctrl"><input class="text-inp" type="number" inputmode="numeric" min="1" max="336" style="width:80px"
+        value="${Number(meta.payDeadlineHours) || 24}" onchange="updateMeta('payDeadlineHours',Math.max(1,parseInt(this.value)||24))"/></div></div>
+    <div class="sett-section-title" style="margin-top:16px">${t('settings.securePw')}</div>
     <p class="sett-desc">${t('settings.securePwDesc')}</p>
     ${['admin', 'master'].map(role => `<div class="sett-row">
       <div class="sett-label"><span class="sett-name">${t(role === 'master' ? 'admin.roleMaster' : 'admin.roleAdmin')}</span></div>

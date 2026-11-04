@@ -112,20 +112,28 @@ export const registerPair = onCall(async req => {
   await rateLimit(`reg:${req.rawRequest.ip}`, 20, 3600);
   const t = await secureTournament(tId);
   if (t.approval !== 'approved' || !t.meta?.regOpen || t.meta?.phase !== 'registration') fail('failed-precondition', 'closed');
-  if (!(t.categories || []).some(c => c.id === category)) fail('invalid-argument', 'category');
+  const cat = (t.categories || []).find(c => c.id === category);
+  if (!cat) fail('invalid-argument', 'category');
+  const cap = Number(cat.cfg?.maxPairs) || 0;
 
   const tRef = db.doc(`tournaments/${tId}`);
   const idxRef = tRef.collection('private').doc('phones');
   const regRef = tRef.collection('registrations').doc();
-  await db.runTransaction(async tx => {
+  // A full category (approved pairs hold the seats) takes new pairs onto the waitlist: no payment until approved.
+  const status = await db.runTransaction(async tx => {
     const idx = (await tx.get(idxRef)).data() || {};
     const mine = idx[phone] || [];
     if (mine.some(r => r.category === category)) fail('already-exists', 'duplicate');
-    tx.create(regRef, { p1, p2, category, status: 'pending', paid: false, createdAt: FieldValue.serverTimestamp() });
+    const taken = cap ? (await tx.get(tRef.collection('registrations')
+      .where('category', '==', category).where('status', '==', 'approved'))).size : 0;
+    const status = cap && taken >= cap ? 'waitlist' : 'pending';
+    tx.create(regRef, { p1, p2, category, status, paid: false, createdAt: FieldValue.serverTimestamp(),
+      ...(status === 'waitlist' && { waitAt: Date.now() }) });
     tx.create(regRef.collection('private').doc('contact'), { phone, email });
     tx.set(idxRef, { [phone]: [...mine, { id: regRef.id, category }] }, { merge: true });
+    return status;
   });
-  return { id: regRef.id };
+  return { id: regRef.id, status };
 });
 
 export const checkRegistration = onCall(async req => {
@@ -138,8 +146,8 @@ export const checkRegistration = onCall(async req => {
     .map(r => db.doc(`tournaments/${tId}/registrations/${r.id}`));
   const snaps = refs.length ? await db.getAll(...refs) : [];
   return { registrations: snaps.filter(s => s.exists).map(s => {
-    const { p1, p2, category, status, paid } = s.data();
-    return { id: s.id, p1, p2, category, status, paid };
+    const { p1, p2, category, status, paid, payDeadline } = s.data();
+    return { id: s.id, p1, p2, category, status, paid, payDeadline: payDeadline || null };
   }) };
 });
 

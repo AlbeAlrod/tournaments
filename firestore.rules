@@ -89,7 +89,7 @@ service cloud.firestore {
         allow update: if isSecure(parent())
                       ? canManage(parent(), tId)
                         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(
-                             ['status', 'paid', 'category', 'p1', 'p2', 'approvedAt', 'payDeadline', 'waitPos'])
+                             ['status', 'paid', 'category', 'p1', 'p2', 'approvedAt', 'payDeadline', 'waitAt'])
                       : true;
         allow delete: if isSecure(parent()) ? canManage(parent(), tId) : true;
 

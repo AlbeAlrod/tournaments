@@ -7,10 +7,14 @@ const $ = id => document.getElementById(id);
 const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' });
 const fmtDate = d => d ? new Date(d + 'T12:00:00').toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'long' }) : 'תאריך יפורסם';
 let all = [], branches = [], fBranch = '', fLevel = '', showPast = false;
+const seatsLeft = {};   // tournament id → free seats over its capped categories
 
 function status(t) {
   if (t.meta?.phase === 'tournament') return ['live', 'הטורניר מתקיים'];
-  if (t.meta?.phase === 'registration' && t.meta?.regOpen) return ['open', 'ההרשמה פתוחה'];
+  if (t.meta?.phase === 'registration' && t.meta?.regOpen) {
+    const left = seatsLeft[t.id];
+    return left == null ? ['open', 'ההרשמה פתוחה'] : left > 0 ? ['open', `נשארו ${left} מקומות`] : ['wait', 'מלא · רשימת המתנה'];
+  }
   return ['closed', 'ההרשמה סגורה'];
 }
 
@@ -35,7 +39,7 @@ function render() {
       <div class="t-meta">${esc(bName(t.branchId))}${t.meta?.venue && t.meta.venue !== bName(t.branchId) ? ' · ' + esc(t.meta.venue) : ''}${t.meta?.price ? ` · ${esc(t.meta.price)} ₪ לזוג` : ''}</div>
       <div class="t-cats">${(t.categories || []).map(c => `<span class="chip">${esc(c.name)}</span>`).join('')}</div>
       <div class="t-foot"><span class="st ${cls}">${txt}</span>
-        <a class="cta" href="${esc(href)}">${cls === 'open' ? 'להרשמה' : cls === 'live' ? 'ללוח המשחקים' : 'לפרטים'}</a></div>
+        <a class="cta" href="${esc(href)}">${cls === 'open' ? 'להרשמה' : cls === 'wait' ? 'לרשימת ההמתנה' : cls === 'live' ? 'ללוח המשחקים' : 'לפרטים'}</a></div>
     </article>`;
   }).join('') : `<p class="empty">${showPast ? 'אין טורנירים קודמים להצגה.' : 'אין כרגע טורנירים קרובים. בקרוב יתפרסמו חדשים.'}</p>`;
   $('past-btn').textContent = showPast ? 'לטורנירים הקרובים' : 'טורנירים קודמים';
@@ -65,6 +69,13 @@ Object.assign(window, {
     branches = bs.docs.map(d => ({ id: d.id, ...d.data() }));
     all = ts.docs.map(d => ({ id: d.id, ...d.data() }))
       .sort((x, y) => (x.meta?.eventDate || '9').localeCompare(y.meta?.eventDate || '9'));
+    render();
+    // Free seats only where every category has a cap (otherwise "open" says it all).
+    await Promise.all(all.filter(t => (t.meta?.eventDate || '9') >= today && t.meta?.regOpen
+      && (t.categories || []).length && t.categories.every(c => Number(c.cfg?.maxPairs) > 0)).map(async t => {
+      const regs = (await getDocs(query(collection(db, 'tournaments', t.id, 'registrations'), where('status', '==', 'approved')))).docs.map(d => d.data());
+      seatsLeft[t.id] = t.categories.reduce((n, c) => n + Math.max(0, c.cfg.maxPairs - regs.filter(r => r.category === c.id).length), 0);
+    }));
     render();
   } catch (e) {
     $('list').innerHTML = '<p class="empty">לא הצלחנו לטעון את הטורנירים. נסו לרענן.</p>';
