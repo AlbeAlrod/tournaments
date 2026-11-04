@@ -2,3 +2,5 @@
 .netlify
 node_modules/
 .claude/worktrees/
+firebase-debug.log
+firestore-debug.log

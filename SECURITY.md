@@ -1,5 +1,20 @@
 # Security model & hardening path
 
+## Two models side by side (since Nov 2026)
+- **Legacy tournaments** (no `secure` field): everything below under "How it works today" still
+  applies, unchanged, so running tournaments are not disturbed.
+- **Secure tournaments** (`secure: true`, set at creation, cannot be added or removed later):
+  - Managers sign in with Firebase Auth (email + password). Roles are custom claims
+    (`super` / `owner` of a club / `branch` manager) set only by Cloud Functions (`functions/`).
+  - A tournament password is checked on the server (`tournamentLogin`, salted scrypt in
+    `tournaments/{id}/private/secrets`, rate-limited) and returns a token for that tournament only.
+  - Registrations are created only by `registerPair`; phone + email live in
+    `registrations/{id}/private/contact`, readable by that tournament's managers only.
+  - `firestore.rules` gates every write on the token's claims; approval is super-admin only.
+  - Tests: `cd functions && npm test` (Firebase emulator; also runs in CI).
+  - First super-admin: `node functions/scripts/set-superadmin.mjs <email>` with project credentials.
+
+
 ## How it works today
 This app has **no Firebase Authentication**. Access control is done in the browser:
 tournament `adminPassword` / `masterPassword` (stored as SHA-256 hashes in each

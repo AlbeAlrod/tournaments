@@ -2,25 +2,31 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Tournaments are PUBLIC to view (anyone with the ?t=<id> link can read).
-    //
-    // Writes are open because the app authenticates with tournament passwords
-    // that are checked IN THE BROWSER — there is no Firebase Auth, so these
-    // rules cannot tell an admin from an ordinary visitor. Access control today
-    // is effectively "you need to know the tournament id + password". To truly
-    // lock down writes, add Firebase Auth and gate on request.auth. See SECURITY.md.
-    // ── Damage limits, added 20.8 ───────────────────────────────────────────
-    // These do NOT authenticate anyone. Without Firebase Auth the rules still
-    // cannot tell a manager from a player, and a determined person can still
-    // edit a score. What they do stop is the two things that would actually
-    // cost a season, whether done on purpose or by accident:
-    //   1. emptying a live league of its games or its player registry
-    //   2. clearing a password that is already set, i.e. locking the manager out
-    // Both are shape checks on the resulting document, so every legitimate app
-    // write (full setDoc and merge alike — request.resource.data is the document
-    // AFTER the write) passes untouched. See SECURITY.md for the real fix.
+    // Two models side by side:
+    //  - LEGACY tournaments (no `secure` field): exactly the open model described in
+    //    SECURITY.md, unchanged, so tournaments already running are not disturbed.
+    //  - SECURE tournaments (`secure: true`, set at creation, can never be removed or
+    //    added later): writes need a Firebase Auth token whose claims match the club,
+    //    branch or tournament. Claims are set only by Cloud Functions (functions/).
+    //    Passwords are checked on the server; no hash or phone number is world-readable.
 
-    // A league that already holds games is "live" and must not be blanked.
+    function signedIn() { return request.auth != null; }
+    function tok() { return request.auth.token; }
+    function isSuper() { return signedIn() && tok().get('role', '') == 'super'; }
+    function canManage(t, tId) {
+      return isSuper() || (signedIn() && (
+        (tok().get('club', '') == t.get('clubId', '-') &&
+          (tok().get('role', '') == 'owner' ||
+           (tok().get('role', '') == 'branch' && tok().get('branch', '') == t.get('branchId', '-')))) ||
+        tok().get('tid', '') == tId));
+    }
+    function isSecure(d) { return d.get('secure', false) == true; }
+    function noPasswordsInMeta(d) {
+      return !('meta' in d) || !d.meta.keys().hasAny(
+        ['adminPassword', 'masterPassword', 'adminPasswordHash', 'managerPasswordHash']);
+    }
+
+    // ── Damage limits for LEGACY tournaments (added 20.8, unchanged) ─────────
     function wasLive() {
       return 'games' in resource.data && resource.data.games.size() > 0;
     }
@@ -31,8 +37,6 @@ service cloud.firestore {
               && 'players' in request.resource.data
               && request.resource.data.players.size() > 0);
     }
-    // A password, once set, can be changed to another one but not removed.
-    // To actually clear it, use the Firebase console.
     function lockKept(field) {
       return !('meta' in resource.data)
           || !(field in resource.data.meta)
@@ -42,33 +46,88 @@ service cloud.firestore {
               && request.resource.data.meta[field] != '');
     }
 
+    function secureCreateOk(tId) {
+      let d = request.resource.data;
+      return d.secure == true
+          && d.clubId is string && d.branchId is string
+          && canManage(d, tId) && tok().get('tid', '') == ''
+          && (d.get('approval', '') == 'pending' || isSuper())
+          && noPasswordsInMeta(d);
+    }
+    function secureUpdateOk(tId) {
+      let d = request.resource.data;
+      return canManage(resource.data, tId)
+          && d.secure == true
+          && d.clubId == resource.data.clubId
+          && d.branchId == resource.data.branchId
+          && (d.get('approval', '') == resource.data.get('approval', '') || isSuper())
+          && noPasswordsInMeta(d)
+          && keepsContent();
+    }
+
     match /tournaments/{tId} {
       allow read:   if true;
-      allow create: if true;
-      allow update: if keepsContent()
-                    && lockKept('managerPasswordHash')
-                    && lockKept('adminPasswordHash');
+      allow create: if isSecure(request.resource.data) ? secureCreateOk(tId) : true;
+      allow update: if isSecure(resource.data)
+                    ? secureUpdateOk(tId)
+                    : (!('secure' in request.resource.data)
+                       && keepsContent()
+                       && lockKept('managerPasswordHash')
+                       && lockKept('adminPasswordHash'));
       allow delete: if false;  // no client can WIPE a tournament — delete from the Firebase console
 
-      // Contains participant name + phone (PII). World-readable under the current model.
+      function parent() { return get(/databases/$(database)/documents/tournaments/$(tId)).data; }
+
+      // Legacy: name + phone, world-readable and writable (see SECURITY.md).
+      // Secure: no contact details here; created only by the registerPair function.
       match /registrations/{rId} {
-        allow read, write: if true;
+        allow read: if true;
+        allow create: if !isSecure(parent());
+        allow update: if isSecure(parent())
+                      ? canManage(parent(), tId)
+                        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(
+                             ['status', 'paid', 'category', 'p1', 'p2', 'approvedAt', 'payDeadline', 'waitPos'])
+                      : true;
+        allow delete: if isSecure(parent()) ? canManage(parent(), tId) : true;
+
+        // Phone + email of a secure registration: managers of that tournament only.
+        match /private/{doc} {
+          allow read:  if isSecure(parent()) && canManage(parent(), tId);
+          allow write: if false;
+        }
+      }
+
+      // Password hashes and the phone index: server only.
+      match /private/{doc} {
+        allow read, write: if false;
       }
     }
 
-    // Global player directory (name + phone) used for autocomplete.
+    match /clubs/{clubId} {
+      allow read:  if true;
+      allow write: if isSuper();
+      match /branches/{branchId} {
+        allow read:  if true;
+        allow write: if isSuper() || (signedIn() && tok().get('role', '') == 'owner' && tok().get('club', '') == clubId);
+      }
+    }
+
+    match /users/{uid} {
+      allow read:  if signedIn() && (request.auth.uid == uid || isSuper());
+      allow write: if false;
+    }
+
+    // Global player directory (name + phone) used for autocomplete by legacy tournaments.
     match /players/{doc} {
       allow read, write: if true;
     }
 
-    // Super-admin credential hash. Readable so admin.html can compare it
-    // client-side; NEVER writable from the client — set it in the Firebase console.
+    // Legacy super-admin credential hash (admin.html). Never writable from the client.
     match /config/{doc} {
       allow read:  if true;
       allow write: if false;
     }
 
-    // Deny everything else (prevents writing to arbitrary new collections).
     match /{document=**} {
       allow read, write: if false;
     }
