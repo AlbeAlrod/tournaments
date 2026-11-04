@@ -137,6 +137,7 @@ async function openClub(id) {
   clubId = id;
   const club = (await getDoc(doc(db, 'clubs', id))).data() || {};
   $('club-name').textContent = club.name || id;
+  $('hub-link').href = $('hub-link').textContent = new URL(`tournaments.html?club=${encodeURIComponent(id)}`, location.href).href;
   applyBrand(club.brand);
   branches = (await getDocs(collection(db, 'clubs', id, 'branches'))).docs.map(d => ({ id: d.id, ...d.data() }));
   const mine = claims.role === 'branch' ? branches.filter(b => b.id === claims.branch) : branches;

@@ -14,6 +14,7 @@
   - Tests: `cd functions && npm test` (Firebase emulator; also runs in CI).
   - Club panel: `club.html` (club owners, branch managers, super-admin): create secure tournaments
     (pending until the super-admin approves), branches, and manager invites.
+  - Public list: `tournaments.html?club=<id>` (approved tournaments of that club only, no personal data).
   - First super-admin: `node functions/scripts/set-superadmin.mjs <email>` with project credentials.
 
 

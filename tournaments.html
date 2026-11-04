@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>טורנירים</title>
+<link rel="modulepreload" href="hub.js?v=1"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700;800&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="styles.css?v=75"/>
+<style>
+.h { display: none !important; }
+body { margin: 0; background: var(--bg); color: var(--text); }
+.wrap { max-width: 960px; margin: 0 auto; padding: 0 16px 48px; }
+.hd { display: flex; align-items: center; gap: 16px; padding: 24px 0 8px; }
+.hd img { height: 56px; width: auto; }
+.kicker { font-size: 14px; color: var(--text3); margin: 0; }
+h1 { font-size: clamp(28px, 6vw, 40px); font-weight: 800; margin: 0; line-height: 1.1; }
+.filters { display: flex; flex-direction: column; gap: 8px; margin: 20px 0 16px; }
+.row { display: flex; flex-wrap: wrap; gap: 8px; }
+.row:empty { display: none; }
+.pill { flex: none; min-height: 40px; padding: 0 16px; border-radius: 999px; border: 1px solid var(--border2);
+  background: var(--bg2); color: var(--text2); font: inherit; font-size: 14px; font-weight: 500; cursor: pointer; }
+.pill.on { background: var(--primary); border-color: var(--primary); color: var(--on-primary); font-weight: 700; }
+#list { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 420px), 1fr)); gap: 16px; }
+.t-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; padding: 20px;
+  display: flex; flex-direction: column; gap: 8px; }
+.t-date { font-size: 14px; font-weight: 700; color: var(--text2); }
+.t-card h2 { font-size: 22px; font-weight: 800; margin: 0; }
+.t-meta { font-size: 14px; color: var(--text3); }
+.t-cats { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.chip { font-size: 13px; padding: 3px 10px; border-radius: 999px; background: var(--bg3); color: var(--text2); }
+.t-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 8px; flex-wrap: wrap; }
+.st { font-size: 13px; font-weight: 700; display: inline-flex; align-items: center; gap: 6px; color: var(--text2); }
+.st::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--text3); }
+.st.open::before { background: #2e7d32; }
+.st.live::before { background: #c62828; }
+.cta { min-height: 44px; padding: 0 22px; border-radius: 10px; background: var(--primary); color: var(--on-primary);
+  font-weight: 700; display: inline-flex; align-items: center; text-decoration: none; }
+.cta:focus-visible, .pill:focus-visible, .link:focus-visible { outline: 3px solid var(--text); outline-offset: 2px; }
+.empty { color: var(--text3); text-align: center; padding: 40px 0; grid-column: 1 / -1; }
+.link { display: block; margin: 24px auto 0; background: none; border: none; font: inherit; font-size: 14px;
+  color: var(--text2); text-decoration: underline; cursor: pointer; min-height: 44px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="hd">
+    <img id="logo" class="h" alt=""/>
+    <div><p class="kicker" id="club"></p><h1>טורנירים</h1></div>
+  </div>
+  <div class="filters" role="search" aria-label="סינון">
+    <div class="row" id="f-branch" role="group" aria-label="סניף"></div>
+    <div class="row" id="f-level" role="group" aria-label="רמה"></div>
+  </div>
+  <div id="list" aria-live="polite"><p class="empty">טוען…</p></div>
+  <button type="button" class="link" id="past-btn" onclick="togglePast()">טורנירים קודמים</button>
+</div>
+<script type="module" src="hub.js?v=1"></script>
+</body>
+</html>
