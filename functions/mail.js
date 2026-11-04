@@ -89,12 +89,13 @@ async function mailForRegistration(ev, before, after) {
   await sendMail(email, `${subject} · ${t.meta?.name || ''}`, mailHtml(t, club, lines, cta), { kind, tId, rId });
 }
 
-const opts = { document: 'tournaments/{tId}/registrations/{rId}', secrets: [SMTP_URL] };
+// Same region as index.js (its setGlobalOptions runs after this module is loaded).
+const opts = { document: 'tournaments/{tId}/registrations/{rId}', secrets: [SMTP_URL], region: 'europe-west1' };
 export const mailOnRegistrationCreated = onDocumentCreated(opts, ev => mailForRegistration(ev, null, ev.data?.data()));
 export const mailOnRegistrationUpdated = onDocumentUpdated(opts, ev => mailForRegistration(ev, ev.data?.before.data(), ev.data?.after.data()));
 
 // A new secure tournament waits for the super-admin: tell them.
-export const mailOnTournamentCreated = onDocumentCreated({ document: 'tournaments/{tId}', secrets: [SMTP_URL] }, async ev => {
+export const mailOnTournamentCreated = onDocumentCreated({ document: 'tournaments/{tId}', secrets: [SMTP_URL], region: 'europe-west1' }, async ev => {
   const t = ev.data?.data();
   if (t?.secure !== true || t.approval !== 'pending' || !SUPER_EMAIL.value().includes('@')) return;
   const club = (await getFirestore().doc(`clubs/${t.clubId}`).get()).data();
