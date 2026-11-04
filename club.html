@@ -41,6 +41,12 @@ label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 4px; }
 .inline .form-input { flex: 1; min-width: 140px; }
 .inline .mini { min-height: 44px; }
 textarea.form-input { min-height: 90px; font: inherit; }
+.brand-logo { display: block; height: 44px; width: auto; max-width: 160px; }
+#screen-login .brand-logo { height: 64px; margin: 0 auto 16px; }
+.top-id { display: flex; align-items: center; gap: 12px; }
+.sub { font-size: 14px; margin: 16px 0 8px; }
+.card .row-btn { flex: 1; margin: 0; }
+input[type=color].form-input { padding: 4px; height: 44px; }
 .link-btn { background: none; border: none; color: var(--primary-text); font: inherit; font-size: 13px; cursor: pointer; padding: 8px 0 0; }
 </style>
 </head>
@@ -48,6 +54,7 @@ textarea.form-input { min-height: 90px; font: inherit; }
 
 <div id="screen-login">
   <div class="box">
+    <img id="lg-logo" class="h brand-logo" alt=""/>
     <h2>ניהול מועדון</h2>
     <p class="muted">כניסה למנהלי מועדונים וסניפים.</p>
     <div class="form-row"><input class="form-input" id="lg-email" type="email" dir="ltr" autocomplete="username" placeholder="מייל"/></div>
@@ -62,7 +69,8 @@ textarea.form-input { min-height: 90px; font: inherit; }
 <div id="screen-app" class="h">
   <div class="wrap">
     <div class="top">
-      <div><h1>ניהול טורנירים</h1><div class="muted" id="who"></div></div>
+      <div class="top-id"><img id="top-logo" class="h brand-logo" alt=""/>
+        <div><h1>ניהול טורנירים</h1><div class="muted" id="who"></div></div></div>
       <button class="mini" onclick="logout()">יציאה</button>
     </div>
 
@@ -74,11 +82,16 @@ textarea.form-input { min-height: 90px; font: inherit; }
       <div class="box">
         <h2>מועדונים</h2>
         <div id="club-list"></div>
-        <div class="inline" style="margin-top:10px">
-          <input class="form-input" id="nc-name" placeholder="שם המועדון"/>
-          <input class="form-input" id="nc-id" dir="ltr" placeholder="mentor" aria-label="מזהה באנגלית"/>
-          <button class="mini ok" onclick="createClub()">הוספה</button>
+        <h3 class="sub">הוספה או עריכה של מועדון</h3>
+        <div class="grid">
+          <div><label for="nc-name">שם המועדון</label><input class="form-input" id="nc-name"/></div>
+          <div><label for="nc-id">מזהה באנגלית</label><input class="form-input" id="nc-id" dir="ltr" placeholder="mentor"/></div>
+          <div><label for="nc-primary">צבע ראשי</label><input class="form-input" id="nc-primary" type="color" value="#652d92"/></div>
+          <div><label for="nc-secondary">צבע משני</label><input class="form-input" id="nc-secondary" type="color" value="#7a3fb0"/></div>
+          <div><label for="nc-logo">כתובת לוגו</label><input class="form-input" id="nc-logo" dir="ltr" placeholder="assets/mentor/logo-black.svg"/></div>
+          <div><label for="nc-fonts">פונטים (Google Fonts)</label><input class="form-input" id="nc-fonts" dir="ltr" placeholder="Poppins, Heebo"/></div>
         </div>
+        <button class="mini ok" style="margin-top:10px;min-height:44px" onclick="saveClub()">שמירת מועדון</button>
         <div id="nc-err" class="err h"></div>
       </div>
     </div>

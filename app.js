@@ -6,7 +6,7 @@ import {
 import { pickImage, attachDropZone } from "./uploader.js?v=73";
 import { t, initLang, setLang, getLang, applyStatic, fmtDate, tRound, tSlot } from './i18n.js?v=73';
 // Same Firebase config as below, so common.js's initializeApp returns this app (no duplicate).
-import { onColor } from './common.js?v=73';
+import { onColor, applyBrandFonts } from './common.js?v=76';
 
 // ============ FIREBASE ============
 const firebaseConfig = {
@@ -450,9 +450,10 @@ function applyTheme(primary, secondary) {
   const surf = hslToHex(h1, Math.min(s1 * 0.22, 18), 91);
 
   // ── Text: deep tones grounded in primary hue, forced WCAG contrast ──
-  const rawText  = hslToHex(h1, Math.min(s1 * 0.30, 28), 10);
-  const rawText2 = hslToHex(h1, Math.min(s1 * 0.50, 44), 22);
-  const rawText3 = hslToHex(h1, Math.min(s1 * 0.60, 54), 42);
+  const tint = meta.neutralText ? 0 : 1;   // brands with black/white text (e.g. Mentor)
+  const rawText  = hslToHex(h1, Math.min(s1 * 0.30, 28) * tint, 10);
+  const rawText2 = hslToHex(h1, Math.min(s1 * 0.50, 44) * tint, 22);
+  const rawText3 = hslToHex(h1, Math.min(s1 * 0.60, 54) * tint, 42);
   const text  = readable(rawText,  bg, 7.0);
   const text2 = readable(rawText2, bg, 5.0);
   const text3 = readable(rawText3, bg, 4.5);
@@ -474,7 +475,7 @@ function applyTheme(primary, secondary) {
   const [rb3,gb3,bb3] = hexToRgb(bg3);
 
   // ── Readable variants: slight darkening only when truly needed (ratio 3.5) ──
-  const primaryText   = readable(primary,   '#FFFFFF', 3.5);
+  const primaryText   = tint ? readable(primary, '#FFFFFF', 3.5) : text;
   const secondaryText = readable(secondary, '#FFFFFF', 3.5);
 
   const vars = {
@@ -506,6 +507,7 @@ function applyTheme(primary, secondary) {
   style.textContent = `:root{${Object.entries(vars).map(([k,v])=>`${k}:${v};`).join('')}}`;
   // Apply custom background override if set
   document.body.style.backgroundColor = meta.bgColor || '';
+  applyBrandFonts(meta.fonts);
 
   const lm = document.getElementById('logo-mark');
   // With a real logo image, don't tint the chip — a dark logo would vanish on a dark primary.

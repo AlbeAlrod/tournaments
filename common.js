@@ -174,9 +174,10 @@ export function applyTheme(primary, secondary, opts = {}) {
   const surf = hslToHex(h1, Math.min(s1 * 0.22, 18), 91);
 
   // ── Text: deep tones grounded in primary hue, forced WCAG contrast ──
-  const rawText  = hslToHex(h1, Math.min(s1 * 0.30, 28), 10);
-  const rawText2 = hslToHex(h1, Math.min(s1 * 0.50, 44), 22);
-  const rawText3 = hslToHex(h1, Math.min(s1 * 0.60, 54), 42);
+  const tint = opts.neutralText ? 0 : 1;   // brands with black/white text (e.g. Mentor)
+  const rawText  = hslToHex(h1, Math.min(s1 * 0.30, 28) * tint, 10);
+  const rawText2 = hslToHex(h1, Math.min(s1 * 0.50, 44) * tint, 22);
+  const rawText3 = hslToHex(h1, Math.min(s1 * 0.60, 54) * tint, 42);
   const text  = readable(rawText,  bg, 7.0);
   const text2 = readable(rawText2, bg, 5.0);
   const text3 = readable(rawText3, bg, 4.5);
@@ -198,7 +199,7 @@ export function applyTheme(primary, secondary, opts = {}) {
   const [rb3,gb3,bb3] = hexToRgb(bg3);
 
   // ── Readable variants: slight darkening only when truly needed (ratio 3.5) ──
-  const primaryText   = readable(primary,   '#FFFFFF', 3.5);
+  const primaryText   = tint ? readable(primary, '#FFFFFF', 3.5) : text;
   const secondaryText = readable(secondary, '#FFFFFF', 3.5);
 
   const vars = {
@@ -236,4 +237,17 @@ export function applyTheme(primary, secondary, opts = {}) {
     if (hasLogo) { lm.style.background='transparent'; lm.style.boxShadow='none'; lm.style.width='auto'; lm.style.overflow='visible'; }
     else { lm.style.background=primary; lm.style.boxShadow=''; lm.style.width=''; lm.style.overflow=''; }
   }
+}
+
+// ============ BRAND FONTS ============
+// Club fonts from Google Fonts, e.g. ['Poppins', 'Heebo']: Latin from the first, Hebrew falls
+// through to the next family that has it. Empty = the site default (Rubik).
+export function applyBrandFonts(fonts) {
+  const list = (Array.isArray(fonts) ? fonts : []).filter(f => /^[A-Za-z ]{2,40}$/.test(f));
+  document.body.style.fontFamily = list.length ? list.map(f => `'${f}'`).join(',') + ', system-ui, sans-serif' : '';
+  if (!list.length || document.getElementById('brand-fonts')) return;
+  const l = document.createElement('link');
+  l.id = 'brand-fonts'; l.rel = 'stylesheet';
+  l.href = 'https://fonts.googleapis.com/css2?' + list.map(f => `family=${f.replace(/ /g, '+')}:wght@400;500;700`).join('&') + '&display=swap';
+  document.head.appendChild(l);
 }

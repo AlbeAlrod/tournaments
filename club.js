@@ -1,7 +1,7 @@
 // club.html — club / branch managers and the super-admin, for SECURE tournaments only.
 // Sign-in is Firebase Auth (email + password); every write is checked by firestore.rules
 // against the custom claims set by the inviteManager Cloud Function.
-import { fbApp, db, escH as esc, doc, getDoc, setDoc, updateDoc, serverTimestamp } from './common.js?v=73';
+import { fbApp, db, escH as esc, doc, getDoc, setDoc, updateDoc, serverTimestamp, applyTheme, applyBrandFonts } from './common.js?v=76';
 import { collection, getDocs, query, where, getCountFromServer } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js';
 import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, sendPasswordResetEmail, signOut }
   from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js';
@@ -10,7 +10,20 @@ import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/
 const auth = getAuth(fbApp);
 const inviteManager = httpsCallable(getFunctions(fbApp, 'europe-west1'), 'inviteManager');
 const $ = id => document.getElementById(id);
-let claims = {}, clubId = '', clubs = [], branches = [];
+let claims = {}, clubId = '', clubs = [], branches = [], brand = {};
+
+// Club look: brand = { primary, secondary, logo, fonts } on clubs/{id}. New tournaments copy it.
+function applyBrand(b = {}) {
+  brand = b;
+  if (b.primary) applyTheme(b.primary, b.secondary, { hasLogo: !!b.logo, neutralText: b.neutralText });
+  for (const id of ['lg-logo', 'top-logo']) {
+    $(id).classList.toggle('h', !b.logo);
+    if (b.logo) $(id).src = b.logo;
+  }
+  applyBrandFonts(b.fonts);
+}
+const brandParam = new URLSearchParams(location.search).get('club');
+if (brandParam) getDoc(doc(db, 'clubs', brandParam)).then(s => applyBrand(s.data()?.brand), () => {});
 
 const KO_STAGES = ['pool', 'r16', 'qf', 'sf', 'third', 'final'];
 const DEF_CAT_CFG = {
@@ -63,7 +76,8 @@ onAuthStateChanged(auth, async u => {
 async function loadSuper() {
   clubs = (await getDocs(collection(db, 'clubs'))).docs.map(d => ({ id: d.id, ...d.data() }));
   $('club-list').innerHTML = clubs.length ? clubs.map(c =>
-    `<button class="row-btn" onclick="openClub('${esc(c.id)}')"><strong>${esc(c.name)}</strong> <span class="muted">${esc(c.id)}</span></button>`).join('')
+    `<div class="card"><button class="row-btn" onclick="openClub('${esc(c.id)}')"><strong>${esc(c.name)}</strong> <span class="muted">${esc(c.id)}</span></button>
+      <button class="mini" onclick="editClub('${esc(c.id)}')">עריכה</button></div>`).join('')
     : '<p class="muted">אין עדיין מועדונים.</p>';
   await loadPending();
   if (clubId) await openClub(clubId); else $('sec-club').classList.add('h');
@@ -91,12 +105,16 @@ async function setApproval(id, approval) {
   } catch (e) { toast('הפעולה נכשלה'); }
 }
 
-async function createClub() {
+// Creates a club, or updates the name and look of an existing one with the same id.
+async function saveClub() {
   const name = $('nc-name').value.trim(), id = slug($('nc-id').value);
   if (!name || !id) return showErr('nc-err', 'נדרשים שם ומזהה באנגלית.');
-  if (clubs.some(c => c.id === id)) return showErr('nc-err', 'המזהה תפוס.');
+  const fonts = $('nc-fonts').value.split(',').map(f => f.trim()).filter(Boolean);
   try {
-    await setDoc(doc(db, 'clubs', id), { name, createdAt: serverTimestamp() });
+    await setDoc(doc(db, 'clubs', id), {
+      name, brand: { primary: $('nc-primary').value, secondary: $('nc-secondary').value, logo: $('nc-logo').value.trim(), fonts,
+        neutralText: /^#[0-3][0-9a-f][0-3][0-9a-f][0-3][0-9a-f]$/i.test($('nc-secondary').value) }
+    }, { merge: true });
     $('nc-name').value = $('nc-id').value = '';
     showErr('nc-err', '');
     await loadSuper();
@@ -104,10 +122,22 @@ async function createClub() {
 }
 
 // ── Club: branches, tournaments, managers ───────────────────
+function editClub(id) {
+  const c = clubs.find(x => x.id === id), b = c?.brand || {};
+  $('nc-name').value = c?.name || '';
+  $('nc-id').value = id;
+  $('nc-primary').value = b.primary || '#652d92';
+  $('nc-secondary').value = b.secondary || '#7a3fb0';
+  $('nc-logo').value = b.logo || '';
+  $('nc-fonts').value = (b.fonts || []).join(', ');
+  $('nc-name').focus();
+}
+
 async function openClub(id) {
   clubId = id;
   const club = (await getDoc(doc(db, 'clubs', id))).data() || {};
   $('club-name').textContent = club.name || id;
+  applyBrand(club.brand);
   branches = (await getDocs(collection(db, 'clubs', id, 'branches'))).docs.map(d => ({ id: d.id, ...d.data() }));
   const mine = claims.role === 'branch' ? branches.filter(b => b.id === claims.branch) : branches;
   const opts = mine.map(b => `<option value="${esc(b.id)}">${esc(b.name)}</option>`).join('');
@@ -163,7 +193,8 @@ async function createTournament() {
         price: $('nt-price').value.trim(), paymentLink: $('nt-pay').value.trim(), paymentLinkLabel: '',
         sport: 'footvolley', lang: 'he', phase: 'registration', regOpen: true, showRegistered: true,
         coordinated: true, parallelCategories: true, allPoolsBeforeKO: true,
-        primaryColor: '#652d92', secondaryColor: '#7a3fb0', bgColor: '', logoUrl: '',
+        primaryColor: brand.primary || '#652d92', secondaryColor: brand.secondary || '#7a3fb0', bgColor: '',
+        logoUrl: brand.logo || '', fonts: brand.fonts || [], neutralText: !!brand.neutralText,
         groupColors: [], sponsorLogos: [], regNote: '', paymentLink2: '', paymentLink2Label: ''
       },
       categories: cats.map((n, i) => ({ id: 'c' + (i + 1), name: n, cfg: structuredClone(DEF_CAT_CFG) })),
@@ -186,7 +217,7 @@ async function invite() {
   $('inv-out').classList.add('h');
   try {
     const { data } = await inviteManager({ email, role, clubId, branchId });
-    const msg = `הוזמנת לנהל טורנירים. לקביעת סיסמה: ${data.link}\nאחר כך נכנסים כאן: ${new URL('club.html', location.href).href}`;
+    const msg = `הוזמנת לנהל טורנירים. לקביעת סיסמה: ${data.link}\nאחר כך נכנסים כאן: ${new URL(`club.html?club=${encodeURIComponent(clubId)}`, location.href).href}`;
     $('inv-link').value = msg;
     $('inv-wa').href = 'https://wa.me/?text=' + encodeURIComponent(msg);
     $('inv-out').classList.remove('h');
@@ -201,4 +232,4 @@ function copyText(text) {
   navigator.clipboard.writeText(text).then(() => toast('הועתק'), () => toast('ההעתקה נכשלה'));
 }
 
-Object.assign(window, { login, resetPw, logout, openClub, setApproval, createClub, addBranch, createTournament, invite, copyText });
+Object.assign(window, { login, resetPw, logout, openClub, editClub, setApproval, saveClub, addBranch, createTournament, invite, copyText });
