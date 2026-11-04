@@ -7,7 +7,7 @@
     "node": "22"
   },
   "scripts": {
-    "test": "firebase emulators:exec --only firestore,auth,functions --project demo-luz \"node --test --test-concurrency=1 test/\""
+    "test": "firebase emulators:exec --only firestore,auth,functions --project demo-luz \"node --test --test-concurrency=1 test/*.test.mjs\""
   },
   "dependencies": {
     "firebase-admin": "^13.4.0",
