@@ -66,7 +66,8 @@ test('secure registrations: no client create; managers edit allowed fields only'
   await seed('tournaments/a', secureT());
   await seed('tournaments/a/registrations/r1', { p1: 'a', p2: 'b', category: 'c1', status: 'pending', paid: false });
   await assertFails(addDoc(collection(anon(), 'tournaments/a/registrations'), { p1: 'a', p2: 'b' }));
-  await assertFails(addDoc(collection(owner(), 'tournaments/a/registrations'), { p1: 'a', p2: 'b' }));
+  await assertSucceeds(addDoc(collection(owner(), 'tournaments/a/registrations'), { p1: 'a', p2: 'b', status: 'approved' }));
+  await assertFails(addDoc(collection(owner(), 'tournaments/a/registrations'), { p1: 'a', p2: 'b', phone: '0501234567' }));
   await assertFails(updateDoc(doc(anon(), 'tournaments/a/registrations/r1'), { paid: true }));
   await assertSucceeds(updateDoc(doc(owner(), 'tournaments/a/registrations/r1'), { status: 'approved', paid: true }));
   await assertFails(updateDoc(doc(owner(), 'tournaments/a/registrations/r1'), { phone: '0501234567' }));

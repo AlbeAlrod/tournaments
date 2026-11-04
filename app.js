@@ -20,6 +20,15 @@ const firebaseConfig = {
 const fbApp = initializeApp(firebaseConfig);
 const db    = getFirestore(fbApp);
 
+// Secure tournaments (data.secure === true): Firebase Auth + Cloud Functions, loaded on demand
+// so legacy tournaments do not pay for them. See SECURITY.md.
+let secure = false, tAccess = {};
+const authMod = () => import('https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js');
+async function callFn(name, data) {
+  const { getFunctions, httpsCallable } = await import('https://www.gstatic.com/firebasejs/10.12.5/firebase-functions.js');
+  return (await httpsCallable(getFunctions(fbApp, 'europe-west1'), name)(data)).data;
+}
+
 // ============ URL PARAM ============
 const tId = new URLSearchParams(location.search).get('t');
 
@@ -241,6 +250,8 @@ async function loadTournament() {
   } else {
     const data = snap.data();
     if (data.meta) meta = { ...meta, ...data.meta };
+    secure = data.secure === true;
+    tAccess = { club: data.clubId, branch: data.branchId };
     // Loading screen stays neutral white (styled in styles.css #view-loading)
     // Expiry check — show expired page and stop loading
     if (meta.expiresAt) {
@@ -267,6 +278,7 @@ async function loadTournament() {
     if (!state[cat.id]) state[cat.id] = { roster:[], groups:[], sched:[], ko:[] };
   });
 
+  if (secure) watchSecureAuth();
   // Registrations: live listener (Participants / my-registration status update by themselves)
   // Registrations hold phone numbers: viewers only need them before the tournament starts.
   if (meta.phase !== 'tournament') subscribeRegistrations();
@@ -313,9 +325,10 @@ function subscribeRegistrations() {
     let first = true;
     const done = () => { if (first) { first = false; resolve(); } };
     onSnapshot(REGS_REF, snap => {
-      registrations = snap.docs.map(d => ({ id: d.id, ...d.data({ serverTimestamps: 'estimate' }) }))
+      registrations = snap.docs.map(d => ({ id: d.id, ...d.data({ serverTimestamps: 'estimate' }), ...contacts[d.id] }))
         .sort((a, b) => regTime(a) - regTime(b));
       regsLoaded = true;
+      loadContacts();
       done();
       const active = ['register','participants','registrations']
         .find(p => document.getElementById('page-'+p)?.classList.contains('on'));
@@ -326,15 +339,28 @@ function subscribeRegistrations() {
   });
 }
 
+// Secure tournaments keep phone + email in registrations/{id}/private/contact (managers only).
+const contacts = {};
+async function loadContacts() {
+  if (!secure || !admin) return;
+  const miss = registrations.filter(r => !contacts[r.id]);
+  if (!miss.length) return;
+  await Promise.all(miss.map(r => getDoc(doc(db, 'tournaments', tId, 'registrations', r.id, 'private', 'contact'))
+    .then(s => { contacts[r.id] = s.data() || {}; }, () => {})));
+  registrations.forEach(r => Object.assign(r, contacts[r.id]));
+  if (document.getElementById('page-registrations')?.classList.contains('on')) renderRegistrations();
+}
+
 async function loadRegistrations() {
   if (!REGS_REF) return;
   try {
     const snap = await getDocs(query(REGS_REF, orderBy('createdAt', 'asc')));
-    registrations = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    registrations = snap.docs.map(d => ({ id: d.id, ...d.data(), ...contacts[d.id] }));
   } catch(e) {
     const snap = await getDocs(REGS_REF);
-    registrations = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    registrations = snap.docs.map(d => ({ id: d.id, ...d.data(), ...contacts[d.id] }));
   }
+  loadContacts();
 }
 
 // ============ THEME — dual free color picker ============
@@ -494,10 +520,12 @@ function adminClick() {
   if (admin) {
     adminLevel = 0; admin = false; superAdmin = false;
     try { sessionStorage.removeItem(AUTH_KEY()); } catch(_) {}
+    if (secure) authMod().then(m => m.signOut(m.getAuth(fbApp)));
     refreshAdmin(); rerender(); return;
   }
   loginRole = 'admin';
   updateRoleButtons();
+  document.getElementById('pw-email-row').classList.toggle('h', !secure);
   document.getElementById('pw-modal').classList.remove('h');
   setTimeout(() => document.getElementById('pw-inp').focus(), 80);
 }
@@ -519,6 +547,7 @@ function updateRoleButtons() {
 }
 
 async function tryLogin() {
+  if (secure) return trySecureLogin();
   const val      = document.getElementById('pw-inp').value.trim();
   const field    = loginRole === 'master' ? 'masterPassword' : 'adminPassword';
   const expected = meta[field];
@@ -550,6 +579,52 @@ async function tryLogin() {
   }
 }
 
+// Club staff (club owner, branch manager, super) manage as master; a tournament-password
+// token manages only its own tournament, in the role it was issued for.
+const securePerm = c => c.tid === tId ? c.trole
+  : c.role === 'super' || (c.club && c.club === tAccess.club && (c.role === 'owner' || (c.role === 'branch' && c.branch === tAccess.branch))) ? 'master'
+  : null;
+
+function applySecureRole(role) {
+  if (!role || (admin && adminLevel === (role === 'master' ? 2 : 1))) return;
+  setRole(role); loadContacts();
+  if (firebaseReady) { refreshAdmin(); rerender(); }   // before boot, renderAll picks the role up
+}
+
+async function watchSecureAuth() {
+  const { getAuth, onAuthStateChanged } = await authMod();
+  onAuthStateChanged(getAuth(fbApp), async u => {
+    if (u) applySecureRole(securePerm((await u.getIdTokenResult()).claims));
+  });
+}
+
+function loginFailed(key) {
+  const err = document.getElementById('pw-err');
+  err.textContent = t(key);
+  err.classList.remove('h');
+  document.getElementById('pw-inp').value = '';
+  document.getElementById('pw-inp').focus();
+}
+
+async function trySecureLogin() {
+  const pw = document.getElementById('pw-inp').value.trim();
+  const email = document.getElementById('pw-email').value.trim();
+  if (!pw) return loginFailed('admin.pwWrong');
+  try {
+    const { getAuth, signInWithCustomToken, signInWithEmailAndPassword } = await authMod();
+    const auth = getAuth(fbApp);
+    if (email) await signInWithEmailAndPassword(auth, email, pw);
+    else await signInWithCustomToken(auth, (await callFn('tournamentLogin', { tId, role: loginRole, password: pw })).token);
+    const role = securePerm((await auth.currentUser.getIdTokenResult()).claims);
+    if (!role) return loginFailed('admin.noAccess');
+    closeLogin();
+    applySecureRole(role);
+    if (meta.phase === 'registration' && document.getElementById('page-register')?.classList.contains('on')) goPage('registrations');
+  } catch(e) {
+    loginFailed(e.code === 'functions/resource-exhausted' || e.code === 'auth/too-many-requests' ? 'admin.tooMany' : 'admin.pwWrong');
+  }
+}
+
 function setRole(role) {
   adminLevel = role === 'master' ? 2 : 1;
   admin      = true;
@@ -561,6 +636,7 @@ function setRole(role) {
 // Stores the password hash and re-checks it, so a changed password logs out.
 const AUTH_KEY = () => 'luz.auth.' + tId;
 async function restoreLogin() {
+  if (secure) return;   // Firebase Auth keeps the session; watchSecureAuth restores the role
   let s = null;
   try { s = JSON.parse(sessionStorage.getItem(AUTH_KEY()) || 'null'); } catch(_) {}
   if (!s || !['admin','master'].includes(s.role)) return;
@@ -574,6 +650,8 @@ async function restoreLogin() {
 function closeLogin() {
   document.getElementById('pw-modal').classList.add('h');
   document.getElementById('pw-inp').value = '';
+  document.getElementById('pw-email').value = '';
+  document.getElementById('pw-err').textContent = t('admin.pwWrong');
   document.getElementById('pw-err').classList.add('h');
 }
 
@@ -698,7 +776,7 @@ function renderMyReg() {
         <span class="status-badge badge-${escH(r.status)}">${escH(statusTxt(r.status))}</span>
         ${r.status !== 'rejected' ? `<span class="paid-badge${r.paid ? '' : ' no'}">${t(r.paid ? 'reg.paidBadge' : 'reg.unpaidBadge')}</span>` : ''}
       </div>
-      ${r.status === 'pending'
+      ${r.status === 'pending' && !secure
         ? `<button type="button" class="reg-btn reject" onclick="cancelMyRegistration('${escH(r.id)}')">${t('common.cancel')}</button>`
         : `<span class="d-muted">${t('reg.cancelContact')}</span>`}
     </div>`;
@@ -752,7 +830,7 @@ function registerAnother() {
 // Registration errors, per field: {p1, p2, phone, cat, form} → () => message.
 // Kept as functions so a language switch re-renders them in the new language.
 let regErrors = {};
-const REG_FIELDS = { p1: 'frm-p1', p2: 'frm-p2', phone: 'frm-phone', cat: 'frm-cat-wrap' };
+const REG_FIELDS = { p1: 'frm-p1', p2: 'frm-p2', phone: 'frm-phone', email: 'frm-email', cat: 'frm-cat-wrap' };
 function renderRegErrors() {
   Object.entries(REG_FIELDS).forEach(([k, id]) => {
     const msg = regErrors[k] ? regErrors[k]() : '';
@@ -769,6 +847,7 @@ async function submitRegistration() {
   const p1   = cleanName(document.getElementById('frm-p1').value);
   const p2   = cleanName(document.getElementById('frm-p2').value);
   const phoneRaw = document.getElementById('frm-phone').value.trim();
+  const email = document.getElementById('frm-email').value.trim();
   const catId = document.querySelector('#frm-cat-wrap .cat-pill.on')?.dataset.value || '';
   const ok  = document.getElementById('frm-ok');
   ok.classList.add('h');
@@ -777,6 +856,7 @@ async function submitRegistration() {
     p1: nameError(p1, 'common.player1'),
     p2: nameError(p2, 'common.player2'),
     phone: !phoneRaw ? () => t('errors.phoneRequired') : !phone ? () => t('errors.phoneInvalid') : null,
+    email: secure && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email) ? () => t('errors.emailInvalid') : null,
     cat: catId ? null : () => t('errors.catRequired'),
   };
   if (!regErrors.p1 && !regErrors.p2 && normName(p1) === normName(p2)) regErrors.p2 = () => t('errors.sameNames');
@@ -797,16 +877,19 @@ async function submitRegistration() {
   if (btn) { btn.disabled = true; btn.textContent = t('reg.sending'); }
   const unlock = () => { if (btn) { btn.disabled = false; btn.textContent = btnTxt; } };
   try {
-    const ref = await addDoc(REGS_REF, {
-      p1, p2, phone, category: catId,
-      status: 'pending', paid: false,
-      createdAt: serverTimestamp()
-    });
+    const ref = secure
+      ? await callFn('registerPair', { tId, p1, p2, phone, email, category: catId })
+      : await addDoc(REGS_REF, {
+          p1, p2, phone, category: catId,
+          status: 'pending', paid: false,
+          createdAt: serverTimestamp()
+        });
     setMyRegs([...getMyRegs(), ref.id]);
     if (registrations.some(r => r.id !== ref.id && r.category === catId && r.status !== 'rejected' && normPhone(r.phone) === phone)) toast(t('errors.dupPhoneWarn'));
     document.getElementById('frm-p1').value = '';
     document.getElementById('frm-p2').value = '';
     document.getElementById('frm-phone').value = '';
+    document.getElementById('frm-email').value = '';
     if (categories.length !== 1)
       document.querySelectorAll('#frm-cat-wrap .cat-pill').forEach(b => { b.classList.remove('on'); b.setAttribute('aria-pressed', 'false'); });
     unlock();
@@ -816,7 +899,8 @@ async function submitRegistration() {
     document.getElementById('reg-receipt')?.scrollIntoView({ block: 'nearest' });
   } catch(e) {
     unlock();
-    regErrors = { form: () => t('errors.submitFailed') };
+    regErrors = { form: () => t(e.code === 'functions/already-exists' ? 'errors.dupServer'
+      : e.code === 'functions/failed-precondition' ? 'reg.closed' : 'errors.submitFailed') };
     renderRegErrors();
   }
 }
@@ -1145,6 +1229,7 @@ function previewRegNote(ta) {
 window.previewRegNote = previewRegNote;
 
 function renderRegisterPage() {
+  document.getElementById('frm-email-row')?.classList.toggle('h', !secure);
   renderInfoCards();
   const closedMsg = document.getElementById('reg-closed-msg');
   const formWrap  = document.getElementById('reg-form-wrap');
@@ -1455,7 +1540,7 @@ async function saveAddPair() {
   const p2    = cleanName(document.getElementById('ap-p2').value);
   const catId = document.getElementById('ap-cat').value;
   if (!p1 || !state[catId]) return;
-  const r = { p1, p2, phone:'', category: catId, status:'approved', paid:false };
+  const r = { p1, p2, ...(secure ? {} : { phone:'' }), category: catId, status:'approved', paid:false };
   const name = regPairName(r);
   if (pairTaken(catId, name)) { toast(t('errors.dupName', { name: fsi(name) })); return; }
   await addDoc(REGS_REF, { ...r, createdAt: serverTimestamp() });
@@ -2281,7 +2366,7 @@ async function saveEditReg(p1, p2) {
     if (!ok) return;
   }
   try {
-    await updateDoc(doc(db, 'tournaments', tId, 'registrations', r.id), { p1, p2, phone, category: catId });
+    await updateDoc(doc(db, 'tournaments', tId, 'registrations', r.id), secure ? { p1, p2, category: catId } : { p1, p2, phone, category: catId });
     Object.assign(r, { p1, p2, phone, category: catId });
   } catch(e) { alert(t('errors.statusUpdate')); return; }
   closeEdit(); renderRegistrations(); renderBuildPage();
@@ -3673,7 +3758,7 @@ function renderSettings() {
   container.appendChild(ssec);
 
   // ── PLAYERS DATABASE ────────────────────────────────────────────
-  renderPlayerDBSection(container);
+  if (secure) renderSecurePwSection(container); else renderPlayerDBSection(container);
 
   // ── GROUPS ──────────────────────────────────────────────────────
   const groupHasCats = categories.some(cat => state[cat.id]?.groups?.length);
@@ -4313,7 +4398,7 @@ function renderAllInner() {
 
 // ============ EXPOSE GLOBALS ============
 Object.assign(window, {
-  adminClick, selectLoginRole, tryLogin, closeLogin,
+  adminClick, selectLoginRole, tryLogin, closeLogin, saveSecurePw,
   openStartModal, closeStartModal, confirmStartTournament,
   goPage, setCat, setCourt,
   submitRegistration, cancelMyRegistration, registerAnother, setRegStatus, setRegPaid, setRegFilter,
@@ -4337,6 +4422,7 @@ Object.assign(window, {
 
 // ============ PLAYER DATABASE ============
 async function loadPlayerDB() {
+  if (secure) return;
   try {
     PLAYERS_REF = doc(db, 'players', 'global');
     const snap = await getDoc(PLAYERS_REF);
@@ -4358,7 +4444,7 @@ async function savePlayerDB() {
 }
 
 async function addPlayerToDB(name, phone) {
-  name = name?.trim(); if (!name) return;
+  name = name?.trim(); if (!name || secure) return;
   if (!playerDB.find(p => p.name.toLowerCase() === name.toLowerCase())) {
     playerDB.push({ name, phone: phone||'' });
     await savePlayerDB();
@@ -4370,6 +4456,31 @@ async function removePlayerFromDB(idx) {
   playerDB.splice(idx, 1);
   await savePlayerDB();
   renderSettings();
+}
+
+function renderSecurePwSection(container) {
+  if (adminLevel !== 2) return;
+  const sec = document.createElement('div');
+  sec.className = 'sett-section';
+  sec.innerHTML = `<div class="sett-section-title">${t('settings.securePw')}</div>
+    <p class="sett-desc">${t('settings.securePwDesc')}</p>
+    ${['admin', 'master'].map(role => `<div class="sett-row">
+      <div class="sett-label"><span class="sett-name">${t(role === 'master' ? 'admin.roleMaster' : 'admin.roleAdmin')}</span></div>
+      <div class="sett-ctrl">
+        <input class="text-inp" id="spw-${role}" type="password" dir="ltr" autocomplete="new-password" style="width:160px"/>
+        <button class="add-cat-btn" onclick="saveSecurePw('${role}')">${t('settings.pwSave')}</button>
+      </div></div>`).join('')}`;
+  container.appendChild(sec);
+}
+
+async function saveSecurePw(role) {
+  const inp = document.getElementById('spw-' + role);
+  if (inp.value.length < 6) { toast(t('settings.securePwDesc')); return; }
+  try {
+    await callFn('setTournamentPassword', { tId, role, password: inp.value });
+    inp.value = '';
+    toast(t('settings.pwSaved'));
+  } catch(e) { toast(t(e.code === 'functions/permission-denied' ? 'admin.noAccess' : 'errors.saveFailed')); }
 }
 
 function renderPlayerDBSection(container) {

@@ -79,10 +79,13 @@ service cloud.firestore {
       function parent() { return get(/databases/$(database)/documents/tournaments/$(tId)).data; }
 
       // Legacy: name + phone, world-readable and writable (see SECURITY.md).
-      // Secure: no contact details here; created only by the registerPair function.
+      // Secure: no contact details here. Players register through the registerPair
+      // function; managers may add a pair directly (late add), without contact fields.
       match /registrations/{rId} {
         allow read: if true;
-        allow create: if !isSecure(parent());
+        allow create: if isSecure(parent())
+                      ? canManage(parent(), tId) && !request.resource.data.keys().hasAny(['phone', 'email'])
+                      : true;
         allow update: if isSecure(parent())
                       ? canManage(parent(), tId)
                         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(

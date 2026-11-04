@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://www.gstatic.com" crossorigin/>
 <link rel="preconnect" href="https://firestore.googleapis.com" crossorigin/>
-<link rel="modulepreload" href="app.js?v=75"/>
+<link rel="modulepreload" href="app.js?v=76"/>
 <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js"/>
 <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js"/>
 <link rel="modulepreload" href="common.js?v=73"/>
@@ -125,6 +125,11 @@
             <input class="form-input" id="frm-phone" type="tel" dir="ltr" inputmode="tel" placeholder="050-0000000" autocomplete="tel" required aria-describedby="frm-phone-err"/>
             <div id="frm-phone-err" class="fld-err h"></div>
           </div>
+          <div class="form-row h" id="frm-email-row">
+            <label for="frm-email" data-i18n="reg.emailLabel">מייל</label>
+            <input class="form-input" id="frm-email" type="email" dir="ltr" inputmode="email" autocomplete="email" aria-describedby="frm-email-err"/>
+            <div id="frm-email-err" class="fld-err h"></div>
+          </div>
           <div class="form-row">
             <label id="frm-cat-lbl" data-i18n="reg.catLabel">קטגוריה</label>
             <div id="frm-cat-wrap" class="cat-pills" role="group" aria-labelledby="frm-cat-lbl" aria-describedby="frm-cat-wrap-err"></div>
@@ -234,6 +239,9 @@
       <button id="role-btn-master" onclick="selectLoginRole('master')" data-i18n="admin.roleMaster">מאסטר</button>
     </div>
     <p class="role-hint" id="role-hint"></p>
+    <div class="modal-row h" id="pw-email-row">
+      <input class="modal-input" id="pw-email" type="email" dir="ltr" autocomplete="username" data-i18n-ph="admin.emailPh" placeholder="מייל (מנהלי מועדון)"/>
+    </div>
     <div class="modal-row">
       <input class="modal-input" id="pw-inp" type="password" dir="ltr" autocomplete="current-password" data-i18n-ph="admin.pwPh" placeholder="סיסמה"
         onkeydown="if(event.key==='Enter')tryLogin()"/>
@@ -322,6 +330,6 @@
   </div>
 </div>
 
-<script type="module" src="app.js?v=75"></script>
+<script type="module" src="app.js?v=76"></script>
 </body>
 </html>
