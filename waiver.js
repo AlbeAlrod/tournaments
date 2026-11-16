@@ -9,7 +9,7 @@ export const waiverFor = id => WAIVERS[id] || null;
 // Israeli ID: up to 9 digits with a Luhn-style check digit.
 export function validIsraeliId(v) {
   const id = String(v ?? '').replace(/\D/g, '');
-  if (!id || id.length > 9 || !Number(id)) return false;
+  if (!id || id.length < 5 || id.length > 9 || !Number(id)) return false;
   let sum = 0;
   [...id.padStart(9, '0')].forEach((c, i) => { const d = Number(c) * (i % 2 + 1); sum += d > 9 ? d - 9 : d; });
   return sum % 10 === 0;
