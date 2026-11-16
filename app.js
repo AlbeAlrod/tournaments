@@ -1,12 +1,13 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
 import {
   getFirestore, doc, getDoc, setDoc, onSnapshot, serverTimestamp,
-  collection, addDoc, getDocs, updateDoc, deleteDoc, query, orderBy, FieldPath, runTransaction, deleteField
+  collection, addDoc, getDocs, updateDoc, deleteDoc, query, orderBy, FieldPath, runTransaction, deleteField, writeBatch
 } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
 import { pickImage, attachDropZone } from "./uploader.js?v=73";
 import { t, initLang, setLang, getLang, applyStatic, fmtDate, tRound, tSlot } from './i18n.js?v=73';
 // Same Firebase config as below, so common.js's initializeApp returns this app (no duplicate).
 import { onColor } from './common.js?v=73';
+import { waiverFor, waiverHTML, initWaiver, readWaiver, openSignDialog, closeSignDialog } from './waiver.js?v=1';
 
 // ============ FIREBASE ============
 const firebaseConfig = {
@@ -317,6 +318,7 @@ function subscribeRegistrations() {
         .sort((a, b) => regTime(a) - regTime(b));
       regsLoaded = true;
       done();
+      openSignLinkOnce();
       const active = ['register','participants','registrations']
         .find(p => document.getElementById('page-'+p)?.classList.contains('on'));
       if (active === 'register')      renderRegisterPage();
@@ -676,7 +678,74 @@ function getMyRegs() {
 function setMyRegs(ids) {
   try { localStorage.setItem(MYREGS_KEY(), JSON.stringify(ids)); localStorage.removeItem(MYREG_KEY()); } catch(_) {}
 }
-let lastReceipt = null;   // {p1,p2,catId} — receipt card shown instead of the form
+let lastReceipt = null;   // {p1,p2,catId,regId} — receipt card shown instead of the form
+
+// ── Waiver (meta.waiver = waiver id, e.g. 'volleylab') ─────────────────────
+// Every player signs for himself: player 1 inside the registration form, player 2
+// (or anyone missing) through a personal link. Signatures go to the create-only
+// `waivers` collection (nobody can read them from the site; the organizer reads
+// them in the Firebase console). The registration only keeps waiver1/waiver2 flags.
+const curWaiver = () => waiverFor(meta.waiver);
+const waiverDone = r => !curWaiver() || (r.waiver1 && r.waiver2);
+const signLink = (r, n) => `${location.origin}${location.pathname}?t=${encodeURIComponent(tId)}&sign=${encodeURIComponent(r.id)}&p=${n}`;
+const signShare = (r, n) => `https://wa.me/?text=${encodeURIComponent(`היי ${r['p' + n]}, כדי להשלים את ההרשמה ל${meta.name || 'טורניר'} צריך לחתום על כתב הוויתור: ${signLink(r, n)}`)}`;
+function missingSignHTML(r, withSignBtn) {
+  if (!curWaiver() || r.status === 'rejected') return '';
+  return [1, 2].filter(n => !r['waiver' + n]).map(n => `<div class="d-waiver-miss">
+    <span>חסרה חתימה על כתב הוויתור: <bdi>${escH(r['p' + n])}</bdi></span>
+    ${withSignBtn ? `<button type="button" class="reg-btn approve" onclick="signWaiver('${escH(r.id)}',${n})">חתימה עכשיו</button>` : ''}
+    <a class="reg-btn" target="_blank" rel="noopener" href="${escH(signShare(r, n))}">שליחת קישור בוואטסאפ</a>
+    <button type="button" class="reg-btn" onclick="copySignLink('${escH(r.id)}',${n})">העתקת קישור</button>
+  </div>`).join('');
+}
+function copySignLink(id, n) {
+  const r = registrations.find(x => x.id === id);
+  if (r) navigator.clipboard.writeText(signLink(r, n)).then(() => toast('הקישור הועתק'), () => {});
+}
+function waiverDoc(data, regId, player) {
+  return { ...data, tId, regId, player, tournamentName: meta.name || '', tournamentDate: meta.eventDate || '',
+    ua: navigator.userAgent.slice(0, 200), signedAt: serverTimestamp() };
+}
+function signWaiver(id, n) {
+  const r = registrations.find(x => x.id === id), w = curWaiver();
+  if (!r || !w) return;
+  if (r['waiver' + n]) { toast('כבר נחתם, תודה!'); return; }
+  openSignDialog({ w, name: r['p' + n], tName: meta.name, tDate: meta.eventDate, onSubmit: async () => {
+    const res = readWaiver('wm', w, { normPhone });
+    if (!res.data) return;
+    const b = writeBatch(db);
+    b.set(doc(collection(db, 'waivers')), waiverDoc(res.data, id, n));
+    b.update(doc(db, 'tournaments', tId, 'registrations', id), { ['waiver' + n]: true });
+    await b.commit();
+    r['waiver' + n] = true;
+    closeSignDialog();
+    toast('החתימה נשמרה, תודה!');
+    renderRegisterPage();
+  } });
+}
+let signLinkDone = false;
+function openSignLinkOnce() {
+  if (signLinkDone) return;
+  signLinkDone = true;
+  const q = new URLSearchParams(location.search), id = q.get('sign'), n = Number(q.get('p'));
+  if (!id || ![1, 2].includes(n) || !curWaiver()) return;
+  if (!registrations.some(r => r.id === id)) { toast('ההרשמה לא נמצאה. בקשו קישור חדש מהמארגנים.'); return; }
+  goPage('register');
+  signWaiver(id, n);
+}
+function mountRegWaiver() {
+  const box = document.getElementById('frm-waiver'), w = curWaiver();
+  if (!box) return;
+  if (!w) { box.innerHTML = ''; box.dataset.v = ''; return; }
+  if (box.dataset.v === w.version) return;   // keep what was typed/drawn across re-renders
+  box.dataset.v = w.version;
+  box.innerHTML = waiverHTML('w1', w, { name: document.getElementById('frm-p1')?.value || '', tName: meta.name, tDate: meta.eventDate,
+    note: 'כל שחקן/ית חותם/ת בעצמו/ה. כאן חותם/ת שחקן/ית 1. שחקן/ית 2 יקבל/תקבל קישור לחתימה מיד אחרי ההרשמה.' });
+  initWaiver('w1');
+  const p1 = document.getElementById('frm-p1'), wn = document.getElementById('w1-name');
+  if (p1 && wn) p1.addEventListener('input', () => { if (!wn.dataset.edited) wn.value = p1.value; });
+  wn?.addEventListener('input', () => { wn.dataset.edited = '1'; });
+}
 
 function renderMyReg() {
   const el = document.getElementById('reg-mine');
@@ -697,6 +766,7 @@ function renderMyReg() {
         <div>${dnH(regPairName(r))}${cat ? ` · <bdi>${escH(cat.name)}</bdi>` : ''}</div>
         <span class="status-badge badge-${escH(r.status)}">${escH(statusTxt(r.status))}</span>
         ${r.status !== 'rejected' ? `<span class="paid-badge${r.paid ? '' : ' no'}">${t(r.paid ? 'reg.paidBadge' : 'reg.unpaidBadge')}</span>` : ''}
+        ${missingSignHTML(r, true)}
       </div>
       ${r.status === 'pending'
         ? `<button type="button" class="reg-btn reject" onclick="cancelMyRegistration('${escH(r.id)}')">${t('common.cancel')}</button>`
@@ -733,6 +803,8 @@ function renderReceipt() {
       <div class="d-receipt-line"><span class="d-muted">${t('reg.receiptPair')}</span> <strong>${dnH(lastReceipt.p1 + ' / ' + lastReceipt.p2)}</strong></div>
       <div class="d-receipt-line"><span class="d-muted">${t('reg.catLabel')}</span> <strong><bdi>${escH(cat ? cat.name : '')}</bdi></strong></div>
       <div class="d-receipt-line"><span class="d-muted">${t('reg.receiptStatus')}</span> <strong>${t('reg.pendingApproval')}</strong></div>
+      ${(() => { const r = registrations.find(x => x.id === lastReceipt.regId); return r && curWaiver() && !r.waiver2
+        ? `<p><strong>שלב אחרון:</strong> גם <bdi>${escH(r.p2)}</bdi> צריך/ה לחתום על כתב הוויתור. שלחו לו/ה את הקישור:</p>${missingSignHTML(r, false)}` : ''; })()}
       <div id="receipt-pay-wrap"></div>
       <p id="receipt-pay-note" class="d-muted" style="display:none">${t('reg.payNote')}</p>
       <button type="button" class="submit-btn" onclick="registerAnother()">${t('reg.another')}</button>
@@ -788,6 +860,9 @@ async function submitRegistration() {
   const first = Object.keys(REG_FIELDS).find(k => regErrors[k]);
   if (first) { (first === 'cat' ? document.querySelector('#frm-cat-wrap .cat-pill') : document.getElementById(REG_FIELDS[first]))?.focus(); return; }
   if (regErrors.form) return;
+  const w = curWaiver();
+  const signed = w ? readWaiver('w1', w, { phone, normPhone }) : null;
+  if (signed && !signed.data) return;
   // meta is kept live by onSnapshot — the organizer may have closed registration
   // while this form was open.
   if (!regAccepting()) { regErrors = { form: () => t('reg.closed') }; renderRegisterPage(); return; }
@@ -797,11 +872,12 @@ async function submitRegistration() {
   if (btn) { btn.disabled = true; btn.textContent = t('reg.sending'); }
   const unlock = () => { if (btn) { btn.disabled = false; btn.textContent = btnTxt; } };
   try {
-    const ref = await addDoc(REGS_REF, {
-      p1, p2, phone, category: catId,
-      status: 'pending', paid: false,
-      createdAt: serverTimestamp()
-    });
+    const ref = doc(REGS_REF);
+    const b = writeBatch(db);
+    b.set(ref, { p1, p2, phone, category: catId, status: 'pending', paid: false, createdAt: serverTimestamp(),
+      ...(w && { waiver1: true, waiver2: false }) });
+    if (w) b.set(doc(collection(db, 'waivers')), waiverDoc(signed.data, ref.id, 1));
+    await b.commit();
     setMyRegs([...getMyRegs(), ref.id]);
     if (registrations.some(r => r.id !== ref.id && r.category === catId && r.status !== 'rejected' && normPhone(r.phone) === phone)) toast(t('errors.dupPhoneWarn'));
     document.getElementById('frm-p1').value = '';
@@ -811,7 +887,9 @@ async function submitRegistration() {
       document.querySelectorAll('#frm-cat-wrap .cat-pill').forEach(b => { b.classList.remove('on'); b.setAttribute('aria-pressed', 'false'); });
     unlock();
     regErrors = {};
-    lastReceipt = { p1, p2, catId };
+    lastReceipt = { p1, p2, catId, regId: ref.id };
+    const wb = document.getElementById('frm-waiver');
+    if (wb) wb.dataset.v = '';
     renderRegisterPage();
     document.getElementById('reg-receipt')?.scrollIntoView({ block: 'nearest' });
   } catch(e) {
