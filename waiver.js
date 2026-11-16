@@ -198,10 +198,10 @@ export function openWaiverViewer({ load, regs, catName }) {
       <div class="wv-table-wrap"><table class="wv-table">
         <thead><tr><th>זוג</th><th>שחקן</th><th>שם מלא</th><th>ת"ז</th><th>טלפון</th><th>נחתם</th><th>צילום</th><th>חתימה</th></tr></thead>
         <tbody>${rows.map(({ r, n, w }) => `<tr class="${w ? '' : 'wv-miss'}">
-          <td>${esc(r.p1)} / ${esc(r.p2)}<div class="d-muted">${esc(catName(r.category))}</div></td>
-          <td>${esc(r['p' + n])}</td>
-          ${w ? `<td>${esc(w.fullName)}</td><td dir="ltr">${esc(w.idNum)}</td><td dir="ltr">${esc(w.phone)}</td><td>${esc(date(w.signedAt))}</td>
-            <td>${w.consentPhotos ? 'מסכים/ה' : 'לא מסכים/ה'}</td><td><img class="wv-sig" src="${esc(w.signature)}" alt="חתימה של ${esc(w.fullName)}"/></td>`
+          <td data-label="זוג">${esc(r.p1)} / ${esc(r.p2)}<div class="d-muted">${esc(catName(r.category))}</div></td>
+          <td data-label="שחקן">${esc(r['p' + n])}</td>
+          ${w ? `<td data-label="שם מלא">${esc(w.fullName)}</td><td data-label="ת&quot;ז"><bdi>${esc(w.idNum)}</bdi></td><td data-label="טלפון"><bdi>${esc(w.phone)}</bdi></td><td data-label="נחתם">${esc(date(w.signedAt))}</td>
+            <td data-label="צילום">${w.consentPhotos ? 'מסכים/ה' : 'לא מסכים/ה'}</td><td data-label="חתימה"><img class="wv-sig" src="${esc(w.signature)}" alt="חתימה של ${esc(w.fullName)}"/></td>`
           : '<td colspan="6"><strong>לא חתם/ה</strong></td>'}
         </tr>`).join('')}</tbody></table></div>`;
     document.getElementById('wv-close2').onclick = closeWaiverViewer;
