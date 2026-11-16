@@ -139,3 +139,73 @@ export function openSignDialog({ w, name, tName, tDate, onSubmit }) {
   document.getElementById('wm-name')?.focus();
 }
 export function closeSignDialog() { document.getElementById('waiver-modal')?.remove(); delete pads.wm; }
+
+// Managers: signed waivers, loaded from the server after a password check.
+// load(password) → [{regId, player, fullName, idNum, phone, consentPhotos, signature, signedAt}]
+export function openWaiverViewer({ load, regs, catName }) {
+  closeWaiverViewer();
+  const el = document.createElement('div');
+  el.id = 'waiver-viewer';
+  el.className = 'waiver-modal';
+  el.innerHTML = `<div class="waiver-modal-box wide" role="dialog" aria-modal="true" aria-labelledby="wv-title">
+    <h3 id="wv-title" class="waiver-h">כתבי ויתור חתומים</h3>
+    <div id="wv-login" class="form-row">
+      <label for="wv-pw">סיסמת צפייה בכתבי ויתור</label>
+      <input class="form-input" id="wv-pw" type="password" dir="ltr" autocomplete="current-password"/>
+      <div id="wv-err" class="fld-err h" role="alert"></div>
+      <div class="waiver-modal-btns"><button type="button" class="submit-btn" id="wv-go">הצגה</button>
+        <button type="button" class="reg-btn" id="wv-close">סגירה</button></div>
+    </div>
+    <div id="wv-out"></div></div>`;
+  document.body.appendChild(el);
+  const pw = document.getElementById('wv-pw');
+  document.getElementById('wv-close').onclick = closeWaiverViewer;
+  pw.onkeydown = e => { if (e.key === 'Enter') go(); };
+  document.getElementById('wv-go').onclick = go;
+  pw.focus();
+
+  async function go() {
+    const err = document.getElementById('wv-err');
+    err.classList.add('h');
+    let list;
+    try { list = await load(pw.value); }
+    catch (e) {
+      err.textContent = e.code === 'functions/resource-exhausted' ? 'יותר מדי ניסיונות. נסו שוב בעוד רבע שעה.'
+        : e.code === 'functions/permission-denied' ? 'הסיסמה שגויה.' : 'הטעינה נכשלה. בדקו את החיבור ונסו שוב.';
+      err.classList.remove('h');
+      return;
+    }
+    document.getElementById('wv-login').remove();
+    render(list);
+  }
+
+  function render(list) {
+    const by = (rid, n) => list.filter(w => w.regId === rid && w.player === n).sort((a, b) => (b.signedAt || '').localeCompare(a.signedAt || ''))[0];
+    const active = regs.filter(r => r.status !== 'rejected');
+    const rows = active.flatMap(r => [1, 2].map(n => ({ r, n, w: by(r.id, n) })));
+    const missing = rows.filter(x => !x.w).length;
+    const date = s => s ? new Date(s).toLocaleString('he-IL', { day: 'numeric', month: 'numeric', year: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
+    const csv = [['זוג', 'קטגוריה', 'שחקן', 'שם מלא', 'תעודת זהות', 'טלפון', 'נחתם', 'הסכמה לצילום'],
+      ...rows.map(({ r, n, w }) => [`${r.p1} / ${r.p2}`, catName(r.category), r['p' + n], w?.fullName || 'לא חתם/ה', w?.idNum || '', w?.phone || '', date(w?.signedAt), w ? (w.consentPhotos ? 'כן' : 'לא') : ''])]
+      .map(l => l.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
+    document.getElementById('wv-out').innerHTML = `
+      <p>${rows.length - missing} מתוך ${rows.length} שחקנים חתמו.${missing ? ` <strong>${missing} עוד לא חתמו.</strong>` : ''}</p>
+      <div class="waiver-modal-btns no-print">
+        <button type="button" class="reg-btn" id="wv-print">הדפסה / PDF</button>
+        <a class="reg-btn" download="waivers.csv" href="data:text/csv;charset=utf-8,${encodeURIComponent('﻿' + csv)}">ייצוא לאקסל (CSV)</a>
+        <button type="button" class="reg-btn" id="wv-close2">סגירה</button>
+      </div>
+      <div class="wv-table-wrap"><table class="wv-table">
+        <thead><tr><th>זוג</th><th>שחקן</th><th>שם מלא</th><th>ת"ז</th><th>טלפון</th><th>נחתם</th><th>צילום</th><th>חתימה</th></tr></thead>
+        <tbody>${rows.map(({ r, n, w }) => `<tr class="${w ? '' : 'wv-miss'}">
+          <td>${esc(r.p1)} / ${esc(r.p2)}<div class="d-muted">${esc(catName(r.category))}</div></td>
+          <td>${esc(r['p' + n])}</td>
+          ${w ? `<td>${esc(w.fullName)}</td><td dir="ltr">${esc(w.idNum)}</td><td dir="ltr">${esc(w.phone)}</td><td>${esc(date(w.signedAt))}</td>
+            <td>${w.consentPhotos ? 'מסכים/ה' : 'לא מסכים/ה'}</td><td><img class="wv-sig" src="${esc(w.signature)}" alt="חתימה של ${esc(w.fullName)}"/></td>`
+          : '<td colspan="6"><strong>לא חתם/ה</strong></td>'}
+        </tr>`).join('')}</tbody></table></div>`;
+    document.getElementById('wv-close2').onclick = closeWaiverViewer;
+    document.getElementById('wv-print').onclick = () => { document.body.classList.add('printing-waivers'); window.print(); document.body.classList.remove('printing-waivers'); };
+  }
+}
+export function closeWaiverViewer() { document.getElementById('waiver-viewer')?.remove(); }

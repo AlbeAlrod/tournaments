@@ -7,7 +7,11 @@ import { pickImage, attachDropZone } from "./uploader.js?v=73";
 import { t, initLang, setLang, getLang, applyStatic, fmtDate, tRound, tSlot } from './i18n.js?v=73';
 // Same Firebase config as below, so common.js's initializeApp returns this app (no duplicate).
 import { onColor } from './common.js?v=73';
-import { waiverFor, waiverHTML, initWaiver, readWaiver, openSignDialog, closeSignDialog } from './waiver.js?v=1';
+import { waiverFor, waiverHTML, initWaiver, readWaiver, openSignDialog, closeSignDialog, openWaiverViewer } from './waiver.js?v=1';
+async function callFn(name, data) {
+  const { getFunctions, httpsCallable } = await import('https://www.gstatic.com/firebasejs/10.12.5/firebase-functions.js');
+  return (await httpsCallable(getFunctions(fbApp, 'europe-west1'), name)(data)).data;
+}
 
 // ============ FIREBASE ============
 const firebaseConfig = {
@@ -733,6 +737,19 @@ function openSignLinkOnce() {
   goPage('register');
   signWaiver(id, n);
 }
+function showWaivers() {
+  const catName = id => categories.find(c => c.id === id)?.name || '';
+  openWaiverViewer({ regs: registrations, catName, load: async password => (await callFn('listWaivers', { tId, password })).waivers });
+}
+async function setWaiverPw() {
+  const sup = document.getElementById('wpw-super'), nw = document.getElementById('wpw-new');
+  if (nw.value.length < 6) { toast('סיסמת הצפייה צריכה לפחות 6 תווים'); return; }
+  try {
+    await callFn('setWaiverPassword', { tId, superPassword: sup.value, password: nw.value });
+    sup.value = nw.value = '';
+    toast('סיסמת הצפייה נשמרה');
+  } catch(e) { toast(e.code === 'functions/permission-denied' ? 'סיסמת מנהל המערכת שגויה' : e.code === 'functions/resource-exhausted' ? 'יותר מדי ניסיונות, נסו בעוד רבע שעה' : 'השמירה נכשלה'); }
+}
 function mountRegWaiver() {
   const box = document.getElementById('frm-waiver'), w = curWaiver();
   if (!box) return;
@@ -916,6 +933,7 @@ async function setRegStatus(id, status) {
       registrations = registrations.filter(r => r.id !== id);
     } else {
       const r = registrations.find(r => r.id === id);
+      if (status === 'approved' && r && !waiverDone(r)) { toast('אפשר לאשר רק אחרי ששני השחקנים חתמו על כתב הוויתור.'); return; }
       await updateDoc(doc(db, 'tournaments', tId, 'registrations', id), { status });
       if (r) {
         const wasApproved = r.status === 'approved';
@@ -1082,7 +1100,8 @@ function renderRegistrations() {
     return;
   }
   const toApprove = meta.phase === 'registration' ? list.filter(r => r.status !== 'approved').length : 0;
-  el.innerHTML = (toApprove > 1 ? `<button type="button" class="filter-btn" style="margin-bottom:12px" onclick="approveAllShown()">${t('admin.approveAllShown', { n: toApprove })}</button>` : '')
+  el.innerHTML = (curWaiver() ? `<button type="button" class="filter-btn" style="margin:0 0 12px 8px" onclick="showWaivers()">כתבי ויתור חתומים</button>` : '')
+    + (toApprove > 1 ? `<button type="button" class="filter-btn" style="margin-bottom:12px" onclick="approveAllShown()">${t('admin.approveAllShown', { n: toApprove })}</button>` : '')
     + list.map(r => {
     const cat = categories.find(c => c.id === r.category);
     const catName = cat ? cat.name : r.category;
@@ -1095,6 +1114,7 @@ function renderRegistrations() {
         <div class="reg-name">${escH(regPairName(r))}</div>
         <div class="reg-meta"><bdi>${escH(catName)}</bdi> · <span class="num">${fmtDate(r.createdAt)}</span></div>
         <div class="reg-phone">${phoneHtml}</div>
+        ${missingSignHTML(r, false)}
       </div>
       <span class="status-badge badge-${escH(r.status)}">${escH(statusTxt(r.status))}</span>
       <label class="d-paid-toggle"><input type="checkbox" ${r.paid ? 'checked' : ''} aria-label="${escH(t('admin.paidFor', { pair: regPairName(r) }))}" onchange="setRegPaid('${r.id}',this.checked)"/> <span aria-hidden="true">${t('admin.paid')}</span></label>
@@ -1234,6 +1254,7 @@ function renderRegisterPage() {
   closedMsg?.classList.toggle('h', open);
   soonMsg?.classList.toggle('h', !open || !noCats);
   if (formWrap) formWrap.style.display = (open && !noCats && !lastReceipt) ? '' : 'none';
+  mountRegWaiver();
   renderMyReg();
   renderReceipt();
   if (sub) sub.innerHTML = meta.name ? t('reg.subtitle', { name: `<bdi>${escH(meta.name)}</bdi>` }) : '';
@@ -2367,8 +2388,9 @@ async function saveEditReg(p1, p2) {
 
 async function approveAllShown() {
   if (!admin || meta.phase !== 'registration') return;
-  const list = filteredRegs().filter(r => r.status !== 'approved');
-  if (!list.length || !await askConfirm(t('admin.confirmApproveAll', { n: list.length }), t('admin.approve'))) return;
+  const list = filteredRegs().filter(r => r.status !== 'approved' && waiverDone(r));
+  if (!list.length) { toast('אין הרשמות שאפשר לאשר: בכל ההרשמות שמוצגות חסרה חתימה על כתב הוויתור.'); return; }
+  if (!await askConfirm(t('admin.confirmApproveAll', { n: list.length }), t('admin.approve'))) return;
   try {
     await Promise.all(list.map(r => updateDoc(doc(db, 'tournaments', tId, 'registrations', r.id), { status: 'approved' })));
   } catch(e) { alert(t('errors.statusUpdate')); return; }
@@ -3817,6 +3839,18 @@ function renderSettings() {
       <span class="toggle-label">${t('settings.showList')}</span>
       <label class="toggle-switch"><input type="checkbox" ${meta.showRegistered?'checked':''} onchange="updateMeta('showRegistered',this.checked)"/><span class="toggle-slider"></span></label>
     </div>
+    <div class="toggle-row" style="border-bottom:none">
+      <span class="toggle-label">כתב ויתור חובה בהרשמה (וולילאב)</span>
+      <label class="toggle-switch"><input type="checkbox" ${meta.waiver?'checked':''} onchange="updateMeta('waiver',this.checked?'volleylab':'')"/><span class="toggle-slider"></span></label>
+    </div>
+    ${meta.waiver ? `<div class="sett-row" style="flex-direction:column;align-items:stretch">
+      <div class="sett-label"><span class="sett-name">סיסמת צפייה בכתבי ויתור</span>
+        <span class="d-muted">למנהלי הטורניר. הקביעה דורשת את סיסמת מנהל המערכת (admin.html), והבדיקה נעשית בשרת.</span></div>
+      <div class="sett-ctrl" style="display:flex;gap:8px;flex-wrap:wrap">
+        <input class="text-inp" id="wpw-super" type="password" dir="ltr" placeholder="סיסמת מנהל מערכת" autocomplete="off" style="width:170px"/>
+        <input class="text-inp" id="wpw-new" type="password" dir="ltr" placeholder="סיסמת צפייה חדשה" autocomplete="new-password" style="width:170px"/>
+        <button class="add-cat-btn" onclick="setWaiverPw()">שמירה</button>
+      </div></div>` : ''}
     <div class="sett-row" style="flex-direction:column;align-items:stretch;padding-top:16px">
       <div class="sett-label">
         <span class="sett-name">${t('settings.regNote')}</span>
@@ -4135,6 +4169,7 @@ function updateMeta(key, val) {
     renderRegisterPage(); renderParticipants();
   }
   if (key === 'regNote') renderRegisterPage();
+  if (key === 'waiver') { renderRegisterPage(); renderRegistrations(); renderSettings(); }
   if (['eventDate','venue','price'].includes(key)) renderInfoCards();
   if (key === 'sport') renderAll();
   if (key === 'lang') { initLang(val); applyStatic(); renderAll(); }
@@ -4391,6 +4426,7 @@ function renderAllInner() {
 
 // ============ EXPOSE GLOBALS ============
 Object.assign(window, {
+  signWaiver, copySignLink, showWaivers, setWaiverPw,
   adminClick, selectLoginRole, tryLogin, closeLogin,
   openStartModal, closeStartModal, confirmStartTournament,
   goPage, setCat, setCourt,

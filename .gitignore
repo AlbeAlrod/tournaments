@@ -2,3 +2,7 @@
 .netlify
 node_modules/
 .claude/worktrees/
+firebase-debug.log
+firestore-debug.log
+functions/.secret.local
+functions/.env.local
