@@ -13,6 +13,9 @@ Owner: Albe. Coordinator: the managing Claude session. Full review + roadmap liv
 Until phase 5 ships, do NOT add new security mechanisms and do NOT make existing ones weaker.
 Never change firestore.rules in phases 1–4.
 
+Exception (owner's decision, Nov 2026, branch `mentor-registration`): phase 5 starts now for
+NEW tournaments only (`secure: true`). Legacy tournaments keep the old model untouched.
+
 ## Hard rules
 - This app runs LIVE events. Every change must be backward compatible with existing
   Firestore documents (meta/categories/state shape). New fields are optional with defaults.

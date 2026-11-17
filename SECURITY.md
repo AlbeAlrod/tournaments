@@ -1,5 +1,28 @@
 # Security model & hardening path
 
+## Two models side by side (since Nov 2026)
+- **Legacy tournaments** (no `secure` field): everything below under "How it works today" still
+  applies, unchanged, so running tournaments are not disturbed.
+- **Secure tournaments** (`secure: true`, set at creation, cannot be added or removed later):
+  - Managers sign in with Firebase Auth (email + password). Roles are custom claims
+    (`super` / `owner` of a club / `branch` manager) set only by Cloud Functions (`functions/`).
+  - A tournament password is checked on the server (`tournamentLogin`, salted scrypt in
+    `tournaments/{id}/private/secrets`, rate-limited) and returns a token for that tournament only.
+  - Registrations are created only by `registerPair`; phone + email live in
+    `registrations/{id}/private/contact`, readable by that tournament's managers only.
+  - `firestore.rules` gates every write on the token's claims; approval is super-admin only.
+  - Tests: `cd functions && npm test` (Firebase emulator; also runs in CI).
+  - Club panel: `club.html` (club owners, branch managers, super-admin): create secure tournaments
+    (pending until the super-admin approves), branches, and manager invites.
+  - Public list: `tournaments.html?club=<id>` (approved tournaments of that club only, no personal data).
+  - Emails (functions/mail.js): received / waitlist / approved (pay-by) / promoted / back to
+    waitlist / rejected / paid to the pair, and new pending tournaments to SUPER_EMAIL. SMTP
+    credentials live only in Secret Manager: `firebase functions:secrets:set SMTP_URL`
+    (e.g. smtps://user:app-password@smtp.gmail.com:465). Without it nothing is sent; every mail
+    is recorded in the server-only `mailLog` collection.
+  - First super-admin: `node functions/scripts/set-superadmin.mjs <email>` with project credentials.
+
+
 ## How it works today
 This app has **no Firebase Authentication**. Access control is done in the browser:
 tournament `adminPassword` / `masterPassword` (stored as SHA-256 hashes in each

@@ -1,0 +1,13 @@
+{
+  "id": "mentor",
+  "name": "מנטור",
+  "brand": { "primary": "#e5ce0d", "secondary": "#000000", "logo": "assets/mentor/logo-black.svg", "fonts": ["Poppins", "Heebo"], "neutralText": true },
+  "branches": [
+    { "id": "tel-aviv", "name": "תל אביב", "place": "חוף גורדון" },
+    { "id": "raanana", "name": "רעננה", "place": "ספורטק רעננה" },
+    { "id": "kfar-saba", "name": "כפר סבא", "place": "ספורטק כפר סבא" },
+    { "id": "kiryat-ono", "name": "קריית אונו", "place": "ספורטק קריית אונו" },
+    { "id": "galia", "name": "גאליה", "place": "מושב גאליה" },
+    { "id": "yavne", "name": "יבנה", "place": "ספורטק יבנה" }
+  ]
+}
