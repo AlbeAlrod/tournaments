@@ -131,6 +131,31 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // Signed waivers (כתב ויתור): anyone may ADD one, nobody can read, change or delete
+    // it from the site. Managers read them through the listWaivers Cloud Function.
+    match /waivers/{id} {
+      allow create: if request.resource.data.keys().hasOnly(['tId', 'regId', 'player', 'fullName', 'idNum', 'phone',
+                         'agreed', 'consentPhotos', 'signature', 'version', 'tournamentName', 'tournamentDate', 'ua', 'signedAt'])
+                    && request.resource.data.tId is string
+                    && exists(/databases/$(database)/documents/tournaments/$(request.resource.data.tId))
+                    && request.resource.data.regId is string && request.resource.data.regId.size() <= 40
+                    && request.resource.data.player in [1, 2]
+                    && request.resource.data.fullName is string && request.resource.data.fullName.size() >= 3 && request.resource.data.fullName.size() <= 60
+                    && request.resource.data.idNum.matches('^[0-9]{5,9}$')
+                    && request.resource.data.phone is string && request.resource.data.phone.size() <= 20
+                    && request.resource.data.agreed == true
+                    && request.resource.data.consentPhotos is bool
+                    && request.resource.data.signature is string && request.resource.data.signature.size() < 300000
+                    && request.resource.data.signature.matches('^data:image/png;base64,.*')
+                    && request.resource.data.version is string && request.resource.data.version.size() <= 60
+                    && request.resource.data.tournamentName is string && request.resource.data.tournamentName.size() <= 120
+                    && request.resource.data.tournamentDate is string && request.resource.data.tournamentDate.size() <= 40
+                    && request.resource.data.ua is string && request.resource.data.ua.size() <= 200
+                    && request.resource.data.signedAt == request.time;
+      allow read, update, delete: if false;
+    }
+
+    // Deny everything else (prevents writing to arbitrary new collections).
     match /{document=**} {
       allow read, write: if false;
     }

@@ -4,7 +4,7 @@ import { setGlobalOptions } from 'firebase-functions/v2';
 import { initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
-import { scryptSync, randomBytes, timingSafeEqual } from 'node:crypto';
+import { createHash, scryptSync, randomBytes, timingSafeEqual } from 'node:crypto';
 
 setGlobalOptions({ region: 'europe-west1', maxInstances: 10 });
 initializeApp();
@@ -165,4 +165,43 @@ export const onRegistrationDeleted = onDocumentDeleted('tournaments/{tId}/regist
     tx.update(idxRef, { [phone]: left.length ? left : FieldValue.delete() });
   });
 });
+// ── Waivers (כתב ויתור), legacy tournaments ──────────────────────────────────
+// config/superAdmin.password is the super-admin's SHA-256 hash (admin.html). Clients can
+// read but never write it, so it is a trustworthy check. Tournament passwords in meta are
+// NOT: legacy tournament documents are writable by anyone.
+async function isSuperPw(password) {
+  const expected = (await db.doc('config/superAdmin').get()).data()?.password;
+  return !!expected && !!password && createHash('sha256').update(password).digest('hex') === expected;
+}
+
+// The super-admin gives a tournament's managers a password for reading its waivers.
+export const setWaiverPassword = onCall(async req => {
+  const { tId, superPassword, password } = req.data || {};
+  if (typeof tId !== 'string' || !tId || typeof password !== 'string' || password.length < 6) fail('invalid-argument', 'input');
+  await rateLimit(`wpw:${req.rawRequest.ip}`, 10, 900);
+  if (!await isSuperPw(superPassword)) fail('permission-denied', 'wrong-password');
+  await db.doc(`tournaments/${tId}/private/secrets`).set({ waivers: hashPassword(password) }, { merge: true });
+  return { ok: true };
+});
+
+// Signed waivers of one tournament: waiver password, super-admin password, or a signed-in manager of it.
+export const listWaivers = onCall(async req => {
+  const { tId, password } = req.data || {};
+  if (typeof tId !== 'string' || !tId) fail('invalid-argument', 'input');
+  const t = (await db.doc(`tournaments/${tId}`).get()).data();
+  if (!(t?.secure && canManage(req.auth?.token, t, tId))) {
+    if (typeof password !== 'string' || !password) fail('invalid-argument', 'input');
+    await rateLimit(`wls:${tId}:${req.rawRequest.ip}`, 10, 900);
+    const secret = (await db.doc(`tournaments/${tId}/private/secrets`).get()).data()?.waivers;
+    if (!verifyPassword(password, secret) && !await isSuperPw(password)) fail('permission-denied', 'wrong-password');
+  }
+  const snap = await db.collection('waivers').where('tId', '==', tId).get();
+  return { waivers: snap.docs.map(d => {
+    const w = d.data();
+    return { id: d.id, regId: w.regId, player: w.player, fullName: w.fullName, idNum: w.idNum, phone: w.phone,
+      consentPhotos: w.consentPhotos, signature: w.signature, version: w.version,
+      signedAt: w.signedAt?.toDate?.().toISOString() || null };
+  }) };
+});
+
 export * from './mail.js';

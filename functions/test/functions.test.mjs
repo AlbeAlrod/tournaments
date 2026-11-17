@@ -148,3 +148,12 @@ test('a new pending secure tournament emails the super-admin', async () => {
   await adb.doc('tournaments/newone').set({ ...T, approval: 'pending' });
   assert.ok(await mailTo('super@test.co', 'pendingTournament'));
 });
+
+test('a signed-in manager of a secure tournament lists its waivers without a password', async () => {
+  await signOut(auth);
+  assert.equal(await code(call('listWaivers', { tId: 'sec' })), 'functions/invalid-argument');
+  await signInAs('own', { role: 'owner', club: 'mentor' });
+  assert.deepEqual((await call('listWaivers', { tId: 'sec' })).waivers, []);
+  await signInAs('other', { role: 'owner', club: 'other' });
+  assert.equal(await code(call('listWaivers', { tId: 'sec' })), 'functions/invalid-argument');
+});
