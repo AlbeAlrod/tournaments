@@ -204,7 +204,8 @@ export function createLegacy(ctx) {
     if(!cats.length) return;
     const finaleCat = cats[cats.length-1].id;
     const parallel = !!meta.parallelCategories;
-    const allPoolsFirst = !!meta.allPoolsBeforeKO;
+    const seq = !!meta.sequentialCategories;
+    const allPoolsFirst = !seq && !!meta.allPoolsBeforeKO;
     const games=[], koStruct={};
     cats.forEach((cat,ci)=>{
       const groups=state[cat.id].groups; const poolIds=[];
@@ -260,7 +261,8 @@ export function createLegacy(ctx) {
       const courtsThisRound=courtsAt(r);
       const gateFinale = meta.blockFinaleUntilPoolsDone &&
         cats.some(c=>c.id!==finaleCat && poolPending(c.id));
-      const cand=[...rem].map(id=>byId[id]).filter(g=>ready(g,done)&&!isFinaleLast(g)
+      const curCi=Math.min(...[...rem].map(id=>byId[id].ci));
+      const cand=[...rem].map(id=>byId[id]).filter(g=>(!seq||g.ci===curCi)&&ready(g,done)&&!isFinaleLast(g)
         && !(gateFinale && g.catId===finaleCat));
       if(!cand.length){
         const fin=[...rem].map(id=>byId[id]).filter(g=>ready(g,done)&&isFinaleLast(g)).slice(0,courtsThisRound);

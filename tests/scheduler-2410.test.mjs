@@ -3,13 +3,13 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as L from '../core/legacy.js';
 
-function build(n1, n2) {
+function build(n1, n2, extra = {}) {
   const roster = (p, n) => Array.from({ length: n }, (_, i) => `${p}${i} / ${p}${i}x`);
   const ctx = {
     categories: [{ id: 'a', cfg: structuredClone(L.DEF_CAT_CFG) }, { id: 'b', cfg: structuredClone(L.DEF_CAT_CFG) }],
     state: { a: { roster: roster('A', n1), groups: [], sched: [], ko: [] },
              b: { roster: roster('B', n2), groups: [], sched: [], ko: [] } },
-    meta: { coordinated: true, parallelCategories: true, allPoolsBeforeKO: true }, registrations: [],
+    meta: { coordinated: true, parallelCategories: true, allPoolsBeforeKO: true, ...extra }, registrations: [],
   };
   const api = L.createLegacy(ctx);
   api.buildCoordinatedGroups(); api.generateCoordinatedSchedule();
@@ -45,3 +45,14 @@ for (const [n1, n2] of [[12, 12], [16, 16], [15, 13], [13, 13]]) {
     }
   });
 }
+
+test('sequentialCategories: all of category a, then all of category b', () => {
+  const ctx = build(12, 12, { sequentialCategories: true });
+  const all = cs => [...cs.sched, ...cs.ko.flat().filter(g => !g.isBye)];
+  const a = all(ctx.state.a), b = all(ctx.state.b);
+  const slots = [...a, ...b].map(g => `${g.time}/${g.court}`);
+  assert.equal(new Set(slots).size, slots.length, 'court collision');
+  assert.ok(a.every(g => g.time), 'a fully scheduled');
+  assert.ok(b.every(g => g.time), 'b fully scheduled');
+  assert.ok(Math.max(...a.map(g => g.si)) < Math.min(...b.map(g => g.si)), 'b starts after a ends');
+});
