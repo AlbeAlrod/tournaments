@@ -3,7 +3,7 @@
 // against the custom claims set by the inviteManager Cloud Function.
 import { fbApp, db, escH as esc, doc, getDoc, setDoc, updateDoc, serverTimestamp, applyTheme, applyBrandFonts } from './common.js?v=76';
 import { collection, getDocs, query, where, getCountFromServer } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js';
-import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, sendPasswordResetEmail, signOut }
+import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, sendPasswordResetEmail, signOut, setPersistence, browserSessionPersistence }
   from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js';
 import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-functions.js';
 
@@ -54,7 +54,10 @@ const tLink = id => new URL(`index.html?t=${encodeURIComponent(id)}`, location.h
 // ── Auth ─────────────────────────────────────────────────────
 async function login() {
   showErr('lg-err', '');
-  try { await signInWithEmailAndPassword(auth, $('lg-email').value.trim(), $('lg-pw').value); }
+  try {
+    await setPersistence(auth, browserSessionPersistence);   // signed in until the browser closes
+    await signInWithEmailAndPassword(auth, $('lg-email').value.trim(), $('lg-pw').value);
+  }
   catch (e) { showErr('lg-err', e.code === 'auth/too-many-requests' ? 'יותר מדי ניסיונות. נסו שוב מאוחר יותר.' : 'מייל או סיסמה שגויים.'); }
 }
 async function resetPw() {

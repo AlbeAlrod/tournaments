@@ -4,9 +4,10 @@ import {
   collection, addDoc, getDocs, updateDoc, deleteDoc, query, orderBy, FieldPath, runTransaction, deleteField, writeBatch
 } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
 import { pickImage, attachDropZone } from "./uploader.js?v=73";
-import { t, initLang, setLang, getLang, applyStatic, fmtDate, tRound, tSlot } from './i18n.js?v=78';
+import { t, initLang, setLang, getLang, applyStatic, fmtDate, tRound, tSlot } from './i18n.js?v=80';
 // Same Firebase config as below, so common.js's initializeApp returns this app (no duplicate).
 import { onColor, applyBrandFonts } from './common.js?v=76';
+import { buildDE, deDeps, resolveDE } from './core/de.js?v=1';
 import { waiverFor, waiverHTML, initWaiver, readWaiver, openSignDialog, closeSignDialog, openWaiverViewer } from './waiver.js?v=1';
 
 // ============ FIREBASE ============
@@ -108,6 +109,7 @@ function getRuleForGame(catId, g, isKO) {
   const cs = state[catId];
   if (!cs?.ko?.length) return rules.pool;
   const fromEnd = cs.ko.length - 1 - (g.ri ?? 0);
+  if (g.de && fromEnd > 1) return rules.pool;   // double elimination: both brackets play pool rules
   if (fromEnd === 0) return rules.final;
   if (fromEnd === 1) return rules.sf;
   if (fromEnd === 2) return rules.qf;
@@ -619,8 +621,9 @@ async function trySecureLogin() {
   const email = document.getElementById('pw-email').value.trim();
   if (!pw || !email) return loginFailed('admin.emailPwWrong');
   try {
-    const { getAuth, signInWithEmailAndPassword } = await authMod();
+    const { getAuth, signInWithEmailAndPassword, setPersistence, browserSessionPersistence } = await authMod();
     const auth = getAuth(fbApp);
+    await setPersistence(auth, browserSessionPersistence);
     await signInWithEmailAndPassword(auth, email, pw);
     const role = securePerm((await auth.currentUser.getIdTokenResult(true)).claims);
     if (!role) return loginFailed('admin.noAccess');
@@ -1438,11 +1441,13 @@ function renderRegisterPage() {
 
 // ============ DIALOG / TOAST ============
 // The app's own confirm dialog (replaces window.confirm). Resolves true on OK.
-function askConfirm(msg, okLabel) {
+// With cancelLabel the two buttons are a yes/no answer: Escape or a click outside resolves null.
+function askConfirm(msg, okLabel, cancelLabel) {
   const m = document.getElementById('confirm-modal');
   const ok = document.getElementById('confirm-ok'), no = document.getElementById('confirm-cancel');
   document.getElementById('confirm-msg').textContent = msg;
   ok.textContent = okLabel || t('common.confirm');
+  no.textContent = cancelLabel || t('common.back');
   const back = document.activeElement;
   m.classList.remove('h');
   no.focus();
@@ -1455,8 +1460,8 @@ function askConfirm(msg, okLabel) {
     };
     ok.onclick = () => done(true);
     no.onclick = () => done(false);
-    m.onclick = e => { if (e.target === m) done(false); };
-    m.onkeydown = e => { if (e.key === 'Escape') done(false); };
+    m.onclick = e => { if (e.target === m) done(cancelLabel ? null : false); };
+    m.onkeydown = e => { if (e.key === 'Escape') done(cancelLabel ? null : false); };
   });
 }
 
@@ -1663,6 +1668,7 @@ async function moveBetweenCategories(srcCatId, fromIdx, dstCatId, toIdx) {
 
 function moveBuildItem(catId, idx, dir) {
   if (!admin || (meta.phase !== 'registration' && meta.phase !== 'built')) return;
+  arranged.add(catId);
   const a = state[catId]?.roster[idx], b = state[catId]?.roster[idx + dir];
   if (a === undefined || b === undefined) return;
   commitState(catId, cs => {
@@ -1673,16 +1679,20 @@ function moveBuildItem(catId, idx, dir) {
   }).then(renderBuildPage);
 }
 
+function shuffleRoster(cs, catId) {
+  seedRoster(cs, catId);
+  for (let i = cs.roster.length-1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i+1));
+    [cs.roster[i], cs.roster[j]] = [cs.roster[j], cs.roster[i]];
+  }
+}
+// Categories whose pair order the manager already arranged (shuffle or manual move) in this visit.
+const arranged = new Set();
 function shuffleBuildRoster(catId) {
   if (!admin || (meta.phase !== 'registration' && meta.phase !== 'built')) return;
   if (!state[catId]) return;
-  commitState(catId, cs => {
-    seedRoster(cs, catId);
-    for (let i = cs.roster.length-1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i+1));
-      [cs.roster[i], cs.roster[j]] = [cs.roster[j], cs.roster[i]];
-    }
-  }).then(renderBuildPage);
+  arranged.add(catId);
+  commitState(catId, cs => shuffleRoster(cs, catId)).then(renderBuildPage);
 }
 
 function openAddPair(catId) {
@@ -1741,6 +1751,7 @@ function buildCoordinatedGroups(){
     let roster = cs.roster.length ? cs.roster :
       registrations.filter(r=>r.status==='approved'&&r.category===cat.id).map(r=>r.p1+(r.p2?' / '+r.p2:''));
     if(!roster.length){ cs.groups=[]; cs.sched=[]; cs.ko=[]; return; }
+    if(isDE(cat)){ cs.roster=roster; cs.groups=[]; cs.sched=[]; cs.ko=[]; return; }
     const cfg=cat.cfg||DEF_CAT_CFG; const ng=cfg.numGroups||2;
     let groups;
     if(cfg.seeding==='snake') groups=snakeDistribute(roster,ng);
@@ -1761,7 +1772,8 @@ function stageDur(catId, stage) {
   const cfg = categories.find(c => c.id === catId)?.cfg || DEF_CAT_CFG;
   return ({ ...DEF_KO_RULES, ...(cfg.koRules || {}) })[stage]?.dur || cfg.gameDur || 25;
 }
-const koStage = (len, ri) => { const e = len - 1 - ri; return e === 0 ? 'final' : e === 1 ? 'sf' : e === 2 ? 'qf' : 'r16'; };
+const koStage = (len, ri, g) => { const e = len - 1 - ri; return e === 0 ? 'final' : e === 1 ? 'sf' : g?.de ? 'pool' : e === 2 ? 'qf' : 'r16'; };
+const isDE = cat => !!secure && cat?.cfg?.format === 'de';
 function flexClock(START, SLOT, brk, durs) {   // durs[r] = longest game of round r (0 = empty round)
   const at = []; let clock = START;
   durs.forEach((d, r) => { at[r] = clock; clock += d ? d + brk : SLOT; });
@@ -1773,7 +1785,7 @@ function generateCoordinatedSchedule(){
   const BRK = (categories[0]?.cfg || DEF_CAT_CFG).breakDur || 0;
   // Courts available to the app in round r (a reserved side-court frees at BASE_ROUNDS).
   const courtsAt = r => (r < BASE_ROUNDS ? Math.max(2, COURTS-1) : COURTS);
-  const cats = categories.filter(c => state[c.id] && (state[c.id].groups||[]).length);
+  const cats = categories.filter(c => state[c.id] && ((state[c.id].groups||[]).length || (isDE(c) && state[c.id].roster.length >= 2)));
   if(!cats.length) return;
   const finaleCat = cats[cats.length-1].id;
   const order = secure ? catOrderOf() : null;
@@ -1791,7 +1803,15 @@ function generateCoordinatedSchedule(){
 
     }));
     const cfg=cat.cfg||DEF_CAT_CFG; const adv=cfg.advPerGroup||0, ng=groups.length;
-    if(adv>=1 && ng>=1){
+    if(isDE(cat)){
+      const rounds=buildDE(state[cat.id].roster, cat.id);
+      koStruct[cat.id]=rounds;
+      rounds.forEach((rd,ri)=>rd.forEach((g,gi)=>games.push({id:`${cat.id}:K${ri}:${gi}`,catId:cat.id,ci,kind:'ko',ri,gi,ref:g,poolIds,
+        deps:deDeps(g).map(([r,i])=>`${cat.id}:K${r}:${i}`),lastRound:ri===rounds.length-1})));
+      const sfRound=rounds.length-2;
+      if(sfRound>=0) games.push({id:`${cat.id}:3P`,catId:cat.id,ci,kind:'ko3p',sfRound,
+        ref:{catId:cat.id,gi:-1,isThirdPlace:true,a:'Loser of SF1',b:'Loser of SF2',sa:'',sb:''}});
+    } else if(adv>=1 && ng>=1){
       const seeds=[]; for(let rank=1;rank<=adv;rank++) for(let g=0;g<ng;g++) seeds.push(`${String.fromCharCode(65+g)}${rank}`);
       let bs=1; while(bs<seeds.length) bs*=2; while(seeds.length<bs) seeds.push('TBD');
       const rounds=[], first=[];
@@ -1816,6 +1836,7 @@ function generateCoordinatedSchedule(){
   const allPoolIds = games.filter(g=>g.kind==='pool').map(g=>g.id);
   const ready=(g,done)=>{
     if(g.kind==='pool') return true;
+    if(g.deps) return g.deps.every(id=>done.has(id));
     if(allPoolsFirst && !allPoolIds.every(id=>done.has(id))) return false; // all pools first
     if(g.kind==='ko3p') return (koRoundIds[`${g.catId}:${g.sfRound}`]||[]).every(id=>done.has(id));
     if(!g.poolIds.every(id=>done.has(id))) return false;
@@ -1826,7 +1847,7 @@ function generateCoordinatedSchedule(){
   const rankKind=g=>g.kind==='pool'?1:0, koOrder=g=>g.kind==='ko3p'?99:(g.kind==='ko'?g.ri:0);
   const rounds=[], done=new Set(); let rem=new Set(games.map(g=>g.id));
   const byId=Object.fromEntries(games.map(g=>[g.id,g])); const teamRounds={};
-  const gDur = g => stageDur(g.catId, g.kind === 'pool' ? 'pool' : g.kind === 'ko3p' ? 'third' : koStage(koStruct[g.catId].length, g.ri));
+  const gDur = g => stageDur(g.catId, g.kind === 'pool' ? 'pool' : g.kind === 'ko3p' ? 'third' : koStage(koStruct[g.catId].length, g.ri, g.ref));
   const roundDur = ids => secure && ids.length ? Math.max(...ids.map(id => gDur(byId[id]))) : 0;
   let clock = START;
   const pushRound = ids => { rounds.push(ids); clock += secure && ids.length ? roundDur(ids) + BRK : SLOT; };
@@ -1976,11 +1997,22 @@ async function buildTournament(catId) {
       scores: games.filter(hasScore).length, manual: games.filter(g => g.manual).length });
     if (!await askConfirm(msg, t(coord ? 'build.rebuildAll' : 'build.rebuild'))) return;
   }
+  // First build with pairs still in registration order: offer to shuffle them.
+  let toShuffle = [];
+  if (!rebuild) {
+    const plain = cids.filter(id => !arranged.has(id) && (state[id]?.roster.length || approvedNames(id).length) > 1);
+    if (plain.length) {
+      const ans = await askConfirm(t('build.notShuffledQ'), t('build.shuffleYes'), t('build.shuffleNo'));
+      if (ans === null) return;
+      if (ans) toShuffle = plain;
+    }
+  }
   const prev = { phase: meta.phase, breaks: meta.breaks ?? null, regOpen: !!meta.regOpen };
   let backup;
   const ok = await commitState(cids, () => {
     backup = Object.fromEntries(cids.map(id => [id, catStateToFB(structuredClone(state[id]))]));
     const old = gameIndex(cids);
+    toShuffle.forEach(id => shuffleRoster(state[id], id));
     if (coord) { buildCoordinatedGroups(); generateCoordinatedSchedule(); }
     else if (!buildCategory(catId)) return false;
     carryOver(cids, old);
@@ -2845,6 +2877,9 @@ function updateKOForCat(catId) {
   // Stamp each KO game with its round index so per-stage scoring rules resolve correctly
   cs.ko.forEach((round, ri) => round.forEach(g => { if (g) g.ri = ri; }));
 
+  if (cs.ko[0]?.[0]?.de) resolveDE(cs.ko, g => getKOWinner(g, catId), g => getKOLoser(g, catId));
+  else {
+
   // r0: resolve pool seeds; byes just resolve their single seed
   if (cs.ko[0]) {
     cs.ko[0].forEach(g => {
@@ -2876,6 +2911,7 @@ function updateKOForCat(catId) {
       g.b = wb || seedLabel(prev[idxB]) || `Winner of ${rndName} ${idxB+1}`;
     });
   }
+  }
 
   // Auto-fill 3rd-place game with SF losers
   if (cs.ko.length >= 2) {
@@ -2893,6 +2929,7 @@ function koGameLabel(catId, ri, gi) {
   if (!cs?.ko?.[ri]) return '';
   const round = cs.ko[ri];
   if (round[gi]?.isBye) return '';
+  if (round[gi]?.de) return round[gi].de.code;
   const fromEnd = cs.ko.length - 1 - ri;
   const num = round.slice(0, gi).filter(g => !g.isBye).length + 1;
   if (fromEnd === 0) return 'Final';
@@ -2904,6 +2941,8 @@ function koGameLabel(catId, ri, gi) {
 
 // Display text for koGameLabel()'s 'Final' / 'SF2' / 'QF3' / 'R16-2' / 'G1'.
 function tGameLbl(s) {
+  const d = /^([WL])(\d+)-(\d+)$/.exec(s);
+  if (d) return t(d[1] === 'W' ? 'bracket.lbl.wb' : 'bracket.lbl.lb', { r: d[2], n: d[3] });
   const m = /^(Final|SF|QF|R16-|G)(\d*)$/.exec(s);
   return m ? t('bracket.lbl.' + { Final:'final', SF:'sf', QF:'qf', 'R16-':'r16', G:'game' }[m[1]], { n: m[2] }) : s;
 }
@@ -3091,7 +3130,7 @@ function renderScheduleContent() {
       const isThirdPlace = !g._isKO && g.gi === -1;
       let key, label;
       const catName = categories.find(c=>c.id===g._catId)?.name || '';
-      const stage = g._isKO ? tRound(g._fe) : t(isThirdPlace ? 'sched.third' : 'sched.pools');
+      const stage = g._isKO ? (g.de && g._fe > 1 ? deStage(g.de.code) : tRound(g._fe)) : t(isThirdPlace ? 'sched.third' : 'sched.pools');
       if (g._isKO) key = `ko-${g._catId}-${g._rn}`;
       else if (isThirdPlace) key = `3p-${g._catId}`;
       else key = `pool-${g._catId}`;
@@ -3437,6 +3476,38 @@ function setCourt(c) { activeCourt=c; renderCourtFilter(); renderScheduleContent
 
 // ============ BRACKET ============
 const bmWhen = g => g.time && g.court ? `<div class="bm-when">${t('bracket.when', { time: g.time, n: g.court })}</div>` : '';
+// Double elimination: a column per round (winners' rounds, losers' rounds, semis, final).
+const deStage = code => { const d = /^([WL])(\d+)/.exec(code); return d ? t(d[1] === 'W' ? 'bracket.stage.wb' : 'bracket.stage.lb', { r: d[2] }) : ''; };
+function renderDEBracket(catId, container) {
+  const cs = state[catId];
+  const scroll = document.createElement('div'); scroll.className = 'bscroll'; scroll.dataset.cat = catId;
+  const tree = document.createElement('div'); tree.className = 'btree';
+  scroll.appendChild(tree);
+  const team = (name, win, sc, hs) => {
+    const known = name && !/^(Winner|Loser) of |^TBD$/.test(name);
+    return `<div class="bteam ${win ? 'win' : ''} ${known ? '' : 'tbd'}${isMine(known ? name : '') ? ' is-mine' : ''}">
+      <span class="bname">${dnH(tSlot(name))}</span>${hs ? `<span class="bsc num">${sc}</span>` : ''}</div>`;
+  };
+  const box = (g, lbl) => {
+    const sa = parseInt(g.sa), sb = parseInt(g.sb);
+    const hs = isValidScore(sa, sb, catId, getRuleForGame(catId, g, !g.isThirdPlace), g);
+    const el = document.createElement('div'); el.className = 'bmatch-wrap';
+    el.innerHTML = `<div class="bmatch-box">${lbl ? `<div class="bm-label">${lbl}</div>` : ''}${bmWhen(g)}<div class="bmatch">
+      ${team(g.a, hs && sa > sb, g.sa, hs)}${team(g.b, hs && sb > sa, g.sb, hs)}</div></div>`;
+    return el;
+  };
+  cs.ko.forEach((round, ri) => {
+    const fe = cs.ko.length - 1 - ri;
+    const col = document.createElement('div'); col.className = 'bround'; col.dataset.ri = ri;
+    col.innerHTML = `<div class="brnd-title">${fe > 1 ? deStage(round[0]?.de?.code) : tRound(fe)}</div>`;
+    const list = document.createElement('div'); list.className = 'brnd-matches';
+    round.forEach((g, gi) => { const w = box(g, tGameLbl(koGameLabel(catId, ri, gi))); if (gi) w.style.marginTop = '12px'; list.appendChild(w); });
+    if (fe === 0) { const third = cs.sched.find(g => g.isThirdPlace); if (third) { const w = box(third, t('bracket.third')); w.style.marginTop = '24px'; list.appendChild(w); } }
+    col.appendChild(list); tree.appendChild(col);
+  });
+  container.appendChild(scroll);
+}
+
 function renderBracketForCat(catId, container) {
   const cs  = state[catId];
   const cat = categories.find(c=>c.id===catId);
@@ -3446,6 +3517,7 @@ function renderBracketForCat(catId, container) {
   const ng  = cs.groups.length;
 
   updateKOForCat(catId);
+  if (cs.ko[0]?.[0]?.de) { renderDEBracket(catId, container); return; }
 
   const poolGames = cs.sched.filter(g=>g.gi>=0);   // exclude the 3rd-place game (gi=-1)
   const done  = poolGames.filter(g=>isValidScore(parseInt(g.sa),parseInt(g.sb),catId,getRuleForGame(catId,g,false),g)).length;
@@ -3801,13 +3873,28 @@ function renderSettings() {
     return;
   }
 
+  const infoRow = `    <div class="sett-row" style="align-items:flex-start;padding-top:16px">
+      <div class="sett-label">
+        <span class="sett-name">${t(secure ? 'settings.infoShort' : 'settings.info')}</span>
+        <span class="sett-desc">${t('settings.infoDesc')}</span>
+      </div>
+      <div class="sett-ctrl" style="flex-direction:column;align-items:flex-end;gap:8px">
+        <input class="text-inp" type="date" style="width:190px" value="${escH(meta.eventDate)}" aria-label="${t('settings.eventDate')}"
+          onchange="updateMeta('eventDate',this.value)"/>
+        <input class="text-inp" dir="auto" style="width:240px" value="${escH(meta.venue)}" placeholder="${t('settings.venuePh')}" aria-label="${t('settings.venue')}"
+          onchange="updateMeta('venue',this.value.trim())"/>
+        <input class="text-inp" dir="auto" style="width:240px" value="${escH(meta.price)}" placeholder="${t('settings.pricePh')}" aria-label="${t('settings.price')}"
+          onchange="updateMeta('price',this.value.trim())"/>
+      </div>
+    </div>
+`;
   // ── DESIGN ──────────────────────────────────────────────────────
   const pc = meta.primaryColor   || DEF_PRIMARY;
   const sc = meta.secondaryColor || pc;
   const dsec = document.createElement('div');
   dsec.className = 'sett-section';
   dsec.innerHTML = `
-    <div class="sett-section-title">${t('settings.design')}</div>
+    <div class="sett-section-title">${t(secure ? 'settings.info' : 'settings.design')}</div>
     <div class="sett-row">
       <div class="sett-label"><span class="sett-name">${t('settings.name')}</span></div>
       <div class="sett-ctrl">
@@ -3815,7 +3902,7 @@ function renderSettings() {
           onchange="updateMeta('name',this.value)" placeholder="${t('settings.namePh')}"/>
       </div>
     </div>
-    ${secure ? '' : `<div class="sett-row">
+    ${secure ? infoRow : `<div class="sett-row">
       <div class="sett-label">
         <span class="sett-name">${t('settings.lang')}</span>
         <span class="sett-desc">${t('settings.langDesc')}</span>
@@ -4047,23 +4134,10 @@ function renderSettings() {
         placeholder="${t('settings.regNotePh')}">${escH(meta.regNote)}</textarea>
       <div class="reg-note md reg-note-preview"></div>
     </div>
+${secure ? '' : infoRow}
     <div class="sett-row" style="align-items:flex-start;padding-top:16px">
       <div class="sett-label">
-        <span class="sett-name">${t('settings.info')}</span>
-        <span class="sett-desc">${t('settings.infoDesc')}</span>
-      </div>
-      <div class="sett-ctrl" style="flex-direction:column;align-items:flex-end;gap:8px">
-        <input class="text-inp" type="date" style="width:190px" value="${escH(meta.eventDate)}" aria-label="${t('settings.eventDate')}"
-          onchange="updateMeta('eventDate',this.value)"/>
-        <input class="text-inp" dir="auto" style="width:240px" value="${escH(meta.venue)}" placeholder="${t('settings.venuePh')}" aria-label="${t('settings.venue')}"
-          onchange="updateMeta('venue',this.value.trim())"/>
-        <input class="text-inp" dir="auto" style="width:240px" value="${escH(meta.price)}" placeholder="${t('settings.pricePh')}" aria-label="${t('settings.price')}"
-          onchange="updateMeta('price',this.value.trim())"/>
-      </div>
-    </div>
-    <div class="sett-row" style="align-items:flex-start;padding-top:16px">
-      <div class="sett-label">
-        <span class="sett-name">${t('settings.payLinks')}</span>
+        <span class="sett-name">${t(secure ? 'settings.payLink' : 'settings.payLinks')}</span>
         <span class="sett-desc">${t('settings.payLinksDesc')}</span>
       </div>
       ${secure ? `<div class="sett-ctrl"><input class="text-inp" type="url" dir="ltr" value="${escH(meta.paymentLink)}" style="width:260px" placeholder="https://…"
@@ -4285,9 +4359,16 @@ function renderCatItem(cat, ci, live) {
         onchange="updateCatCfg(${ci},'maxPairs',Math.max(0,parseInt(this.value)||0))"/></div></div>` : ''}
     ${live ? (coord ? '' : `<div class="cat-settings-grid">${catNumField(t('settings.gameDur'), ci, 'gameDur', cfg.gameDur, 5, 120)}</div>`) : `<div class="cat-settings-grid">
       ${coord ? '' : catNumField(t('settings.courts'), ci, 'courts', cfg.courts, 1, 8)}
-      ${catNumField(t('settings.numGroups'), ci, 'numGroups', cfg.numGroups, 2, 16)}
-      ${catNumField(t('settings.advPerGroup'), ci, 'advPerGroup', cfg.advPerGroup, 1, 8)}
-      ${(n => n > 1 ? `<span class="sett-desc" style="grid-column:1/-1">${t('settings.koHint', { n, round: tRound(Math.ceil(Math.log2(n)) - 1, 2 ** Math.ceil(Math.log2(n))) })}</span>` : '')((cfg.numGroups||0) * (cfg.advPerGroup||0))}
+      ${secure ? `<div class="cat-sett-field" style="grid-column:1/-1">
+        <span class="cat-sett-label">${t('settings.format')}</span>
+        <div class="cat-sett-ctrl"><select class="form-input" aria-label="${escH(cat.name)} · ${t('settings.format')}" onchange="updateCatCfg(${ci},'format',this.value)">
+          <option value="pools" ${cfg.format === 'de' ? '' : 'selected'}>${t('settings.format.pools')}</option>
+          <option value="de" ${cfg.format === 'de' ? 'selected' : ''}>${t('settings.format.de')}</option>
+        </select></div>
+        ${cfg.format === 'de' ? `<span class="sett-desc">${t('settings.format.deDesc')}</span>` : ''}</div>` : ''}
+      ${cfg.format === 'de' && secure ? '' : `${catNumField(t('settings.numGroups'), ci, 'numGroups', cfg.numGroups, 2, 16)}
+      ${catNumField(t('settings.advPerGroup'), ci, 'advPerGroup', cfg.advPerGroup, 1, 8)}`}
+      ${cfg.format === 'de' && secure ? '' : (n => n > 1 ? `<span class="sett-desc" style="grid-column:1/-1">${t('settings.koHint', { n, round: tRound(Math.ceil(Math.log2(n)) - 1, 2 ** Math.ceil(Math.log2(n))) })}</span>` : '')((cfg.numGroups||0) * (cfg.advPerGroup||0))}
       ${coord ? '' : catNumField(t('settings.gameDur'), ci, 'gameDur', cfg.gameDur, 5, 120)}
       ${coord ? '' : catNumField(t('settings.breakDur'), ci, 'breakDur', cfg.breakDur, 0, 60)}
       <div class="cat-sett-field">
@@ -4471,7 +4552,7 @@ function retimeAfter(ci, key) {
           const cs = state[id];
           const note = (g, st) => { if (g.si != null) durs[g.si] = Math.max(durs[g.si] || 0, stageDur(id, st)); };
           cs.sched.forEach(g => note(g, g.gi < 0 || g.isThirdPlace ? 'third' : 'pool'));
-          cs.ko.forEach((r, ri) => r.forEach(g => { if (!g.isBye) note(g, koStage(cs.ko.length, ri)); }));
+          cs.ko.forEach((r, ri) => r.forEach(g => { if (!g.isBye) note(g, koStage(cs.ko.length, ri, g)); }));
         });
         flexAt = flexClock(START, SLOT, (categories[0]?.cfg || DEF_CAT_CFG).breakDur || 0, Array.from(durs, d => d || 0));
       }
