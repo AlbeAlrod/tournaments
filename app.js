@@ -1,12 +1,13 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
 import {
   getFirestore, doc, getDoc, setDoc, onSnapshot, serverTimestamp,
-  collection, addDoc, getDocs, updateDoc, deleteDoc, query, orderBy, FieldPath, runTransaction, deleteField
+  collection, addDoc, getDocs, updateDoc, deleteDoc, query, orderBy, FieldPath, runTransaction, deleteField, writeBatch
 } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
 import { pickImage, attachDropZone } from "./uploader.js?v=73";
-import { t, initLang, setLang, getLang, applyStatic, fmtDate, tRound, tSlot } from './i18n.js?v=76';
+import { t, initLang, setLang, getLang, applyStatic, fmtDate, tRound, tSlot } from './i18n.js?v=77';
 // Same Firebase config as below, so common.js's initializeApp returns this app (no duplicate).
-import { onColor } from './common.js?v=73';
+import { onColor, applyBrandFonts } from './common.js?v=76';
+import { waiverFor, waiverHTML, initWaiver, readWaiver, openSignDialog, closeSignDialog, openWaiverViewer } from './waiver.js?v=1';
 
 // ============ FIREBASE ============
 const firebaseConfig = {
@@ -19,6 +20,15 @@ const firebaseConfig = {
 };
 const fbApp = initializeApp(firebaseConfig);
 const db    = getFirestore(fbApp);
+
+// Secure tournaments (data.secure === true): Firebase Auth + Cloud Functions, loaded on demand
+// so legacy tournaments do not pay for them. See SECURITY.md.
+let secure = false, tAccess = {};
+const authMod = () => import('https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js');
+async function callFn(name, data) {
+  const { getFunctions, httpsCallable } = await import('https://www.gstatic.com/firebasejs/10.12.5/firebase-functions.js');
+  return (await httpsCallable(getFunctions(fbApp, 'europe-west1'), name)(data)).data;
+}
 
 // ============ URL PARAM ============
 const tId = new URLSearchParams(location.search).get('t');
@@ -241,6 +251,8 @@ async function loadTournament() {
   } else {
     const data = snap.data();
     if (data.meta) meta = { ...meta, ...data.meta };
+    secure = data.secure === true;
+    tAccess = { club: data.clubId, branch: data.branchId };
     // Loading screen stays neutral white (styled in styles.css #view-loading)
     // Expiry check — show expired page and stop loading
     if (meta.expiresAt) {
@@ -267,6 +279,7 @@ async function loadTournament() {
     if (!state[cat.id]) state[cat.id] = { roster:[], groups:[], sched:[], ko:[] };
   });
 
+  if (secure) watchSecureAuth();
   // Registrations: live listener (Participants / my-registration status update by themselves)
   // Registrations hold phone numbers: viewers only need them before the tournament starts.
   if (meta.phase !== 'tournament') subscribeRegistrations();
@@ -313,10 +326,12 @@ function subscribeRegistrations() {
     let first = true;
     const done = () => { if (first) { first = false; resolve(); } };
     onSnapshot(REGS_REF, snap => {
-      registrations = snap.docs.map(d => ({ id: d.id, ...d.data({ serverTimestamps: 'estimate' }) }))
+      registrations = snap.docs.map(d => ({ id: d.id, ...d.data({ serverTimestamps: 'estimate' }), ...contacts[d.id] }))
         .sort((a, b) => regTime(a) - regTime(b));
       regsLoaded = true;
+      loadContacts();
       done();
+      openSignLinkOnce();
       const active = ['register','participants','registrations']
         .find(p => document.getElementById('page-'+p)?.classList.contains('on'));
       if (active === 'register')      renderRegisterPage();
@@ -326,15 +341,28 @@ function subscribeRegistrations() {
   });
 }
 
+// Secure tournaments keep phone + email in registrations/{id}/private/contact (managers only).
+const contacts = {};
+async function loadContacts() {
+  if (!secure || !admin) return;
+  const miss = registrations.filter(r => !contacts[r.id]);
+  if (!miss.length) return;
+  await Promise.all(miss.map(r => getDoc(doc(db, 'tournaments', tId, 'registrations', r.id, 'private', 'contact'))
+    .then(s => { contacts[r.id] = s.data() || {}; }, () => {})));
+  registrations.forEach(r => Object.assign(r, contacts[r.id]));
+  if (document.getElementById('page-registrations')?.classList.contains('on')) renderRegistrations();
+}
+
 async function loadRegistrations() {
   if (!REGS_REF) return;
   try {
     const snap = await getDocs(query(REGS_REF, orderBy('createdAt', 'asc')));
-    registrations = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    registrations = snap.docs.map(d => ({ id: d.id, ...d.data(), ...contacts[d.id] }));
   } catch(e) {
     const snap = await getDocs(REGS_REF);
-    registrations = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    registrations = snap.docs.map(d => ({ id: d.id, ...d.data(), ...contacts[d.id] }));
   }
+  loadContacts();
 }
 
 // ============ THEME — dual free color picker ============
@@ -424,9 +452,10 @@ function applyTheme(primary, secondary) {
   const surf = hslToHex(h1, Math.min(s1 * 0.22, 18), 91);
 
   // ── Text: deep tones grounded in primary hue, forced WCAG contrast ──
-  const rawText  = hslToHex(h1, Math.min(s1 * 0.30, 28), 10);
-  const rawText2 = hslToHex(h1, Math.min(s1 * 0.50, 44), 22);
-  const rawText3 = hslToHex(h1, Math.min(s1 * 0.60, 54), 42);
+  const tint = meta.neutralText ? 0 : 1;   // brands with black/white text (e.g. Mentor)
+  const rawText  = hslToHex(h1, Math.min(s1 * 0.30, 28) * tint, 10);
+  const rawText2 = hslToHex(h1, Math.min(s1 * 0.50, 44) * tint, 22);
+  const rawText3 = hslToHex(h1, Math.min(s1 * 0.60, 54) * tint, 42);
   const text  = readable(rawText,  bg, 7.0);
   const text2 = readable(rawText2, bg, 5.0);
   const text3 = readable(rawText3, bg, 4.5);
@@ -448,7 +477,7 @@ function applyTheme(primary, secondary) {
   const [rb3,gb3,bb3] = hexToRgb(bg3);
 
   // ── Readable variants: slight darkening only when truly needed (ratio 3.5) ──
-  const primaryText   = readable(primary,   '#FFFFFF', 3.5);
+  const primaryText   = tint ? readable(primary, '#FFFFFF', 3.5) : text;
   const secondaryText = readable(secondary, '#FFFFFF', 3.5);
 
   const vars = {
@@ -480,6 +509,7 @@ function applyTheme(primary, secondary) {
   style.textContent = `:root{${Object.entries(vars).map(([k,v])=>`${k}:${v};`).join('')}}`;
   // Apply custom background override if set
   document.body.style.backgroundColor = meta.bgColor || '';
+  applyBrandFonts(meta.fonts);
 
   const lm = document.getElementById('logo-mark');
   // With a real logo image, don't tint the chip — a dark logo would vanish on a dark primary.
@@ -494,10 +524,12 @@ function adminClick() {
   if (admin) {
     adminLevel = 0; admin = false; superAdmin = false;
     try { sessionStorage.removeItem(AUTH_KEY()); } catch(_) {}
+    if (secure) authMod().then(m => m.signOut(m.getAuth(fbApp)));
     refreshAdmin(); rerender(); return;
   }
   loginRole = 'admin';
   updateRoleButtons();
+  document.getElementById('pw-email-row').classList.toggle('h', !secure);
   document.getElementById('pw-modal').classList.remove('h');
   setTimeout(() => document.getElementById('pw-inp').focus(), 80);
 }
@@ -519,6 +551,7 @@ function updateRoleButtons() {
 }
 
 async function tryLogin() {
+  if (secure) return trySecureLogin();
   const val      = document.getElementById('pw-inp').value.trim();
   const field    = loginRole === 'master' ? 'masterPassword' : 'adminPassword';
   const expected = meta[field];
@@ -550,6 +583,52 @@ async function tryLogin() {
   }
 }
 
+// Club staff (club owner, branch manager, super) manage as master; a tournament-password
+// token manages only its own tournament, in the role it was issued for.
+const securePerm = c => c.tid === tId ? c.trole
+  : c.role === 'super' || (c.club && c.club === tAccess.club && (c.role === 'owner' || (c.role === 'branch' && c.branch === tAccess.branch))) ? 'master'
+  : null;
+
+function applySecureRole(role) {
+  if (!role || (admin && adminLevel === (role === 'master' ? 2 : 1))) return;
+  setRole(role); loadContacts();
+  if (firebaseReady) { refreshAdmin(); rerender(); }   // before boot, renderAll picks the role up
+}
+
+async function watchSecureAuth() {
+  const { getAuth, onAuthStateChanged } = await authMod();
+  onAuthStateChanged(getAuth(fbApp), async u => {
+    if (u) applySecureRole(securePerm((await u.getIdTokenResult()).claims));
+  });
+}
+
+function loginFailed(key) {
+  const err = document.getElementById('pw-err');
+  err.textContent = t(key);
+  err.classList.remove('h');
+  document.getElementById('pw-inp').value = '';
+  document.getElementById('pw-inp').focus();
+}
+
+async function trySecureLogin() {
+  const pw = document.getElementById('pw-inp').value.trim();
+  const email = document.getElementById('pw-email').value.trim();
+  if (!pw) return loginFailed('admin.pwWrong');
+  try {
+    const { getAuth, signInWithCustomToken, signInWithEmailAndPassword } = await authMod();
+    const auth = getAuth(fbApp);
+    if (email) await signInWithEmailAndPassword(auth, email, pw);
+    else await signInWithCustomToken(auth, (await callFn('tournamentLogin', { tId, role: loginRole, password: pw })).token);
+    const role = securePerm((await auth.currentUser.getIdTokenResult()).claims);
+    if (!role) return loginFailed('admin.noAccess');
+    closeLogin();
+    applySecureRole(role);
+    if (meta.phase === 'registration' && document.getElementById('page-register')?.classList.contains('on')) goPage('registrations');
+  } catch(e) {
+    loginFailed(e.code === 'functions/resource-exhausted' || e.code === 'auth/too-many-requests' ? 'admin.tooMany' : 'admin.pwWrong');
+  }
+}
+
 function setRole(role) {
   adminLevel = role === 'master' ? 2 : 1;
   admin      = true;
@@ -561,6 +640,7 @@ function setRole(role) {
 // Stores the password hash and re-checks it, so a changed password logs out.
 const AUTH_KEY = () => 'luz.auth.' + tId;
 async function restoreLogin() {
+  if (secure) return;   // Firebase Auth keeps the session; watchSecureAuth restores the role
   let s = null;
   try { s = JSON.parse(sessionStorage.getItem(AUTH_KEY()) || 'null'); } catch(_) {}
   if (!s || !['admin','master'].includes(s.role)) return;
@@ -574,6 +654,8 @@ async function restoreLogin() {
 function closeLogin() {
   document.getElementById('pw-modal').classList.add('h');
   document.getElementById('pw-inp').value = '';
+  document.getElementById('pw-email').value = '';
+  document.getElementById('pw-err').textContent = t('admin.pwWrong');
   document.getElementById('pw-err').classList.add('h');
 }
 
@@ -676,7 +758,88 @@ function getMyRegs() {
 function setMyRegs(ids) {
   try { localStorage.setItem(MYREGS_KEY(), JSON.stringify(ids)); localStorage.removeItem(MYREG_KEY()); } catch(_) {}
 }
-let lastReceipt = null;   // {p1,p2,catId} — receipt card shown instead of the form
+let lastReceipt = null;   // {p1,p2,catId,regId} — receipt card shown instead of the form
+
+// ── Waiver (meta.waiver = waiver id, e.g. 'volleylab') ─────────────────────
+// Every player signs for himself: player 1 inside the registration form, player 2
+// (or anyone missing) through a personal link. Signatures go to the create-only
+// `waivers` collection (nobody can read them from the site; the organizer reads
+// them in the Firebase console). The registration only keeps waiver1/waiver2 flags.
+// Legacy tournaments only for now: in a secure tournament the client cannot write registration flags.
+const curWaiver = () => secure ? null : waiverFor(meta.waiver);
+const waiverDone = r => !curWaiver() || (r.waiver1 && r.waiver2);
+const signLink = (r, n) => `${location.origin}${location.pathname}?t=${encodeURIComponent(tId)}&sign=${encodeURIComponent(r.id)}&p=${n}`;
+const signShare = (r, n) => `https://wa.me/?text=${encodeURIComponent(`היי ${r['p' + n]}, כדי להשלים את ההרשמה ל${meta.name || 'טורניר'} צריך לחתום על כתב הוויתור: ${signLink(r, n)}`)}`;
+function missingSignHTML(r, withSignBtn) {
+  if (!curWaiver() || r.status === 'rejected') return '';
+  return [1, 2].filter(n => !r['waiver' + n]).map(n => `<div class="d-waiver-miss">
+    <span>חסרה חתימה על כתב הוויתור: <bdi>${escH(r['p' + n])}</bdi></span>
+    ${withSignBtn ? `<button type="button" class="reg-btn approve" onclick="signWaiver('${escH(r.id)}',${n})">חתימה עכשיו</button>` : ''}
+    <a class="reg-btn" target="_blank" rel="noopener" href="${escH(signShare(r, n))}">שליחת קישור בוואטסאפ</a>
+    <button type="button" class="reg-btn" onclick="copySignLink('${escH(r.id)}',${n})">העתקת קישור</button>
+  </div>`).join('');
+}
+function copySignLink(id, n) {
+  const r = registrations.find(x => x.id === id);
+  if (r) navigator.clipboard.writeText(signLink(r, n)).then(() => toast('הקישור הועתק'), () => {});
+}
+function waiverDoc(data, regId, player) {
+  return { ...data, tId, regId, player, tournamentName: meta.name || '', tournamentDate: meta.eventDate || '',
+    ua: navigator.userAgent.slice(0, 200), signedAt: serverTimestamp() };
+}
+function signWaiver(id, n) {
+  const r = registrations.find(x => x.id === id), w = curWaiver();
+  if (!r || !w) return;
+  if (r['waiver' + n]) { toast('כבר נחתם, תודה!'); return; }
+  openSignDialog({ w, name: r['p' + n], tName: meta.name, tDate: meta.eventDate, onSubmit: async () => {
+    const res = readWaiver('wm', w, { normPhone });
+    if (!res.data) return;
+    const b = writeBatch(db);
+    b.set(doc(collection(db, 'waivers')), waiverDoc(res.data, id, n));
+    b.update(doc(db, 'tournaments', tId, 'registrations', id), { ['waiver' + n]: true });
+    await b.commit();
+    r['waiver' + n] = true;
+    closeSignDialog();
+    toast('החתימה נשמרה, תודה!');
+    renderRegisterPage();
+  } });
+}
+let signLinkDone = false;
+function openSignLinkOnce() {
+  if (signLinkDone) return;
+  signLinkDone = true;
+  const q = new URLSearchParams(location.search), id = q.get('sign'), n = Number(q.get('p'));
+  if (!id || ![1, 2].includes(n) || !curWaiver()) return;
+  if (!registrations.some(r => r.id === id)) { toast('ההרשמה לא נמצאה. בקשו קישור חדש מהמארגנים.'); return; }
+  goPage('register');
+  signWaiver(id, n);
+}
+function showWaivers() {
+  const catName = id => categories.find(c => c.id === id)?.name || '';
+  openWaiverViewer({ regs: registrations, catName, load: async password => (await callFn('listWaivers', { tId, password })).waivers });
+}
+async function setWaiverPw() {
+  const sup = document.getElementById('wpw-super'), nw = document.getElementById('wpw-new');
+  if (nw.value.length < 6) { toast('סיסמת הצפייה צריכה לפחות 6 תווים'); return; }
+  try {
+    await callFn('setWaiverPassword', { tId, superPassword: sup.value, password: nw.value });
+    sup.value = nw.value = '';
+    toast('סיסמת הצפייה נשמרה');
+  } catch(e) { toast(e.code === 'functions/permission-denied' ? 'סיסמת מנהל המערכת שגויה' : e.code === 'functions/resource-exhausted' ? 'יותר מדי ניסיונות, נסו בעוד רבע שעה' : 'השמירה נכשלה'); }
+}
+function mountRegWaiver() {
+  const box = document.getElementById('frm-waiver'), w = curWaiver();
+  if (!box) return;
+  if (!w) { box.innerHTML = ''; box.dataset.v = ''; return; }
+  if (box.dataset.v === w.version) return;   // keep what was typed/drawn across re-renders
+  box.dataset.v = w.version;
+  box.innerHTML = waiverHTML('w1', w, { name: document.getElementById('frm-p1')?.value || '', tName: meta.name, tDate: meta.eventDate,
+    note: 'כל שחקן/ית חותם/ת בעצמו/ה. כאן חותם/ת שחקן/ית 1. שחקן/ית 2 יקבל/תקבל קישור לחתימה מיד אחרי ההרשמה.' });
+  initWaiver('w1');
+  const p1 = document.getElementById('frm-p1'), wn = document.getElementById('w1-name');
+  if (p1 && wn) p1.addEventListener('input', () => { if (!wn.dataset.edited) wn.value = p1.value; });
+  wn?.addEventListener('input', () => { wn.dataset.edited = '1'; });
+}
 
 function renderMyReg() {
   const el = document.getElementById('reg-mine');
@@ -696,16 +859,20 @@ function renderMyReg() {
       <div>
         <div>${dnH(regPairName(r))}${cat ? ` · <bdi>${escH(cat.name)}</bdi>` : ''}</div>
         <span class="status-badge badge-${escH(r.status)}">${escH(statusTxt(r.status))}</span>
-        ${r.status !== 'rejected' ? `<span class="paid-badge${r.paid ? '' : ' no'}">${t(r.paid ? 'reg.paidBadge' : 'reg.unpaidBadge')}</span>` : ''}
+        ${r.status !== 'rejected' && (!secure || r.status === 'approved') ? `<span class="paid-badge${r.paid ? '' : ' no'}">${t(r.paid ? 'reg.paidBadge' : 'reg.unpaidBadge')}</span>` : ''}
+        ${r.status === 'waitlist' ? `<div class="d-muted">${t('reg.waitPos', { n: waitlistOf(r.category).indexOf(r) + 1 })}</div>` : ''}
+        ${secure && r.status === 'approved' && !r.paid && r.payDeadline ? `<div class="d-muted">${t('reg.payBy', { at: fmtDeadline(r.payDeadline) })}</div>` : ''}
+        ${missingSignHTML(r, true)}
       </div>
-      ${r.status === 'pending'
+      ${r.status === 'pending' && !secure
         ? `<button type="button" class="reg-btn reject" onclick="cancelMyRegistration('${escH(r.id)}')">${t('common.cancel')}</button>`
         : `<span class="d-muted">${t('reg.cancelContact')}</span>`}
     </div>`;
   }).join('') + '<div id="mine-pay-wrap"></div>';
   // The form and the receipt carry their own pay buttons.
   const formShown = document.getElementById('reg-form-wrap')?.style.display !== 'none';
-  if (!formShown && !lastReceipt && mine.some(r => !r.paid && r.status !== 'rejected')) renderPayLink('mine-pay-wrap');
+  // Secure tournaments pay only here, once approved.
+  if ((secure || (!formShown && !lastReceipt)) && mine.some(r => !r.paid && (secure ? r.status === 'approved' : r.status !== 'rejected'))) renderPayLink('mine-pay-wrap');
 }
 
 async function cancelMyRegistration(id) {
@@ -732,12 +899,15 @@ function renderReceipt() {
       <h3 class="d-receipt-title">${t('reg.receiptTitle')}</h3>
       <div class="d-receipt-line"><span class="d-muted">${t('reg.receiptPair')}</span> <strong>${dnH(lastReceipt.p1 + ' / ' + lastReceipt.p2)}</strong></div>
       <div class="d-receipt-line"><span class="d-muted">${t('reg.catLabel')}</span> <strong><bdi>${escH(cat ? cat.name : '')}</bdi></strong></div>
-      <div class="d-receipt-line"><span class="d-muted">${t('reg.receiptStatus')}</span> <strong>${t('reg.pendingApproval')}</strong></div>
+      <div class="d-receipt-line"><span class="d-muted">${t('reg.receiptStatus')}</span> <strong>${t(lastReceipt.status === 'waitlist' ? 'reg.waitlisted' : 'reg.pendingApproval')}</strong></div>
+      ${secure ? `<p class="d-muted">${t(lastReceipt.status === 'waitlist' ? 'reg.waitlistNote' : 'reg.approvalNote')}</p>` : ''}
+      ${(() => { const r = registrations.find(x => x.id === lastReceipt.regId); return r && curWaiver() && !r.waiver2
+        ? `<p><strong>שלב אחרון:</strong> גם <bdi>${escH(r.p2)}</bdi> צריך/ה לחתום על כתב הוויתור. שלחו לו/ה את הקישור:</p>${missingSignHTML(r, false)}` : ''; })()}
       <div id="receipt-pay-wrap"></div>
       <p id="receipt-pay-note" class="d-muted" style="display:none">${t('reg.payNote')}</p>
       <button type="button" class="submit-btn" onclick="registerAnother()">${t('reg.another')}</button>
     </div>`;
-  renderPayLink('receipt-pay-wrap');
+  if (!secure) renderPayLink('receipt-pay-wrap');
   const hasPay = !document.getElementById('receipt-pay-wrap')?.classList.contains('h');
   const note = document.getElementById('receipt-pay-note');
   if (note) note.style.display = hasPay ? '' : 'none';
@@ -752,7 +922,7 @@ function registerAnother() {
 // Registration errors, per field: {p1, p2, phone, cat, form} → () => message.
 // Kept as functions so a language switch re-renders them in the new language.
 let regErrors = {};
-const REG_FIELDS = { p1: 'frm-p1', p2: 'frm-p2', phone: 'frm-phone', cat: 'frm-cat-wrap' };
+const REG_FIELDS = { p1: 'frm-p1', p2: 'frm-p2', phone: 'frm-phone', email: 'frm-email', cat: 'frm-cat-wrap' };
 function renderRegErrors() {
   Object.entries(REG_FIELDS).forEach(([k, id]) => {
     const msg = regErrors[k] ? regErrors[k]() : '';
@@ -769,6 +939,7 @@ async function submitRegistration() {
   const p1   = cleanName(document.getElementById('frm-p1').value);
   const p2   = cleanName(document.getElementById('frm-p2').value);
   const phoneRaw = document.getElementById('frm-phone').value.trim();
+  const email = document.getElementById('frm-email').value.trim();
   const catId = document.querySelector('#frm-cat-wrap .cat-pill.on')?.dataset.value || '';
   const ok  = document.getElementById('frm-ok');
   ok.classList.add('h');
@@ -777,6 +948,7 @@ async function submitRegistration() {
     p1: nameError(p1, 'common.player1'),
     p2: nameError(p2, 'common.player2'),
     phone: !phoneRaw ? () => t('errors.phoneRequired') : !phone ? () => t('errors.phoneInvalid') : null,
+    email: secure && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email) ? () => t('errors.emailInvalid') : null,
     cat: catId ? null : () => t('errors.catRequired'),
   };
   if (!regErrors.p1 && !regErrors.p2 && normName(p1) === normName(p2)) regErrors.p2 = () => t('errors.sameNames');
@@ -788,6 +960,9 @@ async function submitRegistration() {
   const first = Object.keys(REG_FIELDS).find(k => regErrors[k]);
   if (first) { (first === 'cat' ? document.querySelector('#frm-cat-wrap .cat-pill') : document.getElementById(REG_FIELDS[first]))?.focus(); return; }
   if (regErrors.form) return;
+  const w = curWaiver();
+  const signed = w ? readWaiver('w1', w, { phone, normPhone }) : null;
+  if (signed && !signed.data) return;
   // meta is kept live by onSnapshot — the organizer may have closed registration
   // while this form was open.
   if (!regAccepting()) { regErrors = { form: () => t('reg.closed') }; renderRegisterPage(); return; }
@@ -797,26 +972,35 @@ async function submitRegistration() {
   if (btn) { btn.disabled = true; btn.textContent = t('reg.sending'); }
   const unlock = () => { if (btn) { btn.disabled = false; btn.textContent = btnTxt; } };
   try {
-    const ref = await addDoc(REGS_REF, {
-      p1, p2, phone, category: catId,
-      status: 'pending', paid: false,
-      createdAt: serverTimestamp()
-    });
+    let ref;
+    if (secure) ref = await callFn('registerPair', { tId, p1, p2, phone, email, category: catId });
+    else {
+      ref = doc(REGS_REF);
+      const b = writeBatch(db);
+      b.set(ref, { p1, p2, phone, category: catId, status: 'pending', paid: false, createdAt: serverTimestamp(),
+        ...(w && { waiver1: true, waiver2: false }) });
+      if (w) b.set(doc(collection(db, 'waivers')), waiverDoc(signed.data, ref.id, 1));
+      await b.commit();
+    }
     setMyRegs([...getMyRegs(), ref.id]);
     if (registrations.some(r => r.id !== ref.id && r.category === catId && r.status !== 'rejected' && normPhone(r.phone) === phone)) toast(t('errors.dupPhoneWarn'));
     document.getElementById('frm-p1').value = '';
     document.getElementById('frm-p2').value = '';
     document.getElementById('frm-phone').value = '';
+    document.getElementById('frm-email').value = '';
     if (categories.length !== 1)
       document.querySelectorAll('#frm-cat-wrap .cat-pill').forEach(b => { b.classList.remove('on'); b.setAttribute('aria-pressed', 'false'); });
     unlock();
     regErrors = {};
-    lastReceipt = { p1, p2, catId };
+    lastReceipt = { p1, p2, catId, status: ref.status, regId: ref.id };
+    const wb = document.getElementById('frm-waiver');
+    if (wb) wb.dataset.v = '';
     renderRegisterPage();
     document.getElementById('reg-receipt')?.scrollIntoView({ block: 'nearest' });
   } catch(e) {
     unlock();
-    regErrors = { form: () => t('errors.submitFailed') };
+    regErrors = { form: () => t(e.code === 'functions/already-exists' ? 'errors.dupServer'
+      : e.code === 'functions/failed-precondition' ? 'reg.closed' : 'errors.submitFailed') };
     renderRegErrors();
   }
 }
@@ -838,10 +1022,13 @@ async function setRegStatus(id, status) {
       registrations = registrations.filter(r => r.id !== id);
     } else {
       const r = registrations.find(r => r.id === id);
-      await updateDoc(doc(db, 'tournaments', tId, 'registrations', id), { status });
+      if (status === 'approved' && r && !waiverDone(r)) { toast('אפשר לאשר רק אחרי ששני השחקנים חתמו על כתב הוויתור.'); return; }
+      if (status === 'approved' && r && r.status !== 'approved' && catFull(r.category)) { toast(t('admin.catFull')); return; }
+      const fields = statusFields(status);
+      await updateDoc(doc(db, 'tournaments', tId, 'registrations', id), fields);
       if (r) {
         const wasApproved = r.status === 'approved';
-        r.status = status;
+        Object.entries(fields).forEach(([k, v]) => { r[k] = k === 'payDeadline' && status !== 'approved' ? undefined : v; });
         // Any approval → make sure the pair is in its category's build roster.
         if (status === 'approved') await commitState(r.category, () => addRegToRoster(r));
         if (wasApproved && status !== 'approved') await commitState(r.category, cs => withdrawPair(r.category, cs, regPairName(r)));
@@ -872,6 +1059,21 @@ function addRegToRoster(r) {
   return true;
 }
 const approvedNames = catId => registrations.filter(r => r.status === 'approved' && r.category === catId).map(regPairName);
+// Secure tournaments: a category may cap its pairs (cfg.maxPairs). Approved pairs hold the seats,
+// paid or not; the rest wait. An approved pair must pay within meta.payDeadlineHours.
+const capOf = catId => secure ? Number(categories.find(c => c.id === catId)?.cfg?.maxPairs) || 0 : 0;
+const seatsTaken = catId => registrations.filter(r => r.status === 'approved' && r.category === catId).length;
+const catFull = catId => capOf(catId) > 0 && seatsTaken(catId) >= capOf(catId);
+const waitOrder = r => r.waitAt || (r.createdAt?.seconds ?? 9e12) * 1000;
+const waitlistOf = catId => registrations.filter(r => r.status === 'waitlist' && r.category === catId).sort((a, b) => waitOrder(a) - waitOrder(b));
+const overdue = r => secure && r.status === 'approved' && !r.paid && r.payDeadline && r.payDeadline < Date.now();
+function statusFields(status) {
+  if (!secure) return { status };
+  if (status === 'approved') return { status, approvedAt: Date.now(), payDeadline: Date.now() + (Number(meta.payDeadlineHours) || 24) * 3600e3 };
+  if (status === 'waitlist') return { status, waitAt: Date.now(), payDeadline: deleteField() };
+  return { status, payDeadline: deleteField() };
+}
+const fmtDeadline = ms => new Date(ms).toLocaleString(getLang() === 'he' ? 'he-IL' : 'en-GB', { day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' });
 // The Build page shows approved registrations while the stored roster is still empty.
 const seedRoster = (cs, catId) => { if (!cs.roster.length) cs.roster = approvedNames(catId); };
 const hasScore = g => String(g.sa ?? '') !== '' || String(g.sb ?? '') !== '';
@@ -917,7 +1119,7 @@ function selectRegCat(btn) {
 
 function setRegFilter(f) {
   regFilter = f;
-  ['all','pending','approved','rejected'].forEach(k => {
+  ['all','pending','approved','waitlist','rejected'].forEach(k => {
     document.getElementById('rf-' + k)?.classList.toggle('on', k === f);
   });
   renderRegistrations();
@@ -945,7 +1147,9 @@ function renderRegCounts() {
     const appr = rs.filter(r => r.status === 'approved').length;
     const pend = rs.filter(r => r.status === 'pending').length;
     const paid = rs.filter(r => r.paid).length;
-    return `<span class="d-reg-count"><strong><bdi>${escH(c.name)}</bdi></strong> ${t('admin.counts', { total: rs.length, appr, pend, paid })}</span>`;
+    const wait = rs.filter(r => r.status === 'waitlist').length;
+    const extra = capOf(c.id) ? ' · ' + t('admin.capCount', { appr, cap: capOf(c.id), wait }) : '';
+    return `<span class="d-reg-count"><strong><bdi>${escH(c.name)}</bdi></strong> ${t('admin.counts', { total: rs.length, appr, pend, paid })}${extra}</span>`;
   });
   el.innerHTML = rows.join('');
 }
@@ -1004,7 +1208,9 @@ function renderRegistrations() {
     return;
   }
   const toApprove = meta.phase === 'registration' ? list.filter(r => r.status !== 'approved').length : 0;
-  el.innerHTML = (toApprove > 1 ? `<button type="button" class="filter-btn" style="margin-bottom:12px" onclick="approveAllShown()">${t('admin.approveAllShown', { n: toApprove })}</button>` : '')
+  el.innerHTML = renderNeedsAttention()
+    + (curWaiver() ? `<button type="button" class="filter-btn" style="margin:0 0 12px 8px" onclick="showWaivers()">כתבי ויתור חתומים</button>` : '')
+    + (toApprove > 1 ? `<button type="button" class="filter-btn" style="margin-bottom:12px" onclick="approveAllShown()">${t('admin.approveAllShown', { n: toApprove })}</button>` : '')
     + list.map(r => {
     const cat = categories.find(c => c.id === r.category);
     const catName = cat ? cat.name : r.category;
@@ -1017,6 +1223,9 @@ function renderRegistrations() {
         <div class="reg-name">${escH(regPairName(r))}</div>
         <div class="reg-meta"><bdi>${escH(catName)}</bdi> · <span class="num">${fmtDate(r.createdAt)}</span></div>
         <div class="reg-phone">${phoneHtml}</div>
+        ${secure && r.status === 'approved' && !r.paid && r.payDeadline ? `<div class="reg-meta${overdue(r) ? ' d-overdue' : ''}">${t('admin.payBy', { at: fmtDeadline(r.payDeadline) })}</div>` : ''}
+        ${r.status === 'waitlist' ? `<div class="reg-meta">${t('reg.waitPos', { n: waitlistOf(r.category).indexOf(r) + 1 })}</div>` : ''}
+        ${missingSignHTML(r, false)}
       </div>
       <span class="status-badge badge-${escH(r.status)}">${escH(statusTxt(r.status))}</span>
       <label class="d-paid-toggle"><input type="checkbox" ${r.paid ? 'checked' : ''} aria-label="${escH(t('admin.paidFor', { pair: regPairName(r) }))}" onchange="setRegPaid('${r.id}',this.checked)"/> <span aria-hidden="true">${t('admin.paid')}</span></label>
@@ -1024,11 +1233,34 @@ function renderRegistrations() {
         <button class="reg-btn" onclick="openEditReg('${r.id}')" title="${t('admin.editReg')}" aria-label="${t('admin.editReg')}">✎</button>
         ${regPhase ? `${r.status !== 'approved' ? `<button class="reg-btn approve" onclick="setRegStatus('${r.id}','approved')">${t('admin.approve')}</button>` : ''}
         ${r.status === 'approved'  ? `<button class="reg-btn" onclick="setRegStatus('${r.id}','pending')">${t('admin.undo')}</button>` : ''}
+        ${secure && !['waitlist', 'rejected'].includes(r.status) ? `<button class="reg-btn" onclick="setRegStatus('${r.id}','waitlist')">${t('admin.toWaitlist')}</button>` : ''}
         ${r.status !== 'rejected'  ? `<button class="reg-btn reject" onclick="setRegStatus('${r.id}','rejected')">${t('admin.reject')}</button>` : ''}
         <button class="reg-btn reject" onclick="setRegStatus('${r.id}','deleted')" title="${t('admin.deleteTitle')}">${t('admin.delete')}</button>` : ''}
       </div>
     </div>`;
   }).join('');
+}
+
+// Secure tournaments: unpaid pairs past their deadline, and the next waiting pair wherever a seat is free.
+function renderNeedsAttention() {
+  if (!secure || meta.phase !== 'registration') return '';
+  const late = registrations.filter(overdue);
+  const next = categories.filter(c => capOf(c.id) && !catFull(c.id)).map(c => waitlistOf(c.id)[0]).filter(Boolean);
+  if (!late.length && !next.length) return '';
+  const catName = r => escH(categories.find(c => c.id === r.category)?.name || '');
+  const wa = (r, key) => waLink(r.phone) ? `<a class="reg-btn" target="_blank" rel="noopener" href="${escH(waLink(r.phone) + '?text=' + encodeURIComponent(t(key, { name: meta.name, link: payUrl(meta.paymentLink) })))}">${t('admin.waSend')}</a>` : '';
+  return `<div class="d-attention" role="region" aria-label="${t('admin.attention')}">
+    <strong>${t('admin.attention')}</strong>
+    ${late.map(r => `<div class="d-att-row"><span>${escH(regPairName(r))} · <bdi>${catName(r)}</bdi> · ${t('admin.overdue')}</span>
+      <span class="reg-actions">
+        <button class="reg-btn approve" onclick="setRegPaid('${r.id}',true)">${t('admin.markPaid')}</button>
+        <button class="reg-btn" onclick="setRegStatus('${r.id}','waitlist')">${t('admin.toWaitlist')}</button>
+        ${wa(r, 'admin.waReminder')}</span></div>`).join('')}
+    ${next.map(r => `<div class="d-att-row"><span>${t('admin.seatFree', { cat: catName(r) })}: ${escH(regPairName(r))}</span>
+      <span class="reg-actions">
+        <button class="reg-btn approve" onclick="setRegStatus('${r.id}','approved')">${t('admin.approve')}</button>
+        ${wa(r, 'admin.waApproved')}</span></div>`).join('')}
+  </div>`;
 }
 
 function renderParticipants() {
@@ -1145,6 +1377,7 @@ function previewRegNote(ta) {
 window.previewRegNote = previewRegNote;
 
 function renderRegisterPage() {
+  document.getElementById('frm-email-row')?.classList.toggle('h', !secure);
   renderInfoCards();
   const closedMsg = document.getElementById('reg-closed-msg');
   const formWrap  = document.getElementById('reg-form-wrap');
@@ -1156,6 +1389,7 @@ function renderRegisterPage() {
   closedMsg?.classList.toggle('h', open);
   soonMsg?.classList.toggle('h', !open || !noCats);
   if (formWrap) formWrap.style.display = (open && !noCats && !lastReceipt) ? '' : 'none';
+  mountRegWaiver();
   renderMyReg();
   renderReceipt();
   if (sub) sub.innerHTML = meta.name ? t('reg.subtitle', { name: `<bdi>${escH(meta.name)}</bdi>` }) : '';
@@ -1164,7 +1398,7 @@ function renderRegisterPage() {
     // Live snapshots re-render this page: keep the category the user already picked.
     const prevSel = catWrap.querySelector('.cat-pill.on')?.dataset.value || '';
     catWrap.innerHTML = categories.map(c =>
-      `<button type="button" class="cat-pill${c.id === prevSel ? ' on' : ''}" aria-pressed="${c.id === prevSel}" data-value="${escH(c.id)}" onclick="selectRegCat(this)">${escH(c.name)}</button>`
+      `<button type="button" class="cat-pill${c.id === prevSel ? ' on' : ''}" aria-pressed="${c.id === prevSel}" data-value="${escH(c.id)}" onclick="selectRegCat(this)">${escH(c.name)}${catFull(c.id) ? ` <small>· ${t('reg.catFullTag')}</small>` : ''}</button>`
     ).join('');
     if (categories.length === 1) { const b = catWrap.querySelector('.cat-pill'); b?.classList.add('on'); b?.setAttribute('aria-pressed', 'true'); }
     // One option: keep the (selected) pill hidden but tell the user which category it is.
@@ -1175,7 +1409,7 @@ function renderRegisterPage() {
     const singleEl = document.getElementById('frm-cat-single');
     if (singleEl) {
       singleEl.style.display = single ? '' : 'none';
-      singleEl.textContent = single ? categories[0].name : '';
+      singleEl.textContent = single ? categories[0].name + (catFull(categories[0].id) ? ' · ' + t('reg.catFullTag') : '') : '';
     }
   }
   const noteEl = document.getElementById('reg-note');
@@ -1185,7 +1419,7 @@ function renderRegisterPage() {
     noteEl.innerHTML = has ? mdNote(meta.regNote, t('reg.rulesSummary')) : '';
     if (open && has) noteEl.querySelector('details').open = true;
   }
-  renderPayLink('reg-pay-wrap');
+  if (secure) document.getElementById('reg-pay-wrap')?.classList.add('h'); else renderPayLink('reg-pay-wrap');
   renderRegErrors();
 }
 
@@ -1455,7 +1689,7 @@ async function saveAddPair() {
   const p2    = cleanName(document.getElementById('ap-p2').value);
   const catId = document.getElementById('ap-cat').value;
   if (!p1 || !state[catId]) return;
-  const r = { p1, p2, phone:'', category: catId, status:'approved', paid:false };
+  const r = { p1, p2, ...(secure ? {} : { phone:'' }), category: catId, status:'approved', paid:false };
   const name = regPairName(r);
   if (pairTaken(catId, name)) { toast(t('errors.dupName', { name: fsi(name) })); return; }
   await addDoc(REGS_REF, { ...r, createdAt: serverTimestamp() });
@@ -2283,7 +2517,7 @@ async function saveEditReg(p1, p2) {
     if (!ok) return;
   }
   try {
-    await updateDoc(doc(db, 'tournaments', tId, 'registrations', r.id), { p1, p2, phone, category: catId });
+    await updateDoc(doc(db, 'tournaments', tId, 'registrations', r.id), secure ? { p1, p2, category: catId } : { p1, p2, phone, category: catId });
     Object.assign(r, { p1, p2, phone, category: catId });
   } catch(e) { alert(t('errors.statusUpdate')); return; }
   closeEdit(); renderRegistrations(); renderBuildPage();
@@ -2291,12 +2525,16 @@ async function saveEditReg(p1, p2) {
 
 async function approveAllShown() {
   if (!admin || meta.phase !== 'registration') return;
-  const list = filteredRegs().filter(r => r.status !== 'approved');
-  if (!list.length || !await askConfirm(t('admin.confirmApproveAll', { n: list.length }), t('admin.approve'))) return;
+  const free = Object.fromEntries(categories.map(c => [c.id, capOf(c.id) ? capOf(c.id) - seatsTaken(c.id) : Infinity]));
+  const unsigned = filteredRegs().some(r => r.status !== 'approved' && !waiverDone(r));
+  const list = filteredRegs().filter(r => r.status !== 'approved' && waiverDone(r) && free[r.category]-- > 0);
+  if (!list.length) { toast(unsigned ? 'אין הרשמות שאפשר לאשר: בכל ההרשמות שמוצגות חסרה חתימה על כתב הוויתור.' : t('admin.catFull')); return; }
+  if (!await askConfirm(t('admin.confirmApproveAll', { n: list.length }), t('admin.approve'))) return;
+  const fields = statusFields('approved');
   try {
-    await Promise.all(list.map(r => updateDoc(doc(db, 'tournaments', tId, 'registrations', r.id), { status: 'approved' })));
+    await Promise.all(list.map(r => updateDoc(doc(db, 'tournaments', tId, 'registrations', r.id), fields)));
   } catch(e) { alert(t('errors.statusUpdate')); return; }
-  list.forEach(r => { r.status = 'approved'; });
+  list.forEach(r => Object.assign(r, fields));
   await commitState([...new Set(list.map(r => r.category))].filter(id => categories.some(c => c.id === id)),
     () => list.forEach(addRegToRoster));
   renderRegistrations(); renderParticipants(); renderBuildPage();
@@ -3675,7 +3913,7 @@ function renderSettings() {
   container.appendChild(ssec);
 
   // ── PLAYERS DATABASE ────────────────────────────────────────────
-  renderPlayerDBSection(container);
+  if (secure) renderSecurePwSection(container); else renderPlayerDBSection(container);
 
   // ── GROUPS ──────────────────────────────────────────────────────
   const groupHasCats = categories.some(cat => state[cat.id]?.groups?.length);
@@ -3741,6 +3979,18 @@ function renderSettings() {
       <span class="toggle-label">${t('settings.showList')}</span>
       <label class="toggle-switch"><input type="checkbox" ${meta.showRegistered?'checked':''} onchange="updateMeta('showRegistered',this.checked)"/><span class="toggle-slider"></span></label>
     </div>
+    ${secure ? '' : `<div class="toggle-row" style="border-bottom:none">
+      <span class="toggle-label">כתב ויתור חובה בהרשמה (וולילאב)</span>
+      <label class="toggle-switch"><input type="checkbox" ${meta.waiver?'checked':''} onchange="updateMeta('waiver',this.checked?'volleylab':'')"/><span class="toggle-slider"></span></label>
+    </div>
+    ${meta.waiver ? `<div class="sett-row" style="flex-direction:column;align-items:stretch">
+      <div class="sett-label"><span class="sett-name">סיסמת צפייה בכתבי ויתור</span>
+        <span class="d-muted">למנהלי הטורניר. הקביעה דורשת את סיסמת מנהל המערכת (admin.html), והבדיקה נעשית בשרת.</span></div>
+      <div class="sett-ctrl" style="display:flex;gap:8px;flex-wrap:wrap">
+        <input class="text-inp" id="wpw-super" type="password" dir="ltr" placeholder="סיסמת מנהל מערכת" autocomplete="off" style="width:170px"/>
+        <input class="text-inp" id="wpw-new" type="password" dir="ltr" placeholder="סיסמת צפייה חדשה" autocomplete="new-password" style="width:170px"/>
+        <button class="add-cat-btn" onclick="setWaiverPw()">שמירה</button>
+      </div></div>` : ''}`}
     <div class="sett-row" style="flex-direction:column;align-items:stretch;padding-top:16px">
       <div class="sett-label">
         <span class="sett-name">${t('settings.regNote')}</span>
@@ -3972,6 +4222,11 @@ function renderCatItem(cat, ci, live) {
       </div>
       <button class="team-del" onclick="deleteCategory(${ci})" title="${t('settings.deleteCategory')}" aria-label="${t('settings.deleteCategory')}">✕</button>`}
     </div>
+    ${secure ? `<div class="cat-sett-field" style="margin-bottom:8px">
+      <span class="cat-sett-label">${t('settings.maxPairs')}</span>
+      <div class="cat-sett-ctrl"><input class="text-inp" type="number" inputmode="numeric" min="0" max="128" style="width:80px"
+        value="${cfg.maxPairs || ''}" placeholder="—" aria-label="${escH(cat.name)} · ${t('settings.maxPairs')}"
+        onchange="updateCatCfg(${ci},'maxPairs',Math.max(0,parseInt(this.value)||0))"/></div></div>` : ''}
     ${live ? (coord ? '' : `<div class="cat-settings-grid">${catNumField(t('settings.gameDur'), ci, 'gameDur', cfg.gameDur, 5, 120)}</div>`) : `<div class="cat-settings-grid">
       ${coord ? '' : catNumField(t('settings.courts'), ci, 'courts', cfg.courts, 1, 8)}
       ${catNumField(t('settings.numGroups'), ci, 'numGroups', cfg.numGroups, 2, 16)}
@@ -4059,6 +4314,7 @@ function updateMeta(key, val) {
     renderRegisterPage(); renderParticipants();
   }
   if (key === 'regNote') renderRegisterPage();
+  if (key === 'waiver') { renderRegisterPage(); renderRegistrations(); renderSettings(); }
   if (['eventDate','venue','price'].includes(key)) renderInfoCards();
   if (key === 'sport') renderAll();
   if (key === 'lang') { initLang(val); applyStatic(); renderAll(); }
@@ -4315,7 +4571,8 @@ function renderAllInner() {
 
 // ============ EXPOSE GLOBALS ============
 Object.assign(window, {
-  adminClick, selectLoginRole, tryLogin, closeLogin,
+  signWaiver, copySignLink, showWaivers, setWaiverPw,
+  adminClick, selectLoginRole, tryLogin, closeLogin, saveSecurePw,
   openStartModal, closeStartModal, confirmStartTournament,
   goPage, setCat, setCourt,
   submitRegistration, cancelMyRegistration, registerAnother, setRegStatus, setRegPaid, setRegFilter,
@@ -4339,6 +4596,7 @@ Object.assign(window, {
 
 // ============ PLAYER DATABASE ============
 async function loadPlayerDB() {
+  if (secure) return;
   try {
     PLAYERS_REF = doc(db, 'players', 'global');
     const snap = await getDoc(PLAYERS_REF);
@@ -4360,7 +4618,7 @@ async function savePlayerDB() {
 }
 
 async function addPlayerToDB(name, phone) {
-  name = name?.trim(); if (!name) return;
+  name = name?.trim(); if (!name || secure) return;
   if (!playerDB.find(p => p.name.toLowerCase() === name.toLowerCase())) {
     playerDB.push({ name, phone: phone||'' });
     await savePlayerDB();
@@ -4372,6 +4630,35 @@ async function removePlayerFromDB(idx) {
   playerDB.splice(idx, 1);
   await savePlayerDB();
   renderSettings();
+}
+
+function renderSecurePwSection(container) {
+  if (adminLevel !== 2) return;
+  const sec = document.createElement('div');
+  sec.className = 'sett-section';
+  sec.innerHTML = `<div class="sett-section-title">${t('settings.payDeadline')}</div>
+    <div class="sett-row"><div class="sett-label"><span class="sett-name">${t('settings.payDeadlineHours')}</span></div>
+      <div class="sett-ctrl"><input class="text-inp" type="number" inputmode="numeric" min="1" max="336" style="width:80px"
+        value="${Number(meta.payDeadlineHours) || 24}" onchange="updateMeta('payDeadlineHours',Math.max(1,parseInt(this.value)||24))"/></div></div>
+    <div class="sett-section-title" style="margin-top:16px">${t('settings.securePw')}</div>
+    <p class="sett-desc">${t('settings.securePwDesc')}</p>
+    ${['admin', 'master'].map(role => `<div class="sett-row">
+      <div class="sett-label"><span class="sett-name">${t(role === 'master' ? 'admin.roleMaster' : 'admin.roleAdmin')}</span></div>
+      <div class="sett-ctrl">
+        <input class="text-inp" id="spw-${role}" type="password" dir="ltr" autocomplete="new-password" style="width:160px"/>
+        <button class="add-cat-btn" onclick="saveSecurePw('${role}')">${t('settings.pwSave')}</button>
+      </div></div>`).join('')}`;
+  container.appendChild(sec);
+}
+
+async function saveSecurePw(role) {
+  const inp = document.getElementById('spw-' + role);
+  if (inp.value.length < 6) { toast(t('settings.securePwDesc')); return; }
+  try {
+    await callFn('setTournamentPassword', { tId, role, password: inp.value });
+    inp.value = '';
+    toast(t('settings.pwSaved'));
+  } catch(e) { toast(t(e.code === 'functions/permission-denied' ? 'admin.noAccess' : 'errors.saveFailed')); }
 }
 
 function renderPlayerDBSection(container) {

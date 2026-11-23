@@ -3,7 +3,7 @@ import globals from 'globals';
 
 export default [
   {
-    ignores: ['node_modules/**', 'ops/**/*.html', '.netlify/**'],
+    ignores: ['node_modules/**', 'functions/node_modules/**', 'ops/**/*.html', '.netlify/**'],
   },
   {
     files: ['**/*.js', '**/*.mjs'],
@@ -19,7 +19,7 @@ export default [
     },
   },
   {
-    files: ['ops/**/*.mjs', 'tests/**/*.mjs', 'eslint.config.js'],
+    files: ['ops/**/*.mjs', 'tests/**/*.mjs', 'functions/**/*.js', 'functions/**/*.mjs', 'eslint.config.js'],
     languageOptions: {
       globals: { ...globals.node },
     },

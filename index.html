@@ -7,14 +7,14 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://www.gstatic.com" crossorigin/>
 <link rel="preconnect" href="https://firestore.googleapis.com" crossorigin/>
-<link rel="modulepreload" href="app.js?v=76"/>
+<link rel="modulepreload" href="app.js?v=79"/>
 <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js"/>
 <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js"/>
-<link rel="modulepreload" href="common.js?v=73"/>
-<link rel="modulepreload" href="i18n.js?v=76"/>
+<link rel="modulepreload" href="common.js?v=76"/>
+<link rel="modulepreload" href="i18n.js?v=77"/>
 <link rel="modulepreload" href="uploader.js?v=73"/>
 <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700;800&display=swap" rel="stylesheet"/>
-<link rel="stylesheet" href="styles.css?v=75"/>
+<link rel="stylesheet" href="styles.css?v=77"/>
 </head>
 <body>
 
@@ -125,12 +125,18 @@
             <input class="form-input" id="frm-phone" type="tel" dir="ltr" inputmode="tel" placeholder="050-0000000" autocomplete="tel" required aria-describedby="frm-phone-err"/>
             <div id="frm-phone-err" class="fld-err h"></div>
           </div>
+          <div class="form-row h" id="frm-email-row">
+            <label for="frm-email" data-i18n="reg.emailLabel">מייל</label>
+            <input class="form-input" id="frm-email" type="email" dir="ltr" inputmode="email" autocomplete="email" aria-describedby="frm-email-err"/>
+            <div id="frm-email-err" class="fld-err h"></div>
+          </div>
           <div class="form-row">
             <label id="frm-cat-lbl" data-i18n="reg.catLabel">קטגוריה</label>
             <div id="frm-cat-wrap" class="cat-pills" role="group" aria-labelledby="frm-cat-lbl" aria-describedby="frm-cat-wrap-err"></div>
             <div id="frm-cat-single" class="d-cat-single" style="display:none"></div>
             <div id="frm-cat-wrap-err" class="fld-err h"></div>
           </div>
+          <div id="frm-waiver"></div>
           <div id="frm-err" class="frm-err h" role="alert"></div>
           <div id="frm-ok" class="frm-ok h" data-i18n="reg.ok">ההרשמה נשלחה! נעדכן אתכם כשהיא תאושר.</div>
           <button class="submit-btn" id="frm-submit" type="button" onclick="submitRegistration()" data-i18n="reg.submit">שליחת הרשמה</button>
@@ -157,6 +163,7 @@
           <button class="filter-btn on" id="rf-all" onclick="setRegFilter('all')" data-i18n="admin.filterAll">הכול</button>
           <button class="filter-btn" id="rf-pending" onclick="setRegFilter('pending')" data-i18n="admin.filterPending">ממתינים</button>
           <button class="filter-btn" id="rf-approved" onclick="setRegFilter('approved')" data-i18n="admin.filterApproved">אושרו</button>
+          <button class="filter-btn" id="rf-waitlist" onclick="setRegFilter('waitlist')" data-i18n="admin.filterWaitlist">המתנה</button>
           <button class="filter-btn" id="rf-rejected" onclick="setRegFilter('rejected')" data-i18n="admin.filterRejected">נדחו</button>
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
@@ -234,6 +241,9 @@
       <button id="role-btn-master" onclick="selectLoginRole('master')" data-i18n="admin.roleMaster">מאסטר</button>
     </div>
     <p class="role-hint" id="role-hint"></p>
+    <div class="modal-row h" id="pw-email-row">
+      <input class="modal-input" id="pw-email" type="email" dir="ltr" autocomplete="username" data-i18n-ph="admin.emailPh" placeholder="מייל (מנהלי מועדון)"/>
+    </div>
     <div class="modal-row">
       <input class="modal-input" id="pw-inp" type="password" dir="ltr" autocomplete="current-password" data-i18n-ph="admin.pwPh" placeholder="סיסמה"
         onkeydown="if(event.key==='Enter')tryLogin()"/>
@@ -322,6 +332,6 @@
   </div>
 </div>
 
-<script type="module" src="app.js?v=76"></script>
+<script type="module" src="app.js?v=79"></script>
 </body>
 </html>
