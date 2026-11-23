@@ -1,4 +1,4 @@
-import { test, before } from 'node:test';
+import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
@@ -28,6 +28,7 @@ before(async () => {
   await adb.doc('tournaments/leg').set({ meta: { name: 'T', waiver: 'volleylab', masterPassword: sha('master1') } });
   await adb.doc('config/superAdmin').set({ password: sha('superpw') });
 });
+after(() => env.cleanup());
 
 test('rules: anyone can add a valid waiver, nobody can read or change one', async () => {
   const db = env.unauthenticatedContext().firestore();

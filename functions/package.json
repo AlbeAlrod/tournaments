@@ -7,7 +7,7 @@
     "node": "22"
   },
   "scripts": {
-    "test": "printf 'SMTP_URL=none\\n' > .secret.local && printf 'SUPER_EMAIL=super@test.co\\n' > .env.local && firebase emulators:exec --only firestore,auth,functions --project demo-luz \"node --test --test-concurrency=1 test/*.test.mjs\""
+    "test": "printf 'SMTP_URL=none\\n' > .secret.local && printf 'SUPER_EMAIL=super@test.co\\n' > .env.local && firebase emulators:exec --only firestore,auth,functions --project demo-luz \"node --test --test-force-exit --test-concurrency=1 test/*.test.mjs\""
   },
   "dependencies": {
     "firebase-admin": "^13.4.0",
