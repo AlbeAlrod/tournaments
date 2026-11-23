@@ -4,7 +4,7 @@ import {
   collection, addDoc, getDocs, updateDoc, deleteDoc, query, orderBy, FieldPath, runTransaction, deleteField, writeBatch
 } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
 import { pickImage, attachDropZone } from "./uploader.js?v=73";
-import { t, initLang, setLang, getLang, applyStatic, fmtDate, tRound, tSlot } from './i18n.js?v=73';
+import { t, initLang, setLang, getLang, applyStatic, fmtDate, tRound, tSlot } from './i18n.js?v=77';
 // Same Firebase config as below, so common.js's initializeApp returns this app (no duplicate).
 import { onColor, applyBrandFonts } from './common.js?v=76';
 import { waiverFor, waiverHTML, initWaiver, readWaiver, openSignDialog, closeSignDialog, openWaiverViewer } from './waiver.js?v=1';
@@ -1744,7 +1744,8 @@ function generateCoordinatedSchedule(){
   if(!cats.length) return;
   const finaleCat = cats[cats.length-1].id;
   const parallel = !!meta.parallelCategories;     // all categories run together, no forced finale
-  const allPoolsFirst = !!meta.allPoolsBeforeKO;  // gate EVERY knockout round until ALL pools (all cats) are done
+  const seq = !!meta.sequentialCategories;
+  const allPoolsFirst = !seq && !!meta.allPoolsBeforeKO;  // gate EVERY knockout round until ALL pools (all cats) are done
   const games=[], koStruct={};
   cats.forEach((cat,ci)=>{
     const groups=state[cat.id].groups; const poolIds=[];
@@ -1803,7 +1804,8 @@ function generateCoordinatedSchedule(){
     // pair with a lone early game -> long waiting gap). Opt-in via meta flag.
     const gateFinale = meta.blockFinaleUntilPoolsDone &&
       cats.some(c=>c.id!==finaleCat && poolPending(c.id));
-    const cand=[...rem].map(id=>byId[id]).filter(g=>ready(g,done)&&!isFinaleLast(g)
+    const curCi=Math.min(...[...rem].map(id=>byId[id].ci));
+    const cand=[...rem].map(id=>byId[id]).filter(g=>(!seq||g.ci===curCi)&&ready(g,done)&&!isFinaleLast(g)
       && !(gateFinale && g.catId===finaleCat));
     if(!cand.length){
       // Only the finale's closing games (final + 3rd) are left for their own round.
@@ -4053,7 +4055,7 @@ function renderSettings() {
         </div>
       </div>
     </div>` : '';
-  const toggles = categories.length >= 2 ? ['coordinated', 'parallelCategories', 'allPoolsBeforeKO'].map(k => `<div class="toggle-row">
+  const toggles = categories.length >= 2 ? ['coordinated', 'parallelCategories', 'sequentialCategories', 'allPoolsBeforeKO'].map(k => `<div class="toggle-row">
       <div class="sett-label toggle-label">
         <span class="sett-name">${t('settings.' + k)}</span>
         <span class="sett-desc">${t('settings.' + k + 'Desc')} ${t('settings.nextBuild')}</span>
