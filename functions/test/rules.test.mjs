@@ -96,3 +96,12 @@ test('clubs, branches, users', async () => {
   await assertFails(setDoc(doc(owner(), 'users/own'), { role: 'super' }));
   await assertFails(getDoc(doc(anon(), 'rateLimits/x')));
 });
+
+test('a single-tournament manager (claims.tours) manages only that tournament', async () => {
+  await seed('tournaments/a', secureT());
+  await seed('tournaments/b', secureT());
+  const m = as('tm', { tours: { a: 'admin' } });
+  await assertSucceeds(updateDoc(doc(m, 'tournaments/a'), { 'meta.name': 'ok' }));
+  await assertFails(updateDoc(doc(m, 'tournaments/b'), { 'meta.name': 'no' }));
+  await assertFails(setDoc(doc(m, 'tournaments/c'), secureT()));
+});

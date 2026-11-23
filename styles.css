@@ -1184,3 +1184,6 @@ body:lang(he) { letter-spacing: 0; }
   .wv-table td[data-label]::before { content: attr(data-label); color: var(--text3); font-weight: 600; flex: none; }
 }
 .d-waiver-miss a.reg-btn, .waiver-modal-btns a.reg-btn { text-decoration: none; display: inline-flex; align-items: center; }
+
+/* Login modal: "forgot password" (club tournaments) */
+.link-btn { background: none; border: none; color: var(--primary-text, var(--primary)); font: inherit; font-size: 13px; cursor: pointer; padding: 6px 0 0; }

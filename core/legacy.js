@@ -196,16 +196,39 @@ export function createLegacy(ctx) {
   }
 
   // from app.js:1022
+const catOrderOf = () => ctx.meta.catOrder || (ctx.meta.sequentialCategories ? 'sequential' : 'parallel');
+  const catStartOf = cat => t2m((cat.cfg || DEF_CAT_CFG).startTime || '08:00');
+  function flexStart(START) {
+    const { categories, secure } = ctx;
+    return secure && catOrderOf() === 'byTime' && categories.length ? Math.min(...categories.map(catStartOf)) : START;
+  }
+  function stageDur(catId, stage) {
+    const { categories } = ctx;
+    const cfg = categories.find(c => c.id === catId)?.cfg || DEF_CAT_CFG;
+    return ({ ...DEF_KO_RULES, ...(cfg.koRules || {}) })[stage]?.dur || cfg.gameDur || 25;
+  }
+  const koStage = (len, ri) => { const e = len - 1 - ri; return e === 0 ? 'final' : e === 1 ? 'sf' : e === 2 ? 'qf' : 'r16'; };
+  function flexClock(START, SLOT, brk, durs) {   // durs[r] = longest game of round r (0 = empty round)
+    const at = []; let clock = START;
+    durs.forEach((d, r) => { at[r] = clock; clock += d ? d + brk : SLOT; });
+    return at;
+  }
+
   function generateCoordinatedSchedule(){
-    const { categories, state, meta } = ctx;
-    const { COURTS, SLOT, START, BASE_ROUNDS } = coordCfg();
+    const { categories, state, meta, secure } = ctx;
+    const { COURTS, SLOT, BASE_ROUNDS } = coordCfg();
+    const START = flexStart(coordCfg().START);
+    const BRK = (categories[0]?.cfg || DEF_CAT_CFG).breakDur || 0;
+    // Courts available to the app in round r (a reserved side-court frees at BASE_ROUNDS).
     const courtsAt = r => (r < BASE_ROUNDS ? Math.max(2, COURTS-1) : COURTS);
     const cats = categories.filter(c => state[c.id] && (state[c.id].groups||[]).length);
     if(!cats.length) return;
     const finaleCat = cats[cats.length-1].id;
-    const parallel = !!meta.parallelCategories;
-    const seq = !!meta.sequentialCategories;
-    const allPoolsFirst = !seq && !!meta.allPoolsBeforeKO;
+    const order = secure ? catOrderOf() : null;
+    const parallel = secure ? order !== 'sequential' : !!meta.parallelCategories;     // all categories run together, no forced finale
+    const seq = secure ? order === 'sequential' : !!meta.sequentialCategories;
+    const allPoolsFirst = !secure && !seq && !!meta.allPoolsBeforeKO;  // gate EVERY knockout round until ALL pools (all cats) are done
+    const catStart = Object.fromEntries(cats.map(c => [c.id, secure && order === 'byTime' ? catStartOf(c) : -Infinity]));
     const games=[], koStruct={};
     cats.forEach((cat,ci)=>{
       const groups=state[cat.id].groups; const poolIds=[];
@@ -241,7 +264,7 @@ export function createLegacy(ctx) {
     const allPoolIds = games.filter(g=>g.kind==='pool').map(g=>g.id);
     const ready=(g,done)=>{
       if(g.kind==='pool') return true;
-      if(allPoolsFirst && !allPoolIds.every(id=>done.has(id))) return false;
+      if(allPoolsFirst && !allPoolIds.every(id=>done.has(id))) return false; // all pools first
       if(g.kind==='ko3p') return (koRoundIds[`${g.catId}:${g.sfRound}`]||[]).every(id=>done.has(id));
       if(!g.poolIds.every(id=>done.has(id))) return false;
       if(g.ri===0) return true;
@@ -251,6 +274,10 @@ export function createLegacy(ctx) {
     const rankKind=g=>g.kind==='pool'?1:0, koOrder=g=>g.kind==='ko3p'?99:(g.kind==='ko'?g.ri:0);
     const rounds=[], done=new Set(); let rem=new Set(games.map(g=>g.id));
     const byId=Object.fromEntries(games.map(g=>[g.id,g])); const teamRounds={};
+    const gDur = g => stageDur(g.catId, g.kind === 'pool' ? 'pool' : g.kind === 'ko3p' ? 'third' : koStage(koStruct[g.catId].length, g.ri));
+    const roundDur = ids => secure && ids.length ? Math.max(...ids.map(id => gDur(byId[id]))) : 0;
+    let clock = START;
+    const pushRound = ids => { rounds.push(ids); clock += secure && ids.length ? roundDur(ids) + BRK : SLOT; };
     const played=t=>teamRounds[t]||new Set();
     let guard=0;
     const poolPending=cid=>games.some(g=>g.catId===cid&&g.kind==='pool'&&rem.has(g.id));
@@ -259,15 +286,20 @@ export function createLegacy(ctx) {
     while(rem.size && guard++<500){
       const r=rounds.length;
       const courtsThisRound=courtsAt(r);
+      // Optional block-scheduling: don't pull the finale category forward while an
+      // earlier category still has unplayed pool games (avoids isolating a finale
+      // pair with a lone early game -> long waiting gap). Opt-in via meta flag.
       const gateFinale = meta.blockFinaleUntilPoolsDone &&
         cats.some(c=>c.id!==finaleCat && poolPending(c.id));
       const curCi=Math.min(...[...rem].map(id=>byId[id].ci));
-      const cand=[...rem].map(id=>byId[id]).filter(g=>(!seq||g.ci===curCi)&&ready(g,done)&&!isFinaleLast(g)
+      const cand=[...rem].map(id=>byId[id]).filter(g=>(!seq||g.ci===curCi)&&catStart[g.catId]<=clock&&ready(g,done)&&!isFinaleLast(g)
         && !(gateFinale && g.catId===finaleCat));
       if(!cand.length){
-        const fin=[...rem].map(id=>byId[id]).filter(g=>ready(g,done)&&isFinaleLast(g)).slice(0,courtsThisRound);
-        if(fin.length){rounds.push(fin.map(g=>g.id)); fin.forEach(g=>{done.add(g.id);rem.delete(g.id);}); continue;}
-        rounds.push([]); if(rounds.length>200) break; continue;
+        // Only the finale's closing games (final + 3rd) are left for their own round.
+        // (Restrict to finaleLast so a gated finale can't dump its pool games here.)
+        const fin=[...rem].map(id=>byId[id]).filter(g=>catStart[g.catId]<=clock&&ready(g,done)&&isFinaleLast(g)).slice(0,courtsThisRound);
+        if(fin.length){pushRound(fin.map(g=>g.id)); fin.forEach(g=>{done.add(g.id);rem.delete(g.id);}); continue;}
+        pushRound([]); if(rounds.length>200) break; continue;
       }
       const lastPlayed=t=>{const s=played(t); return s.size?Math.max(...s):-99;};
       const phase=g=> parallel ? 0 : (g.catId===finaleCat?1:0);
@@ -295,21 +327,31 @@ export function createLegacy(ctx) {
         else {
           const sk=`${g.catId}:${g.ri}`; if(seenKO.has(sk)) continue; seenKO.add(sk);
           const stage=(koRoundIds[sk]||[]).map(id=>byId[id]).filter(x=>rem.has(x.id)&&ready(x,done)&&!isFinaleLast(x));
+          // Place as many of this KO stage as fit; the rest wait for the next round.
+          // ready() keeps the following KO round gated until ALL of this one is done,
+          // so splitting a large stage (e.g. a 4-game QF on 3 courts) stays correct.
           const free=courtsThisRound-chosen.length;
           stage.slice(0,Math.max(0,free)).forEach(x=>chosen.push(x));
         }
       }
-      if(!chosen.length){rounds.push([]); continue;}
-      rounds.push(chosen.map(g=>g.id));
+      if(!chosen.length){pushRound([]); continue;}
+      pushRound(chosen.map(g=>g.id));
       chosen.forEach(g=>{done.add(g.id);rem.delete(g.id); if(g.kind==='pool')g.teams.forEach(t=>{(teamRounds[t]=teamRounds[t]||new Set()).add(r);});});
     }
+    // Dinner exactly at the pool->knockout boundary: all pools done -> break -> KO.
+    // Computes the concrete time and writes it into meta.breaks so the board + print
+    // sheets show the marker (buildTournament persists it with the build).
     if(meta.breakBeforeKO){
       let P=-1;
       for(let r=0;r<rounds.length;r++){ if(rounds[r].some(id=>byId[id]&&byId[id].kind!=='pool')){ P=r; break; } }
-      meta.breaks = (P>0) ? [{atTime:m2t(START+P*SLOT), minutes:meta.breakBeforeKO}] : [];
+      meta.breaks = (P>0) ? [{atTime:m2t(secure ? flexClock(START,SLOT,BRK,rounds.map(roundDur))[P] : START+P*SLOT), minutes:meta.breakBeforeKO}] : [];
     }
+    // Global breaks (e.g. a Friday-dinner pause on ALL courts): any round whose base
+    // time is at/after a break start is pushed later by that break's minutes. Base and
+    // app shift equally, so the court-reservation math (in round indices) is unaffected.
     const brs = (meta.breaks||[]).map(b=>({at:t2m(b.atTime), min:b.minutes||0})).sort((a,b)=>a.at-b.at);
-    const roundTime = r => { let t=START+r*SLOT; for(const b of brs) if(t>=b.at) t+=b.min; return t; };
+    const flexAt = secure ? flexClock(START, SLOT, BRK, rounds.map(roundDur)) : null;
+    const roundTime = r => { let t=flexAt ? flexAt[r] : START+r*SLOT; for(const b of brs) if(t>=b.at) t+=b.min; return t; };
     cats.forEach(c=>{ state[c.id].sched=[]; state[c.id].ko=(koStruct[c.id]||[]).map(rd=>rd.map(g=>g.isBye?g:null)); });
     // Each pool game first gets the court its group played on last (fixed court per
     // group, also with odd group sizes); the other games fill the free courts in order.

@@ -4,7 +4,7 @@ import {
   collection, addDoc, getDocs, updateDoc, deleteDoc, query, orderBy, FieldPath, runTransaction, deleteField, writeBatch
 } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
 import { pickImage, attachDropZone } from "./uploader.js?v=73";
-import { t, initLang, setLang, getLang, applyStatic, fmtDate, tRound, tSlot } from './i18n.js?v=77';
+import { t, initLang, setLang, getLang, applyStatic, fmtDate, tRound, tSlot } from './i18n.js?v=78';
 // Same Firebase config as below, so common.js's initializeApp returns this app (no duplicate).
 import { onColor, applyBrandFonts } from './common.js?v=76';
 import { waiverFor, waiverHTML, initWaiver, readWaiver, openSignDialog, closeSignDialog, openWaiverViewer } from './waiver.js?v=1';
@@ -529,7 +529,11 @@ function adminClick() {
   }
   loginRole = 'admin';
   updateRoleButtons();
+  // Club tournament: managers sign in with their own email + password only.
   document.getElementById('pw-email-row').classList.toggle('h', !secure);
+  document.getElementById('pw-roles').classList.toggle('h', secure);
+  document.getElementById('role-hint').classList.toggle('h', secure);
+  document.getElementById('pw-forgot').classList.toggle('h', !secure);
   document.getElementById('pw-modal').classList.remove('h');
   setTimeout(() => document.getElementById('pw-inp').focus(), 80);
 }
@@ -585,7 +589,7 @@ async function tryLogin() {
 
 // Club staff (club owner, branch manager, super) manage as master; a tournament-password
 // token manages only its own tournament, in the role it was issued for.
-const securePerm = c => c.tid === tId ? c.trole
+const securePerm = c => c.tours?.[tId] ? c.tours[tId] : c.tid === tId ? c.trole
   : c.role === 'super' || (c.club && c.club === tAccess.club && (c.role === 'owner' || (c.role === 'branch' && c.branch === tAccess.branch))) ? 'master'
   : null;
 
@@ -611,22 +615,31 @@ function loginFailed(key) {
 }
 
 async function trySecureLogin() {
-  const pw = document.getElementById('pw-inp').value.trim();
+  const pw = document.getElementById('pw-inp').value;
   const email = document.getElementById('pw-email').value.trim();
-  if (!pw) return loginFailed('admin.pwWrong');
+  if (!pw || !email) return loginFailed('admin.emailPwWrong');
   try {
-    const { getAuth, signInWithCustomToken, signInWithEmailAndPassword } = await authMod();
+    const { getAuth, signInWithEmailAndPassword } = await authMod();
     const auth = getAuth(fbApp);
-    if (email) await signInWithEmailAndPassword(auth, email, pw);
-    else await signInWithCustomToken(auth, (await callFn('tournamentLogin', { tId, role: loginRole, password: pw })).token);
-    const role = securePerm((await auth.currentUser.getIdTokenResult()).claims);
+    await signInWithEmailAndPassword(auth, email, pw);
+    const role = securePerm((await auth.currentUser.getIdTokenResult(true)).claims);
     if (!role) return loginFailed('admin.noAccess');
     closeLogin();
     applySecureRole(role);
     if (meta.phase === 'registration' && document.getElementById('page-register')?.classList.contains('on')) goPage('registrations');
   } catch(e) {
-    loginFailed(e.code === 'functions/resource-exhausted' || e.code === 'auth/too-many-requests' ? 'admin.tooMany' : 'admin.pwWrong');
+    loginFailed(e.code === 'auth/too-many-requests' ? 'admin.tooMany' : 'admin.emailPwWrong');
   }
+}
+
+async function resetLoginPw() {
+  const email = document.getElementById('pw-email').value.trim();
+  const err = document.getElementById('pw-err');
+  err.classList.remove('h');
+  if (!email) { err.textContent = t('admin.resetNeedEmail'); return; }
+  const { getAuth, sendPasswordResetEmail } = await authMod();
+  await sendPasswordResetEmail(getAuth(fbApp), email).catch(() => {});
+  err.textContent = t('admin.resetSent');
 }
 
 function setRole(role) {
@@ -866,7 +879,7 @@ function renderMyReg() {
       </div>
       ${r.status === 'pending' && !secure
         ? `<button type="button" class="reg-btn reject" onclick="cancelMyRegistration('${escH(r.id)}')">${t('common.cancel')}</button>`
-        : `<span class="d-muted">${t('reg.cancelContact')}</span>`}
+        : secure ? '' : `<span class="d-muted">${t('reg.cancelContact')}</span>`}
     </div>`;
   }).join('') + '<div id="mine-pay-wrap"></div>';
   // The form and the receipt carry their own pay buttons.
@@ -1736,16 +1749,38 @@ function buildCoordinatedGroups(){
     cs.roster=roster; cs.groups=groups; cs.sched=[]; cs.ko=[];
   });
 }
+// Club tournaments (secure): the category order is one choice (meta.catOrder), each round
+// lasts as long as the longest stage played in it (per-stage minutes), and with 'byTime'
+// a category's games start no earlier than its own start time.
+const catOrderOf = () => meta.catOrder || (meta.sequentialCategories ? 'sequential' : 'parallel');
+const catStartOf = cat => t2m((cat.cfg || DEF_CAT_CFG).startTime || '08:00');
+function flexStart(START) {
+  return secure && catOrderOf() === 'byTime' && categories.length ? Math.min(...categories.map(catStartOf)) : START;
+}
+function stageDur(catId, stage) {
+  const cfg = categories.find(c => c.id === catId)?.cfg || DEF_CAT_CFG;
+  return ({ ...DEF_KO_RULES, ...(cfg.koRules || {}) })[stage]?.dur || cfg.gameDur || 25;
+}
+const koStage = (len, ri) => { const e = len - 1 - ri; return e === 0 ? 'final' : e === 1 ? 'sf' : e === 2 ? 'qf' : 'r16'; };
+function flexClock(START, SLOT, brk, durs) {   // durs[r] = longest game of round r (0 = empty round)
+  const at = []; let clock = START;
+  durs.forEach((d, r) => { at[r] = clock; clock += d ? d + brk : SLOT; });
+  return at;
+}
 function generateCoordinatedSchedule(){
-  const { COURTS, SLOT, START, BASE_ROUNDS } = coordCfg();
+  const { COURTS, SLOT, BASE_ROUNDS } = coordCfg();
+  const START = flexStart(coordCfg().START);
+  const BRK = (categories[0]?.cfg || DEF_CAT_CFG).breakDur || 0;
   // Courts available to the app in round r (a reserved side-court frees at BASE_ROUNDS).
   const courtsAt = r => (r < BASE_ROUNDS ? Math.max(2, COURTS-1) : COURTS);
   const cats = categories.filter(c => state[c.id] && (state[c.id].groups||[]).length);
   if(!cats.length) return;
   const finaleCat = cats[cats.length-1].id;
-  const parallel = !!meta.parallelCategories;     // all categories run together, no forced finale
-  const seq = !!meta.sequentialCategories;
-  const allPoolsFirst = !seq && !!meta.allPoolsBeforeKO;  // gate EVERY knockout round until ALL pools (all cats) are done
+  const order = secure ? catOrderOf() : null;
+  const parallel = secure ? order !== 'sequential' : !!meta.parallelCategories;     // all categories run together, no forced finale
+  const seq = secure ? order === 'sequential' : !!meta.sequentialCategories;
+  const allPoolsFirst = !secure && !seq && !!meta.allPoolsBeforeKO;  // gate EVERY knockout round until ALL pools (all cats) are done
+  const catStart = Object.fromEntries(cats.map(c => [c.id, secure && order === 'byTime' ? catStartOf(c) : -Infinity]));
   const games=[], koStruct={};
   cats.forEach((cat,ci)=>{
     const groups=state[cat.id].groups; const poolIds=[];
@@ -1791,6 +1826,10 @@ function generateCoordinatedSchedule(){
   const rankKind=g=>g.kind==='pool'?1:0, koOrder=g=>g.kind==='ko3p'?99:(g.kind==='ko'?g.ri:0);
   const rounds=[], done=new Set(); let rem=new Set(games.map(g=>g.id));
   const byId=Object.fromEntries(games.map(g=>[g.id,g])); const teamRounds={};
+  const gDur = g => stageDur(g.catId, g.kind === 'pool' ? 'pool' : g.kind === 'ko3p' ? 'third' : koStage(koStruct[g.catId].length, g.ri));
+  const roundDur = ids => secure && ids.length ? Math.max(...ids.map(id => gDur(byId[id]))) : 0;
+  let clock = START;
+  const pushRound = ids => { rounds.push(ids); clock += secure && ids.length ? roundDur(ids) + BRK : SLOT; };
   const played=t=>teamRounds[t]||new Set();
   let guard=0;
   const poolPending=cid=>games.some(g=>g.catId===cid&&g.kind==='pool'&&rem.has(g.id));
@@ -1805,14 +1844,14 @@ function generateCoordinatedSchedule(){
     const gateFinale = meta.blockFinaleUntilPoolsDone &&
       cats.some(c=>c.id!==finaleCat && poolPending(c.id));
     const curCi=Math.min(...[...rem].map(id=>byId[id].ci));
-    const cand=[...rem].map(id=>byId[id]).filter(g=>(!seq||g.ci===curCi)&&ready(g,done)&&!isFinaleLast(g)
+    const cand=[...rem].map(id=>byId[id]).filter(g=>(!seq||g.ci===curCi)&&catStart[g.catId]<=clock&&ready(g,done)&&!isFinaleLast(g)
       && !(gateFinale && g.catId===finaleCat));
     if(!cand.length){
       // Only the finale's closing games (final + 3rd) are left for their own round.
       // (Restrict to finaleLast so a gated finale can't dump its pool games here.)
-      const fin=[...rem].map(id=>byId[id]).filter(g=>ready(g,done)&&isFinaleLast(g)).slice(0,courtsThisRound);
-      if(fin.length){rounds.push(fin.map(g=>g.id)); fin.forEach(g=>{done.add(g.id);rem.delete(g.id);}); continue;}
-      rounds.push([]); if(rounds.length>200) break; continue;
+      const fin=[...rem].map(id=>byId[id]).filter(g=>catStart[g.catId]<=clock&&ready(g,done)&&isFinaleLast(g)).slice(0,courtsThisRound);
+      if(fin.length){pushRound(fin.map(g=>g.id)); fin.forEach(g=>{done.add(g.id);rem.delete(g.id);}); continue;}
+      pushRound([]); if(rounds.length>200) break; continue;
     }
     const lastPlayed=t=>{const s=played(t); return s.size?Math.max(...s):-99;};
     const phase=g=> parallel ? 0 : (g.catId===finaleCat?1:0);
@@ -1847,8 +1886,8 @@ function generateCoordinatedSchedule(){
         stage.slice(0,Math.max(0,free)).forEach(x=>chosen.push(x));
       }
     }
-    if(!chosen.length){rounds.push([]); continue;}
-    rounds.push(chosen.map(g=>g.id));
+    if(!chosen.length){pushRound([]); continue;}
+    pushRound(chosen.map(g=>g.id));
     chosen.forEach(g=>{done.add(g.id);rem.delete(g.id); if(g.kind==='pool')g.teams.forEach(t=>{(teamRounds[t]=teamRounds[t]||new Set()).add(r);});});
   }
   // Dinner exactly at the pool->knockout boundary: all pools done -> break -> KO.
@@ -1857,13 +1896,14 @@ function generateCoordinatedSchedule(){
   if(meta.breakBeforeKO){
     let P=-1;
     for(let r=0;r<rounds.length;r++){ if(rounds[r].some(id=>byId[id]&&byId[id].kind!=='pool')){ P=r; break; } }
-    meta.breaks = (P>0) ? [{atTime:m2t(START+P*SLOT), minutes:meta.breakBeforeKO}] : [];
+    meta.breaks = (P>0) ? [{atTime:m2t(secure ? flexClock(START,SLOT,BRK,rounds.map(roundDur))[P] : START+P*SLOT), minutes:meta.breakBeforeKO}] : [];
   }
   // Global breaks (e.g. a Friday-dinner pause on ALL courts): any round whose base
   // time is at/after a break start is pushed later by that break's minutes. Base and
   // app shift equally, so the court-reservation math (in round indices) is unaffected.
   const brs = (meta.breaks||[]).map(b=>({at:t2m(b.atTime), min:b.minutes||0})).sort((a,b)=>a.at-b.at);
-  const roundTime = r => { let t=START+r*SLOT; for(const b of brs) if(t>=b.at) t+=b.min; return t; };
+  const flexAt = secure ? flexClock(START, SLOT, BRK, rounds.map(roundDur)) : null;
+  const roundTime = r => { let t=flexAt ? flexAt[r] : START+r*SLOT; for(const b of brs) if(t>=b.at) t+=b.min; return t; };
   cats.forEach(c=>{ state[c.id].sched=[]; state[c.id].ko=(koStruct[c.id]||[]).map(rd=>rd.map(g=>g.isBye?g:null)); });
   // Each pool game first gets the court its group played on last (fixed court per
   // group, also with odd group sizes); the other games fill the free courts in order.
@@ -3775,7 +3815,7 @@ function renderSettings() {
           onchange="updateMeta('name',this.value)" placeholder="${t('settings.namePh')}"/>
       </div>
     </div>
-    <div class="sett-row">
+    ${secure ? '' : `<div class="sett-row">
       <div class="sett-label">
         <span class="sett-name">${t('settings.lang')}</span>
         <span class="sett-desc">${t('settings.langDesc')}</span>
@@ -3829,8 +3869,11 @@ function renderSettings() {
           onchange="if(/^#[0-9A-Fa-f]{6}$/.test(this.value)){document.getElementById('cp-bg').value=this.value;updateBgColor(this.value)}"/>
         <button class="add-cat-btn" onclick="updateBgColor('')">${t('common.reset')}</button>
       </div>
-    </div>`;
+    </div>`}`;
   container.appendChild(dsec);
+
+  // A club tournament takes its look (colours, logo, group colours, sport) from the club.
+  if (!secure) {
 
   // ── LOGO ────────────────────────────────────────────────────────
   const lsec = document.createElement('div');
@@ -3884,6 +3927,7 @@ function renderSettings() {
       </div>`;
     }).join('');
   container.appendChild(gcsec);
+  }
 
   // ── SPONSORS ────────────────────────────────────────────────────
   const ssec = document.createElement('div');
@@ -3952,6 +3996,7 @@ function renderSettings() {
   }
 
   // ── SPORT ───────────────────────────────────────────────────────
+  if (!secure) {
   const sportSection = document.createElement('div');
   sportSection.className = 'sett-section';
   sportSection.innerHTML = `<div class="sett-section-title">${t('settings.sport')}</div>
@@ -3966,6 +4011,7 @@ function renderSettings() {
       </div>
     </div>`;
   container.appendChild(sportSection);
+  }
 
   // ── REGISTRATION ────────────────────────────────────────────────
   const regSection = document.createElement('div');
@@ -4020,7 +4066,8 @@ function renderSettings() {
         <span class="sett-name">${t('settings.payLinks')}</span>
         <span class="sett-desc">${t('settings.payLinksDesc')}</span>
       </div>
-      <div class="sett-ctrl" style="flex-direction:column;align-items:flex-end;gap:8px">
+      ${secure ? `<div class="sett-ctrl"><input class="text-inp" type="url" dir="ltr" value="${escH(meta.paymentLink)}" style="width:260px" placeholder="https://…"
+          aria-label="${t('settings.payLinks')}" onchange="this.value=payUrl(this.value);updateMeta('paymentLink',this.value)"/></div>` : `<div class="sett-ctrl" style="flex-direction:column;align-items:flex-end;gap:8px">
         <div style="display:flex;gap:6px;align-items:center">
           <input class="text-inp" dir="auto" value="${escH(meta.paymentLinkLabel)}" style="width:160px" placeholder="${t('settings.labelPh')}"
             onchange="updateMeta('paymentLinkLabel',this.value)"/>
@@ -4033,7 +4080,7 @@ function renderSettings() {
           <input class="text-inp" type="url" dir="ltr" value="${escH(meta.paymentLink2)}" style="width:190px" placeholder="${t('settings.urlOptionalPh')}"
             onchange="this.value=payUrl(this.value);updateMeta('paymentLink2',this.value)"/>
         </div>
-      </div>
+      </div>`}
     </div>`;
   container.appendChild(regSection);
   previewRegNote(regSection.querySelector('.reg-note-editor'));
@@ -4041,21 +4088,29 @@ function renderSettings() {
   // ── CATEGORIES ──────────────────────────────────────────────────
   // One shared grid: courts / minutes / break / start apply to the whole tournament.
   const c0 = categories[0]?.cfg || DEF_CAT_CFG;
+  const byTime = secure && catOrderOf() === 'byTime';
   const coordHtml = coordBuild() && categories.length ? `<div class="sett-row" style="flex-wrap:wrap">
       <div class="sett-label"><span class="sett-name">${t('settings.wholeTournament')}</span></div>
       <div class="cat-settings-grid">
         ${catNumField(t('settings.courts'), -1, 'courts', coordCfg().COURTS, 1, 8)}
-        ${catNumField(t('settings.gameDur'), -1, 'gameDur', c0.gameDur, 5, 120)}
+        ${secure ? '' : catNumField(t('settings.gameDur'), -1, 'gameDur', c0.gameDur, 5, 120)}
         ${catNumField(t('settings.breakDur'), -1, 'breakDur', c0.breakDur, 0, 60)}
-        <div class="cat-sett-field">
+        ${byTime ? '' : `<div class="cat-sett-field">
           <span class="cat-sett-label">${t('settings.startTime')}</span>
           <div class="cat-sett-ctrl">
             <input type="time" class="time-inp" value="${meta.startTime || c0.startTime || '08:00'}" onchange="updateCatCfg(-1,'startTime',this.value)"/>
           </div>
-        </div>
+        </div>`}
       </div>
     </div>` : '';
-  const toggles = categories.length >= 2 ? ['coordinated', 'parallelCategories', 'sequentialCategories', 'allPoolsBeforeKO'].map(k => `<div class="toggle-row">
+  // Club tournament: ONE clear choice instead of four switches that could contradict each other.
+  const orderHtml = secure && categories.length >= 2 ? `<div class="sett-row">
+      <div class="sett-label"><span class="sett-name">${t('settings.catOrder')}</span>
+        <span class="sett-desc">${t('settings.catOrderDesc')} ${t('settings.nextBuild')}</span></div>
+      <div class="sett-ctrl"><select class="text-inp" aria-label="${t('settings.catOrder')}" onchange="setCatOrder(this.value)">
+        ${['parallel', 'sequential', 'byTime'].map(k => `<option value="${k}" ${catOrderOf() === k ? 'selected' : ''}>${t('settings.catOrder.' + k)}</option>`).join('')}
+      </select></div></div>` : '';
+  const toggles = secure ? orderHtml : categories.length >= 2 ? ['coordinated', 'parallelCategories', 'sequentialCategories', 'allPoolsBeforeKO'].map(k => `<div class="toggle-row">
       <div class="sett-label toggle-label">
         <span class="sett-name">${t('settings.' + k)}</span>
         <span class="sett-desc">${t('settings.' + k + 'Desc')} ${t('settings.nextBuild')}</span>
@@ -4210,16 +4265,17 @@ const KO_COL = { pts: 'settings.rules.pts', change: 'settings.rules.switch', dur
 function renderCatItem(cat, ci, live) {
   const cfg=cat.cfg||DEF_CAT_CFG;
   const coord=coordBuild();
+  const showMin = !coord || secure;   // club tournaments time every stage on the shared grid too
   const catColor = cat.color || meta.primaryColor || DEF_PRIMARY;
   return `<div class="cat-item">
     <div class="cat-item-head">
       <input class="text-inp" dir="auto" style="width:150px;font-weight:600" value="${escH(cat.name)}" onchange="updateCatName(${ci},this.value)"/>
-      ${live ? '' : `<div class="color-pick-row" style="margin-inline-start:auto;margin-inline-end:8px">
+      ${live ? '' : `${secure ? '<span style="margin-inline-start:auto"></span>' : `<div class="color-pick-row" style="margin-inline-start:auto;margin-inline-end:8px">
         <input type="color" class="color-inp" id="ccp-${ci}" value="${catColor}"
           oninput="document.getElementById('cct-${ci}').value=this.value;updateCatColor(${ci},this.value)"/>
         <input class="text-inp text-mono" id="cct-${ci}" style="width:100px" value="${catColor}"
           onchange="if(/^#[0-9A-Fa-f]{6}$/.test(this.value)){document.getElementById('ccp-${ci}').value=this.value;updateCatColor(${ci},this.value)}"/>
-      </div>
+      </div>`}
       <button class="team-del" onclick="deleteCategory(${ci})" title="${t('settings.deleteCategory')}" aria-label="${t('settings.deleteCategory')}">✕</button>`}
     </div>
     ${secure ? `<div class="cat-sett-field" style="margin-bottom:8px">
@@ -4244,8 +4300,8 @@ function renderCatItem(cat, ci, live) {
         </div>
       </div>
       ${cfg.sets===3?catNumField(t('settings.thirdSetPts'), ci, 'pointsThirdSet', cfg.pointsThirdSet||15, 11, 30):''}
-      ${coord ? '' : `<div class="cat-sett-field">
-        <span class="cat-sett-label">${t('settings.startTime')}</span>
+      ${coord && !(secure && catOrderOf() === 'byTime') ? '' : `<div class="cat-sett-field">
+        <span class="cat-sett-label">${t(coord ? 'settings.catStart' : 'settings.startTime')}</span>
         <div class="cat-sett-ctrl">
           <input type="time" class="time-inp" value="${cfg.startTime||'08:00'}" onchange="updateCatCfg(${ci},'startTime',this.value)"/>
         </div>
@@ -4253,11 +4309,16 @@ function renderCatItem(cat, ci, live) {
     </div>`}
     <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
       <div class="cat-sett-label" style="margin-bottom:8px">${t('settings.scoringRules')}</div>
+      ${secure ? `<div class="toggle-row" style="border-bottom:none;padding-top:0">
+        <div class="sett-label toggle-label"><span class="sett-name">${t('settings.koSameAll')}</span>
+          <span class="sett-desc">${t('settings.koSameAllDesc')}</span></div>
+        <label class="toggle-switch"><input type="checkbox" ${cfg.koSplit ? '' : 'checked'} onchange="setKoSplit(${ci},!this.checked)"/><span class="toggle-slider"></span></label>
+      </div>` : ''}
       <div class="srt-wrap"><table class="scoring-rules-tbl">
-        <thead><tr><th>${t('settings.rules.stage')}</th><th>${t('settings.rules.pts')}</th><th>${t('settings.rules.switch')}</th>${coord ? '' : `<th>${t('settings.rules.min')}</th>`}<th>${t('settings.rules.sets')}</th><th>${t('settings.rules.thirdPts')}</th></tr></thead>
+        <thead><tr><th>${t('settings.rules.stage')}</th><th>${t('settings.rules.pts')}</th><th>${t('settings.rules.switch')}</th>${showMin ? `<th>${t('settings.rules.min')}</th>` : ''}<th>${t('settings.rules.sets')}</th><th>${t('settings.rules.thirdPts')}</th></tr></thead>
         <tbody>
-          ${['all', ...KO_STAGES].map(key => {
-            const label = t(key === 'all' ? 'settings.koSameAll' : 'settings.stage.' + key);
+          ${(secure ? (cfg.koSplit ? KO_STAGES : ['all']) : ['all', ...KO_STAGES]).map(key => {
+            const label = t(key === 'all' ? (secure ? 'common.all' : 'settings.koSameAll') : 'settings.stage.' + key);
             const r = { ...DEF_KO_RULES[key === 'all' ? 'pool' : key], ...(cfg.koRules?.[key === 'all' ? 'pool' : key]||{}) };
             const inp = (f, v) => `<input class="text-inp" type="number" inputmode="numeric" style="width:64px" min="${KO_LIM[f][0]}" max="${KO_LIM[f][1]}"
               value="${v ?? ''}" aria-label="${label} · ${t(KO_COL[f])}" onchange="updateKORuleField(${ci},'${key}','${f}',this.value)"/>`;
@@ -4265,7 +4326,7 @@ function renderCatItem(cat, ci, live) {
               <td class="srt-label">${label}</td>
               <td>${inp('pts', r.pts||15)}</td>
               <td>${inp('change', r.change||'')}</td>
-              ${coord ? '' : `<td>${inp('dur', r.dur||cfg.gameDur||15)}</td>`}
+              ${showMin ? `<td>${inp('dur', r.dur||cfg.gameDur||15)}</td>` : ''}
               <td><select class="form-input" style="width:64px" aria-label="${label} · ${t('settings.rules.sets')}" onchange="updateKORuleField(${ci},'${key}','sets',this.value)">
                 <option value="1" ${r.sets===3?'':'selected'}>1</option>
                 <option value="3" ${r.sets===3?'selected':''}>3</option>
@@ -4351,7 +4412,21 @@ function updateKORuleField(ci, roundKey, field, val) {
   const cid = categories[ci].id;
   // Coordinated grids use one slot for every stage; re-timing one category would collide.
   if (field === 'dur' && !coordBuild() && state[cid]?.sched.length) commitState(cid, () => assignSlotTimes(cid));
+  if (field === 'dur' && coordBuild() && secure) retimeAfter(ci, 'gameDur');
   if (roundKey === 'all' || field === 'sets' || lim && v !== Number(val)) renderSettings();
+}
+
+function setCatOrder(v) {
+  Object.assign(meta, { catOrder: v, coordinated: true, parallelCategories: v !== 'sequential', sequentialCategories: v === 'sequential', allPoolsBeforeKO: false });
+  pushMeta('catOrder', 'coordinated', 'parallelCategories', 'sequentialCategories', 'allPoolsBeforeKO');
+  renderSettings();
+}
+// "Same for all stages" on = one row for every stage; off = a row per stage.
+function setKoSplit(ci, split) {
+  const c = categories[ci]; if (!c) return;
+  if (!c.cfg) c.cfg = structuredClone(DEF_CAT_CFG);
+  c.cfg.koSplit = split;
+  pushCategories(); renderSettings();
 }
 
 function updateCatName(ci, val) {
@@ -4386,16 +4461,29 @@ function retimeAfter(ci, key) {
     const manual = cids.flatMap(id => allGamesOf(state[id]).filter(g => g.manual).map(g => [g, g.time]));
     if (!coord) cids.forEach(assignSlotTimes);
     else {
-      const { SLOT, START } = coordCfg();
+      const { SLOT } = coordCfg();
+      const START = flexStart(coordCfg().START);
       const games = cids.flatMap(id => allGamesOf(state[id])).filter(g => g.si != null);
+      let flexAt = null;
+      if (secure) {
+        const durs = [];
+        cids.forEach(id => {
+          const cs = state[id];
+          const note = (g, st) => { if (g.si != null) durs[g.si] = Math.max(durs[g.si] || 0, stageDur(id, st)); };
+          cs.sched.forEach(g => note(g, g.gi < 0 || g.isThirdPlace ? 'third' : 'pool'));
+          cs.ko.forEach((r, ri) => r.forEach(g => { if (!g.isBye) note(g, koStage(cs.ko.length, ri)); }));
+        });
+        flexAt = flexClock(START, SLOT, (categories[0]?.cfg || DEF_CAT_CFG).breakDur || 0, Array.from(durs, d => d || 0));
+      }
+      const at = si => flexAt ? flexAt[si] : START + si*SLOT;
       const extra = {};
       if (meta.breakBeforeKO) {
         const P = Math.min(...cids.flatMap(id => allGamesOf(state[id]).filter(g => !(g.gi >= 0)).map(g => g.si ?? Infinity)));
-        meta.breaks = P > 0 && P < Infinity ? [{ atTime: m2t(START + P*SLOT), minutes: meta.breakBeforeKO }] : [];
+        meta.breaks = P > 0 && P < Infinity ? [{ atTime: m2t(at(P)), minutes: meta.breakBeforeKO }] : [];
         extra['meta.breaks'] = meta.breaks;
       }
       const brs = (meta.breaks||[]).map(b => ({ at: t2m(b.atTime), min: b.minutes||0 })).sort((a,b) => a.at-b.at);
-      games.forEach(g => { let t = START + g.si*SLOT; for (const b of brs) if (t >= b.at) t += b.min; g.time = m2t(t); });
+      games.forEach(g => { let t = at(g.si); for (const b of brs) if (t >= b.at) t += b.min; g.time = m2t(t); });
       manual.forEach(([g, t]) => { g.time = t; });
       return extra;
     }
@@ -4572,7 +4660,7 @@ function renderAllInner() {
 // ============ EXPOSE GLOBALS ============
 Object.assign(window, {
   signWaiver, copySignLink, showWaivers, setWaiverPw,
-  adminClick, selectLoginRole, tryLogin, closeLogin, saveSecurePw,
+  adminClick, selectLoginRole, tryLogin, closeLogin, inviteTM, removeTM, resetLoginPw, setCatOrder, setKoSplit,
   openStartModal, closeStartModal, confirmStartTournament,
   goPage, setCat, setCourt,
   submitRegistration, cancelMyRegistration, registerAnother, setRegStatus, setRegPaid, setRegFilter,
@@ -4632,33 +4720,67 @@ async function removePlayerFromDB(idx) {
   renderSettings();
 }
 
+// Club tournament: payment window + the people who manage THIS tournament, by email.
+// Full = everything; scores = approve registrations and enter results.
+const TROLE = { master: 'settings.tmFull', admin: 'settings.tmScores' };
 function renderSecurePwSection(container) {
   if (adminLevel !== 2) return;
   const sec = document.createElement('div');
   sec.className = 'sett-section';
   sec.innerHTML = `<div class="sett-section-title">${t('settings.payDeadline')}</div>
-    <div class="sett-row"><div class="sett-label"><span class="sett-name">${t('settings.payDeadlineHours')}</span></div>
+    <div class="sett-row"><div class="sett-label"><span class="sett-name">${t('settings.payDeadlineHours')}</span>
+      <span class="sett-desc">${t('settings.payDeadlineDesc')}</span></div>
       <div class="sett-ctrl"><input class="text-inp" type="number" inputmode="numeric" min="1" max="336" style="width:80px"
         value="${Number(meta.payDeadlineHours) || 24}" onchange="updateMeta('payDeadlineHours',Math.max(1,parseInt(this.value)||24))"/></div></div>
-    <div class="sett-section-title" style="margin-top:16px">${t('settings.securePw')}</div>
-    <p class="sett-desc">${t('settings.securePwDesc')}</p>
-    ${['admin', 'master'].map(role => `<div class="sett-row">
-      <div class="sett-label"><span class="sett-name">${t(role === 'master' ? 'admin.roleMaster' : 'admin.roleAdmin')}</span></div>
-      <div class="sett-ctrl">
-        <input class="text-inp" id="spw-${role}" type="password" dir="ltr" autocomplete="new-password" style="width:160px"/>
-        <button class="add-cat-btn" onclick="saveSecurePw('${role}')">${t('settings.pwSave')}</button>
-      </div></div>`).join('')}`;
+    <div class="sett-section-title" style="margin-top:16px">${t('settings.tManagers')}</div>
+    <p class="sett-desc">${t('settings.tManagersDesc')}</p>
+    <div id="tm-list"><p class="d-muted">…</p></div>
+    <div class="sett-add-row" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+      <input class="text-inp" id="tm-email" type="email" dir="ltr" placeholder="${t('admin.emailOnly')}" style="flex:1;min-width:180px"/>
+      <select class="text-inp" id="tm-role" aria-label="${t('settings.tmRole')}">
+        <option value="admin">${t(TROLE.admin)}</option><option value="master">${t(TROLE.master)}</option></select>
+      <button class="add-cat-btn" onclick="inviteTM()">${t('settings.tmInvite')}</button>
+    </div>
+    <div id="tm-out" class="h" style="margin-top:10px">
+      <textarea class="text-inp" id="tm-msg" readonly dir="auto" style="width:100%;min-height:80px"></textarea>
+      <div style="display:flex;gap:8px;margin-top:6px">
+        <button class="add-cat-btn" onclick="navigator.clipboard.writeText(document.getElementById('tm-msg').value).then(()=>toast(t('common.copied')))">${t('common.copy')}</button>
+        <a class="add-cat-btn" id="tm-wa" target="_blank" rel="noopener">WhatsApp</a>
+      </div>
+    </div>`;
   container.appendChild(sec);
+  loadTM();
 }
 
-async function saveSecurePw(role) {
-  const inp = document.getElementById('spw-' + role);
-  if (inp.value.length < 6) { toast(t('settings.securePwDesc')); return; }
+async function loadTM() {
+  const el = document.getElementById('tm-list');
   try {
-    await callFn('setTournamentPassword', { tId, role, password: inp.value });
-    inp.value = '';
-    toast(t('settings.pwSaved'));
+    const { managers } = await callFn('listTournamentManagers', { tId });
+    if (!el) return;
+    el.innerHTML = managers.length ? managers.map(m => `<div class="sett-row">
+        <div class="sett-label"><span class="sett-name" dir="ltr">${escH(m.email)}</span><span class="sett-desc">${t(TROLE[m.trole] || TROLE.admin)}</span></div>
+        <button class="team-del" onclick="removeTM('${escH(m.email)}')" aria-label="${t('common.remove')}">✕</button></div>`).join('')
+      : `<p class="sett-empty-note">${t('settings.tmNone')}</p>`;
+  } catch(_) { if (el) el.innerHTML = ''; }
+}
+
+async function inviteTM() {
+  const email = document.getElementById('tm-email').value.trim();
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { toast(t('errors.emailInvalid')); return; }
+  try {
+    const { link } = await callFn('inviteTournamentManager', { tId, email, trole: document.getElementById('tm-role').value });
+    const msg = t('settings.tmMsg', { name: meta.name || '', link, url: location.href });
+    document.getElementById('tm-msg').value = msg;
+    document.getElementById('tm-wa').href = 'https://wa.me/?text=' + encodeURIComponent(msg);
+    document.getElementById('tm-out').classList.remove('h');
+    document.getElementById('tm-email').value = '';
+    loadTM();
   } catch(e) { toast(t(e.code === 'functions/permission-denied' ? 'admin.noAccess' : 'errors.saveFailed')); }
+}
+
+async function removeTM(email) {
+  try { await callFn('removeTournamentManager', { tId, email }); loadTM(); }
+  catch(e) { toast(t('errors.saveFailed')); }
 }
 
 function renderPlayerDBSection(container) {
