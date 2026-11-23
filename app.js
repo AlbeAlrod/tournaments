@@ -4,7 +4,7 @@ import {
   collection, addDoc, getDocs, updateDoc, deleteDoc, query, orderBy, FieldPath, runTransaction, deleteField, writeBatch
 } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
 import { pickImage, attachDropZone } from "./uploader.js?v=73";
-import { t, initLang, setLang, getLang, applyStatic, fmtDate, tRound, tSlot } from './i18n.js?v=78';
+import { t, initLang, setLang, getLang, applyStatic, fmtDate, tRound, tSlot } from './i18n.js?v=79';
 // Same Firebase config as below, so common.js's initializeApp returns this app (no duplicate).
 import { onColor, applyBrandFonts } from './common.js?v=76';
 import { waiverFor, waiverHTML, initWaiver, readWaiver, openSignDialog, closeSignDialog, openWaiverViewer } from './waiver.js?v=1';
@@ -619,8 +619,9 @@ async function trySecureLogin() {
   const email = document.getElementById('pw-email').value.trim();
   if (!pw || !email) return loginFailed('admin.emailPwWrong');
   try {
-    const { getAuth, signInWithEmailAndPassword } = await authMod();
+    const { getAuth, signInWithEmailAndPassword, setPersistence, browserSessionPersistence } = await authMod();
     const auth = getAuth(fbApp);
+    await setPersistence(auth, browserSessionPersistence);
     await signInWithEmailAndPassword(auth, email, pw);
     const role = securePerm((await auth.currentUser.getIdTokenResult(true)).claims);
     if (!role) return loginFailed('admin.noAccess');
@@ -1438,11 +1439,13 @@ function renderRegisterPage() {
 
 // ============ DIALOG / TOAST ============
 // The app's own confirm dialog (replaces window.confirm). Resolves true on OK.
-function askConfirm(msg, okLabel) {
+// With cancelLabel the two buttons are a yes/no answer: Escape or a click outside resolves null.
+function askConfirm(msg, okLabel, cancelLabel) {
   const m = document.getElementById('confirm-modal');
   const ok = document.getElementById('confirm-ok'), no = document.getElementById('confirm-cancel');
   document.getElementById('confirm-msg').textContent = msg;
   ok.textContent = okLabel || t('common.confirm');
+  no.textContent = cancelLabel || t('common.back');
   const back = document.activeElement;
   m.classList.remove('h');
   no.focus();
@@ -1455,8 +1458,8 @@ function askConfirm(msg, okLabel) {
     };
     ok.onclick = () => done(true);
     no.onclick = () => done(false);
-    m.onclick = e => { if (e.target === m) done(false); };
-    m.onkeydown = e => { if (e.key === 'Escape') done(false); };
+    m.onclick = e => { if (e.target === m) done(cancelLabel ? null : false); };
+    m.onkeydown = e => { if (e.key === 'Escape') done(cancelLabel ? null : false); };
   });
 }
 
@@ -1663,6 +1666,7 @@ async function moveBetweenCategories(srcCatId, fromIdx, dstCatId, toIdx) {
 
 function moveBuildItem(catId, idx, dir) {
   if (!admin || (meta.phase !== 'registration' && meta.phase !== 'built')) return;
+  arranged.add(catId);
   const a = state[catId]?.roster[idx], b = state[catId]?.roster[idx + dir];
   if (a === undefined || b === undefined) return;
   commitState(catId, cs => {
@@ -1673,16 +1677,20 @@ function moveBuildItem(catId, idx, dir) {
   }).then(renderBuildPage);
 }
 
+function shuffleRoster(cs, catId) {
+  seedRoster(cs, catId);
+  for (let i = cs.roster.length-1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i+1));
+    [cs.roster[i], cs.roster[j]] = [cs.roster[j], cs.roster[i]];
+  }
+}
+// Categories whose pair order the manager already arranged (shuffle or manual move) in this visit.
+const arranged = new Set();
 function shuffleBuildRoster(catId) {
   if (!admin || (meta.phase !== 'registration' && meta.phase !== 'built')) return;
   if (!state[catId]) return;
-  commitState(catId, cs => {
-    seedRoster(cs, catId);
-    for (let i = cs.roster.length-1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i+1));
-      [cs.roster[i], cs.roster[j]] = [cs.roster[j], cs.roster[i]];
-    }
-  }).then(renderBuildPage);
+  arranged.add(catId);
+  commitState(catId, cs => shuffleRoster(cs, catId)).then(renderBuildPage);
 }
 
 function openAddPair(catId) {
@@ -1976,11 +1984,22 @@ async function buildTournament(catId) {
       scores: games.filter(hasScore).length, manual: games.filter(g => g.manual).length });
     if (!await askConfirm(msg, t(coord ? 'build.rebuildAll' : 'build.rebuild'))) return;
   }
+  // First build with pairs still in registration order: offer to shuffle them.
+  let toShuffle = [];
+  if (!rebuild) {
+    const plain = cids.filter(id => !arranged.has(id) && (state[id]?.roster.length || approvedNames(id).length) > 1);
+    if (plain.length) {
+      const ans = await askConfirm(t('build.notShuffledQ'), t('build.shuffleYes'), t('build.shuffleNo'));
+      if (ans === null) return;
+      if (ans) toShuffle = plain;
+    }
+  }
   const prev = { phase: meta.phase, breaks: meta.breaks ?? null, regOpen: !!meta.regOpen };
   let backup;
   const ok = await commitState(cids, () => {
     backup = Object.fromEntries(cids.map(id => [id, catStateToFB(structuredClone(state[id]))]));
     const old = gameIndex(cids);
+    toShuffle.forEach(id => shuffleRoster(state[id], id));
     if (coord) { buildCoordinatedGroups(); generateCoordinatedSchedule(); }
     else if (!buildCategory(catId)) return false;
     carryOver(cids, old);
@@ -3801,13 +3820,28 @@ function renderSettings() {
     return;
   }
 
+  const infoRow = `    <div class="sett-row" style="align-items:flex-start;padding-top:16px">
+      <div class="sett-label">
+        <span class="sett-name">${t(secure ? 'settings.infoShort' : 'settings.info')}</span>
+        <span class="sett-desc">${t('settings.infoDesc')}</span>
+      </div>
+      <div class="sett-ctrl" style="flex-direction:column;align-items:flex-end;gap:8px">
+        <input class="text-inp" type="date" style="width:190px" value="${escH(meta.eventDate)}" aria-label="${t('settings.eventDate')}"
+          onchange="updateMeta('eventDate',this.value)"/>
+        <input class="text-inp" dir="auto" style="width:240px" value="${escH(meta.venue)}" placeholder="${t('settings.venuePh')}" aria-label="${t('settings.venue')}"
+          onchange="updateMeta('venue',this.value.trim())"/>
+        <input class="text-inp" dir="auto" style="width:240px" value="${escH(meta.price)}" placeholder="${t('settings.pricePh')}" aria-label="${t('settings.price')}"
+          onchange="updateMeta('price',this.value.trim())"/>
+      </div>
+    </div>
+`;
   // ── DESIGN ──────────────────────────────────────────────────────
   const pc = meta.primaryColor   || DEF_PRIMARY;
   const sc = meta.secondaryColor || pc;
   const dsec = document.createElement('div');
   dsec.className = 'sett-section';
   dsec.innerHTML = `
-    <div class="sett-section-title">${t('settings.design')}</div>
+    <div class="sett-section-title">${t(secure ? 'settings.info' : 'settings.design')}</div>
     <div class="sett-row">
       <div class="sett-label"><span class="sett-name">${t('settings.name')}</span></div>
       <div class="sett-ctrl">
@@ -3815,7 +3849,7 @@ function renderSettings() {
           onchange="updateMeta('name',this.value)" placeholder="${t('settings.namePh')}"/>
       </div>
     </div>
-    ${secure ? '' : `<div class="sett-row">
+    ${secure ? infoRow : `<div class="sett-row">
       <div class="sett-label">
         <span class="sett-name">${t('settings.lang')}</span>
         <span class="sett-desc">${t('settings.langDesc')}</span>
@@ -4047,23 +4081,10 @@ function renderSettings() {
         placeholder="${t('settings.regNotePh')}">${escH(meta.regNote)}</textarea>
       <div class="reg-note md reg-note-preview"></div>
     </div>
+${secure ? '' : infoRow}
     <div class="sett-row" style="align-items:flex-start;padding-top:16px">
       <div class="sett-label">
-        <span class="sett-name">${t('settings.info')}</span>
-        <span class="sett-desc">${t('settings.infoDesc')}</span>
-      </div>
-      <div class="sett-ctrl" style="flex-direction:column;align-items:flex-end;gap:8px">
-        <input class="text-inp" type="date" style="width:190px" value="${escH(meta.eventDate)}" aria-label="${t('settings.eventDate')}"
-          onchange="updateMeta('eventDate',this.value)"/>
-        <input class="text-inp" dir="auto" style="width:240px" value="${escH(meta.venue)}" placeholder="${t('settings.venuePh')}" aria-label="${t('settings.venue')}"
-          onchange="updateMeta('venue',this.value.trim())"/>
-        <input class="text-inp" dir="auto" style="width:240px" value="${escH(meta.price)}" placeholder="${t('settings.pricePh')}" aria-label="${t('settings.price')}"
-          onchange="updateMeta('price',this.value.trim())"/>
-      </div>
-    </div>
-    <div class="sett-row" style="align-items:flex-start;padding-top:16px">
-      <div class="sett-label">
-        <span class="sett-name">${t('settings.payLinks')}</span>
+        <span class="sett-name">${t(secure ? 'settings.payLink' : 'settings.payLinks')}</span>
         <span class="sett-desc">${t('settings.payLinksDesc')}</span>
       </div>
       ${secure ? `<div class="sett-ctrl"><input class="text-inp" type="url" dir="ltr" value="${escH(meta.paymentLink)}" style="width:260px" placeholder="https://…"
