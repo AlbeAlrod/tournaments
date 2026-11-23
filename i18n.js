@@ -151,6 +151,11 @@ export function tSlot(s) {
   if (m) return m[2] ? t('bracket.winnerOfSeeds', { a: seed(m[1]), b: seed(m[2]) }) : seed(m[1]);
   m = str.match(/^Loser of SF(\d+)$/);
   if (m) return t('bracket.loserSf', { n: m[1] });
+  m = str.match(/^(Winner|Loser) of ([WL])(\d+)-(\d+)$/);   // double elimination
+  if (m) return t(m[1] === 'Winner' ? 'bracket.winnerOfDE' : 'bracket.loserOfDE',
+    { g: t(m[2] === 'W' ? 'bracket.lbl.wb' : 'bracket.lbl.lb', { r: m[3], n: m[4] }) });
+  m = str.match(/^Winner of (SF\d+)$/);
+  if (m) return t('bracket.winnerOfDE', { g: t('bracket.lbl.sf', { n: m[1].slice(2) }) });
   m = str.match(/^Winner of (.+) (\d+)$/);
   if (m) {
     const name = m[1];
@@ -368,6 +373,16 @@ const DICT = {
     'bracket.lbl.r16':      'שמינית {n}',
     'bracket.lbl.game':     'משחק {n}',
     'bracket.third':        'מקום שלישי',
+    'bracket.lbl.wb':       'עליון \u2066{r}·{n}\u2069',
+    'bracket.lbl.lb':       'תחתון \u2066{r}·{n}\u2069',
+    'bracket.stage.wb':     'עץ עליון · סיבוב {r}',
+    'bracket.stage.lb':     'עץ תחתון · סיבוב {r}',
+    'bracket.winnerOfDE':   'מנצח {g}',
+    'bracket.loserOfDE':    'מפסיד {g}',
+    'settings.format':      'פורמט',
+    'settings.format.pools':'בתים ונוקאאוט',
+    'settings.format.de':   'דאבל אלימינישן',
+    'settings.format.deDesc':'בלי בתים. הפסד ראשון מוריד לעץ התחתון, הפסד שני מוציא. העץ העליון והעץ התחתון נפגשים בחצי הגמר (בהצלבה), ומשם נוקאאוט רגיל.',
     'bracket.champion':     'אלופים',
     'bracket.direct':       'עולה ישירות',
     'bracket.tbd':          'ייקבע',
@@ -882,6 +897,16 @@ const DICT = {
     'bracket.lbl.r16':      'R16-{n}',
     'bracket.lbl.game':     'G{n}',
     'bracket.third':        '3rd place',
+    'bracket.lbl.wb':       'Upper {r}·{n}',
+    'bracket.lbl.lb':       'Lower {r}·{n}',
+    'bracket.stage.wb':     'Upper bracket · round {r}',
+    'bracket.stage.lb':     'Lower bracket · round {r}',
+    'bracket.winnerOfDE':   'Winner of {g}',
+    'bracket.loserOfDE':    'Loser of {g}',
+    'settings.format':      'Format',
+    'settings.format.pools':'Pools and knockout',
+    'settings.format.de':   'Double elimination',
+    'settings.format.deDesc':'No pools. A first loss drops a pair to the lower bracket, a second loss knocks it out. Both brackets meet in crossed semifinals, then a regular knockout.',
     'bracket.champion':     'Champions',
     'bracket.direct':       'Direct',
     'bracket.tbd':          'TBD',

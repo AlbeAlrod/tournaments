@@ -17,6 +17,7 @@
 // ============ HELPERS (stateless) ============
 
 // from app.js:62
+import { buildDE, deDeps, resolveDE } from './de.js';
 export const dn = s => {
   if (!s || s.startsWith('Winner') || /^[A-Z]\d+$/.test(s)) return s;
   if (s.includes('/')) return s;
@@ -148,7 +149,7 @@ export const koKey = (cid, cs, ri, gi) => `${cid}|K|${cs.ko.length}|${ri}|${cs.k
 export function createLegacy(ctx) {
 
   // from app.js:78
-  function getRuleForGame(catId, g, isKO) {
+function getRuleForGame(catId, g, isKO) {
     const { categories, state } = ctx;
     const cat = categories.find(c=>c.id===catId);
     const rules = { ...DEF_KO_RULES, ...(cat?.cfg?.koRules||{}) };
@@ -159,6 +160,7 @@ export function createLegacy(ctx) {
     const cs = state[catId];
     if (!cs?.ko?.length) return rules.pool;
     const fromEnd = cs.ko.length - 1 - (g.ri ?? 0);
+    if (g.de && fromEnd > 1) return rules.pool;   // double elimination: both brackets play pool rules
     if (fromEnd === 0) return rules.final;
     if (fromEnd === 1) return rules.sf;
     if (fromEnd === 2) return rules.qf;
@@ -179,13 +181,14 @@ export function createLegacy(ctx) {
   }
 
   // from app.js:1008
-  function buildCoordinatedGroups(){
+function buildCoordinatedGroups(){
     const { categories, state, registrations } = ctx;
     categories.forEach(cat=>{
       const cs=state[cat.id]; if(!cs) return;
       let roster = cs.roster.length ? cs.roster :
         registrations.filter(r=>r.status==='approved'&&r.category===cat.id).map(r=>r.p1+(r.p2?' / '+r.p2:''));
       if(!roster.length){ cs.groups=[]; cs.sched=[]; cs.ko=[]; return; }
+      if(isDE(cat)){ cs.roster=roster; cs.groups=[]; cs.sched=[]; cs.ko=[]; return; }
       const cfg=cat.cfg||DEF_CAT_CFG; const ng=cfg.numGroups||2;
       let groups;
       if(cfg.seeding==='snake') groups=snakeDistribute(roster,ng);
@@ -207,21 +210,22 @@ const catOrderOf = () => ctx.meta.catOrder || (ctx.meta.sequentialCategories ? '
     const cfg = categories.find(c => c.id === catId)?.cfg || DEF_CAT_CFG;
     return ({ ...DEF_KO_RULES, ...(cfg.koRules || {}) })[stage]?.dur || cfg.gameDur || 25;
   }
-  const koStage = (len, ri) => { const e = len - 1 - ri; return e === 0 ? 'final' : e === 1 ? 'sf' : e === 2 ? 'qf' : 'r16'; };
+  const koStage = (len, ri, g) => { const e = len - 1 - ri; return e === 0 ? 'final' : e === 1 ? 'sf' : g?.de ? 'pool' : e === 2 ? 'qf' : 'r16'; };
+  const isDE = cat => !!ctx.secure && cat?.cfg?.format === 'de';
   function flexClock(START, SLOT, brk, durs) {   // durs[r] = longest game of round r (0 = empty round)
     const at = []; let clock = START;
     durs.forEach((d, r) => { at[r] = clock; clock += d ? d + brk : SLOT; });
     return at;
   }
 
-  function generateCoordinatedSchedule(){
+function generateCoordinatedSchedule(){
     const { categories, state, meta, secure } = ctx;
     const { COURTS, SLOT, BASE_ROUNDS } = coordCfg();
     const START = flexStart(coordCfg().START);
     const BRK = (categories[0]?.cfg || DEF_CAT_CFG).breakDur || 0;
     // Courts available to the app in round r (a reserved side-court frees at BASE_ROUNDS).
     const courtsAt = r => (r < BASE_ROUNDS ? Math.max(2, COURTS-1) : COURTS);
-    const cats = categories.filter(c => state[c.id] && (state[c.id].groups||[]).length);
+    const cats = categories.filter(c => state[c.id] && ((state[c.id].groups||[]).length || (isDE(c) && state[c.id].roster.length >= 2)));
     if(!cats.length) return;
     const finaleCat = cats[cats.length-1].id;
     const order = secure ? catOrderOf() : null;
@@ -239,7 +243,15 @@ const catOrderOf = () => ctx.meta.catOrder || (ctx.meta.sequentialCategories ? '
 
       }));
       const cfg=cat.cfg||DEF_CAT_CFG; const adv=cfg.advPerGroup||0, ng=groups.length;
-      if(adv>=1 && ng>=1){
+      if(isDE(cat)){
+        const rounds=buildDE(state[cat.id].roster, cat.id);
+        koStruct[cat.id]=rounds;
+        rounds.forEach((rd,ri)=>rd.forEach((g,gi)=>games.push({id:`${cat.id}:K${ri}:${gi}`,catId:cat.id,ci,kind:'ko',ri,gi,ref:g,poolIds,
+          deps:deDeps(g).map(([r,i])=>`${cat.id}:K${r}:${i}`),lastRound:ri===rounds.length-1})));
+        const sfRound=rounds.length-2;
+        if(sfRound>=0) games.push({id:`${cat.id}:3P`,catId:cat.id,ci,kind:'ko3p',sfRound,
+          ref:{catId:cat.id,gi:-1,isThirdPlace:true,a:'Loser of SF1',b:'Loser of SF2',sa:'',sb:''}});
+      } else if(adv>=1 && ng>=1){
         const seeds=[]; for(let rank=1;rank<=adv;rank++) for(let g=0;g<ng;g++) seeds.push(`${String.fromCharCode(65+g)}${rank}`);
         let bs=1; while(bs<seeds.length) bs*=2; while(seeds.length<bs) seeds.push('TBD');
         const rounds=[], first=[];
@@ -264,6 +276,7 @@ const catOrderOf = () => ctx.meta.catOrder || (ctx.meta.sequentialCategories ? '
     const allPoolIds = games.filter(g=>g.kind==='pool').map(g=>g.id);
     const ready=(g,done)=>{
       if(g.kind==='pool') return true;
+      if(g.deps) return g.deps.every(id=>done.has(id));
       if(allPoolsFirst && !allPoolIds.every(id=>done.has(id))) return false; // all pools first
       if(g.kind==='ko3p') return (koRoundIds[`${g.catId}:${g.sfRound}`]||[]).every(id=>done.has(id));
       if(!g.poolIds.every(id=>done.has(id))) return false;
@@ -274,7 +287,7 @@ const catOrderOf = () => ctx.meta.catOrder || (ctx.meta.sequentialCategories ? '
     const rankKind=g=>g.kind==='pool'?1:0, koOrder=g=>g.kind==='ko3p'?99:(g.kind==='ko'?g.ri:0);
     const rounds=[], done=new Set(); let rem=new Set(games.map(g=>g.id));
     const byId=Object.fromEntries(games.map(g=>[g.id,g])); const teamRounds={};
-    const gDur = g => stageDur(g.catId, g.kind === 'pool' ? 'pool' : g.kind === 'ko3p' ? 'third' : koStage(koStruct[g.catId].length, g.ri));
+    const gDur = g => stageDur(g.catId, g.kind === 'pool' ? 'pool' : g.kind === 'ko3p' ? 'third' : koStage(koStruct[g.catId].length, g.ri, g.ref));
     const roundDur = ids => secure && ids.length ? Math.max(...ids.map(id => gDur(byId[id]))) : 0;
     let clock = START;
     const pushRound = ids => { rounds.push(ids); clock += secure && ids.length ? roundDur(ids) + BRK : SLOT; };
@@ -739,16 +752,21 @@ const catOrderOf = () => ctx.meta.catOrder || (ctx.meta.sequentialCategories ? '
   }
 
   // from app.js:1768
-  function updateKOForCat(catId) {
+function updateKOForCat(catId) {
     const { state } = ctx;
     const cs = state[catId];
     if (!cs||!cs.ko.length) return;
 
+    // Stamp each KO game with its round index so per-stage scoring rules resolve correctly
     cs.ko.forEach((round, ri) => round.forEach(g => { if (g) g.ri = ri; }));
 
+    if (cs.ko[0]?.[0]?.de) resolveDE(cs.ko, g => getKOWinner(g, catId), g => getKOLoser(g, catId));
+    else {
+
+    // r0: resolve pool seeds; byes just resolve their single seed
     if (cs.ko[0]) {
       cs.ko[0].forEach(g => {
-      if (String(g.sa ?? '') !== '' || String(g.sb ?? '') !== '') return;
+        if (String(g.sa ?? '') !== '' || String(g.sb ?? '') !== '') return;
         const seedA = g.seedA || (g.isBye ? g.a : '');
         const seedB = g.seedB || '';
         if (seedA) { const r=resolvePoolSeed(catId,seedA); if(r.known||/^[A-Z]\d+$/.test(seedA)) g.a=r.known?r.label:seedA; }
@@ -759,6 +777,7 @@ const catOrderOf = () => ctx.meta.catOrder || (ctx.meta.sequentialCategories ? '
     for (let ri=1; ri<cs.ko.length; ri++) {
       const prev = cs.ko[ri-1];
       const rndName = getKORoundName(catId, ri-1);
+      // Cross pairing when 4 QF games reduce to 2 SF games (QF1×QF4, QF2×QF3)
       const isCross = prev.length === 4 && cs.ko[ri].filter(g=>!g.isThirdPlace).length === 2;
       cs.ko[ri].forEach((g, gi) => {
         if (g.isThirdPlace || String(g.sa ?? '') !== '' || String(g.sb ?? '') !== '') return;
@@ -775,7 +794,9 @@ const catOrderOf = () => ctx.meta.catOrder || (ctx.meta.sequentialCategories ? '
         g.b = wb || seedLabel(prev[idxB]) || `Winner of ${rndName} ${idxB+1}`;
       });
     }
+    }
 
+    // Auto-fill 3rd-place game with SF losers
     if (cs.ko.length >= 2) {
       const sfRound = cs.ko[cs.ko.length - 2];
       const thirdGame = cs.sched.find(g => g.isThirdPlace);
@@ -787,12 +808,13 @@ const catOrderOf = () => ctx.meta.catOrder || (ctx.meta.sequentialCategories ? '
   }
 
   // from app.js:1817
-  function koGameLabel(catId, ri, gi) {
+function koGameLabel(catId, ri, gi) {
     const { state } = ctx;
     const cs = state[catId];
     if (!cs?.ko?.[ri]) return '';
     const round = cs.ko[ri];
     if (round[gi]?.isBye) return '';
+    if (round[gi]?.de) return round[gi].de.code;
     const fromEnd = cs.ko.length - 1 - ri;
     const num = round.slice(0, gi).filter(g => !g.isBye).length + 1;
     if (fromEnd === 0) return 'Final';
