@@ -157,3 +157,24 @@ test('a signed-in manager of a secure tournament lists its waivers without a pas
   await signInAs('other', { role: 'owner', club: 'other' });
   assert.equal(await code(call('listWaivers', { tId: 'sec' })), 'functions/invalid-argument');
 });
+
+test('tournament managers by email: full managers add and remove them, access is per tournament', async () => {
+  await signOut(auth);
+  const add = (email, trole, tId = 'sec') => call('inviteTournamentManager', { tId, email, trole });
+  assert.equal(await code(add('t1@m.co', 'admin')), 'functions/permission-denied');
+  await signInAs('own', { role: 'owner', club: 'mentor' });
+  assert.ok((await add('t1@m.co', 'admin')).link.startsWith('http'));
+  const u = await aauth.getUserByEmail('t1@m.co');
+  assert.deepEqual(u.customClaims, { tours: { sec: 'admin' } });
+  assert.deepEqual((await call('listTournamentManagers', { tId: 'sec' })).managers, [{ email: 't1@m.co', trole: 'admin' }]);
+
+  await signInAs(u.uid, u.customClaims);
+  assert.equal(await code(updateDoc(doc(db, 'tournaments/sec'), { 'meta.name': 'ok' })), 'ok');
+  assert.equal(await code(updateDoc(doc(db, 'tournaments/closed'), { 'meta.name': 'no' })), 'permission-denied');
+  assert.equal(await code(add('t2@m.co', 'master')), 'functions/permission-denied');
+
+  await signInAs('own', { role: 'owner', club: 'mentor' });
+  await call('removeTournamentManager', { tId: 'sec', email: 't1@m.co' });
+  assert.deepEqual((await aauth.getUserByEmail('t1@m.co')).customClaims, { tours: {} });
+  assert.deepEqual((await call('listTournamentManagers', { tId: 'sec' })).managers, []);
+});

@@ -37,7 +37,9 @@ export function verifyPassword(pw, stored) {
 export const canManage = (tk, t, tId) => !!tk && (
   tk.role === 'super' ||
   (!!tk.club && tk.club === t.clubId && (tk.role === 'owner' || (tk.role === 'branch' && tk.branch === t.branchId))) ||
-  tk.tid === tId);
+  tk.tid === tId || !!tk.tours?.[tId]);
+// Full manager of one tournament (not the "registrations and results" access).
+const fullManager = (tk, t, tId) => canManage(tk, t, tId) && tk.trole !== 'admin' && tk.tours?.[tId] !== 'admin';
 
 // At most `max` calls per `windowSec` for one key; counters live in a collection no client can read.
 async function rateLimit(key, max, windowSec) {
@@ -98,9 +100,54 @@ export const inviteManager = onCall(async req => {
 
   const user = await auth.getUserByEmail(email).catch(() => auth.createUser({ email }));
   const claims = role === 'owner' ? { role, club: clubId } : { role, club: clubId, branch: branchId };
-  await auth.setCustomUserClaims(user.uid, claims);
+  const tours = user.customClaims?.tours;   // keep any single-tournament access
+  await auth.setCustomUserClaims(user.uid, tours ? { ...claims, tours } : claims);
   await db.doc(`users/${user.uid}`).set({ email, ...claims, invitedBy: req.auth.uid, invitedAt: FieldValue.serverTimestamp() });
   return { link: await auth.generatePasswordResetLink(email) };
+});
+
+// Managers of ONE tournament, by email: claims.tours = { [tId]: 'master' | 'admin' }.
+// The list lives in tournaments/{tId}/private/staff (server only, read through listTournamentManagers).
+const TROLES = ['master', 'admin'];
+const staffRef = tId => db.doc(`tournaments/${tId}/private/staff`);
+const keyOf = email => email.replace(/\./g, ',');
+
+export const inviteTournamentManager = onCall(async req => {
+  const { tId, trole } = req.data || {};
+  const email = str(req.data?.email, 200).toLowerCase();
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email) || !TROLES.includes(trole)) fail('invalid-argument', 'input');
+  const t = await secureTournament(tId);
+  if (!fullManager(req.auth?.token, t, tId)) fail('permission-denied', 'not-manager');
+  const user = await auth.getUserByEmail(email).catch(() => auth.createUser({ email }));
+  const claims = user.customClaims || {};
+  const tours = Object.fromEntries(Object.entries({ ...claims.tours, [tId]: trole }).slice(-20));
+  await auth.setCustomUserClaims(user.uid, { ...claims, tours });
+  await staffRef(tId).set({ [keyOf(email)]: { email, trole, uid: user.uid } }, { merge: true });
+  return { link: await auth.generatePasswordResetLink(email) };
+});
+
+export const listTournamentManagers = onCall(async req => {
+  const { tId } = req.data || {};
+  const t = await secureTournament(tId);
+  if (!canManage(req.auth?.token, t, tId)) fail('permission-denied', 'not-manager');
+  const staff = (await staffRef(tId).get()).data() || {};
+  return { managers: Object.values(staff).map(({ email, trole }) => ({ email, trole })) };
+});
+
+export const removeTournamentManager = onCall(async req => {
+  const { tId } = req.data || {};
+  const email = str(req.data?.email, 200).toLowerCase();
+  const t = await secureTournament(tId);
+  if (!fullManager(req.auth?.token, t, tId)) fail('permission-denied', 'not-manager');
+  const user = await auth.getUserByEmail(email).catch(() => null);
+  if (user) {
+    const claims = user.customClaims || {};
+    const { [tId]: _, ...tours } = claims.tours || {};
+    await auth.setCustomUserClaims(user.uid, { ...claims, tours });
+    await auth.revokeRefreshTokens(user.uid);
+  }
+  await staffRef(tId).set({ [keyOf(email)]: FieldValue.delete() }, { merge: true });
+  return { ok: true };
 });
 
 export const registerPair = onCall(async req => {

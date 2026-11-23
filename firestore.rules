@@ -18,7 +18,8 @@ service cloud.firestore {
         (tok().get('club', '') == t.get('clubId', '-') &&
           (tok().get('role', '') == 'owner' ||
            (tok().get('role', '') == 'branch' && tok().get('branch', '') == t.get('branchId', '-')))) ||
-        tok().get('tid', '') == tId));
+        tok().get('tid', '') == tId ||
+        tok().get('tours', {}).get(tId, '') != ''));
     }
     function isSecure(d) { return d.get('secure', false) == true; }
     function noPasswordsInMeta(d) {
